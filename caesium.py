@@ -432,6 +432,10 @@ def get_term_size():
     height, width = stdscr.getmaxyx()
 
 def draw_title(y, x, title):
+    x = max(0, x)
+    if (x + len(title) + 2) > width:
+        title = title[:width - x - 2 - 3] + '...'
+    #
     if bold[0]:
         color = curses.color_pair(1) + curses.A_BOLD
     else:
