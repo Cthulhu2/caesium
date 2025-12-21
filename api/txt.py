@@ -1,14 +1,21 @@
-import os, codecs, time, base64, hashlib
+import base64
+import codecs
+import hashlib
+import os
+import time
+
 
 def get_echo_length(echo):
     if os.path.exists("echo/" + echo):
-        echo_length = len(open ("echo/" + echo, "r").read().split("\n")) - 1
+        echo_length = len(open("echo/" + echo, "r").read().split("\n")) - 1
     else:
         echo_length = 0
     return echo_length
 
+
 def get_echocount(echoarea):
     return len(open("echo/" + echoarea, "r").read().split("\n")) - 1
+
 
 def save_to_favorites(msgid, msg):
     if os.path.exists("echo/favorites"):
@@ -21,12 +28,14 @@ def save_to_favorites(msgid, msg):
     else:
         return False
 
+
 def get_echo_msgids(echo):
     if os.path.exists("echo/" + echo):
         msgids = open("echo/" + echo, "r").read().split("\n")[:-1]
     else:
         msgids = []
     return msgids
+
 
 def get_carbonarea():
     try:
@@ -38,17 +47,20 @@ def get_carbonarea():
     except:
         return []
 
+
 def add_to_carbonarea(msgid, msgbody):
     if os.path.exists("echo/carbonarea"):
         return codecs.open("echo/carbonarea", "a", "utf-8").write(msgid + "\n")
     else:
         return []
 
+
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
     msgid = base64.urlsafe_b64encode(hashlib.sha256("\n".join(msgbody).encode()).digest()).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     codecs.open("msg/%s" % msgid, "w", "utf-8").write("\n".join(msgbody))
     open("echo/carbonarea", "a").write(msgid + "\n")
+
 
 def save_message(raw, node, to):
     try:
@@ -60,10 +72,11 @@ def save_message(raw, node, to):
         msgbody = msg[1]
         codecs.open("echo/" + msgbody[1], "a", "utf-8").write(msgid + "\n")
         codecs.open("msg/" + msgid, "w", "utf-8").write("\n".join(msgbody))
-        if to:    
+        if to:
             for name in to:
                 if name in msgbody[5] and not msgid in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
+
 
 def get_favorites_list():
     try:
@@ -75,10 +88,12 @@ def get_favorites_list():
     except:
         return []
 
+
 def remove_from_favorites(msgid):
     favorites_list = get_favorites_list()
     favorites_list.remove(msgid)
     open("echo/favorites", "w").write("\n".join(favorites_list))
+
 
 def remove_echoarea(echoarea):
     try:

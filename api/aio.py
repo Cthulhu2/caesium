@@ -1,4 +1,9 @@
-import os, codecs, sys, time, base64, hashlib
+import base64
+import codecs
+import hashlib
+import os
+import time
+
 
 def get_echo_length(echo):
     if os.path.exists("aio/" + echo + ".aio"):
@@ -6,6 +11,7 @@ def get_echo_length(echo):
     else:
         echo_length = 0
     return echo_length
+
 
 def save_to_favorites(msgid, msg):
     if os.path.exists("aio/favorites.aio"):
@@ -21,6 +27,7 @@ def save_to_favorites(msgid, msg):
     else:
         return False
 
+
 def get_echo_msgids(echo):
     if os.path.exists("aio/" + echo + ".aio"):
         f = codecs.open("aio/" + echo + ".aio", "r", "utf-8").read().split("\n")
@@ -31,6 +38,7 @@ def get_echo_msgids(echo):
     else:
         msgids = []
     return msgids
+
 
 def get_carbonarea():
     try:
@@ -43,16 +51,21 @@ def get_carbonarea():
     except:
         return []
 
+
 def add_to_carbonarea(msgid, msgbody):
     if os.path.exists("aio/carbonarea.aio"):
         return codecs.open("aio/carbonarea.aio", "a", "utf-8").write(msgid + ":" + chr(15).join(msgbody) + "\n")
     else:
         return []
 
+
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body.replace("\n", chr(15))]
-    msgid = base64.urlsafe_b64encode(hashlib.sha256("\n".join(msgbody).encode()).digest()).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
+    msgid = base64.urlsafe_b64encode(
+        hashlib.sha256("\n".join(msgbody).encode()).digest()
+    ).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     codecs.open("aio/carbonarea.aio", "a", "utf-8").write(msgid + ":" + chr(15).join(msgbody) + "\n")
+
 
 def save_message(raw, node, to):
     for msg in raw:
@@ -68,11 +81,13 @@ def save_message(raw, node, to):
                 if name in msgbody[5] and not msgid in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
 
+
 def get_favorites_list():
     if os.path.exists("aio/favorites.aio"):
         return codecs.open("aio/favorites.aio", "r", "utf-8").read().split("\n")
     else:
         return []
+
 
 def remove_from_favorites(msgid):
     favorites_list = get_favorites_list()
@@ -82,11 +97,13 @@ def remove_from_favorites(msgid):
             favorites.append(item)
     codecs.open("aio/favorites.aio", "w", "utf-8").write("\n".join(favorites))
 
+
 def remove_echoarea(echoarea):
     try:
         os.remove("aio/%s.aio" % echoarea)
     except:
         None
+
 
 def get_msg_list_data(echoarea):
     f = codecs.open("aio/%s.aio" % echoarea, "r", "utf-8").read().split("\n")
@@ -94,8 +111,10 @@ def get_msg_list_data(echoarea):
     for msg in f:
         if len(msg) > 1:
             rawmsg = msg.split(chr(15))
-            lst.append([rawmsg[0].split(":")[0], rawmsg[3], rawmsg[6], time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2])))])
+            lst.append(
+                [rawmsg[0].split(":")[0], rawmsg[3], rawmsg[6], time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2])))])
     return lst
+
 
 def read_msg(msgid, echoarea):
     size = "0b"
@@ -106,7 +125,7 @@ def read_msg(msgid, echoarea):
             if item.startswith(msgid):
                 msg = ":".join(item.split(":")[1:]).split(chr(15))
         if msg:
-            size = len ("\n".join(msg).encode("utf-8"))
+            size = len("\n".join(msg).encode("utf-8"))
         else:
             size = 0
         if size < 1024:

@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 
-import curses, os, urllib.request, urllib.parse, base64, codecs, pickle, time, subprocess, re, hashlib, webbrowser, locale
+import base64
+import codecs
+import curses
+import hashlib
+import locale
+import os
+import pickle
+import re
+import subprocess
+import time
+import urllib.parse
+import urllib.request
+import webbrowser
 from datetime import datetime
 from shutil import copyfile
+
 from keys import *
 
 lasts = {}
@@ -19,17 +32,18 @@ twit = []
 
 version = "Caesium/0.5 │"
 
-splash = [ "▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
-           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
-           "███           ███ ███  ███ ███          ███  ███ ███ ██ ███",
-           "███      ████████ ████████ ████████ ███ ███  ███ ███ ██ ███",
-           "███      ███  ███ ███           ███ ███ ███  ███ ███ ██ ███",
-           "████████ ████████ ████████ ████████ ███ ████████ ███ ██ ███",
-           "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
-           "           ncurses ii/idec client      v.0.5",
-           "           Andrew Lobanov             01.11.2024"]
+splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+          "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
+          "███           ███ ███  ███ ███          ███  ███ ███ ██ ███",
+          "███      ████████ ████████ ████████ ███ ███  ███ ███ ██ ███",
+          "███      ███  ███ ███           ███ ███ ███  ███ ███ ██ ███",
+          "████████ ████████ ████████ ████████ ███ ████████ ███ ██ ███",
+          "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
+          "           ncurses ii/idec client      v.0.5",
+          "           Andrew Lobanov             01.11.2024"]
 
-urltemplate=re.compile("((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
+urltemplate = re.compile("((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
+
 
 def reset_config():
     global nodes, node, editor, oldquote, db
@@ -38,6 +52,7 @@ def reset_config():
     editor = ""
     oldquote = False
     db = 2
+
 
 def check_directories():
     if not os.path.exists("out"):
@@ -61,10 +76,12 @@ def check_directories():
         if not os.path.exists("ait"):
             os.mkdir("ait")
 
+
 def check_config():
     if not os.path.exists("caesium.cfg"):
         default_config = open("caesium.def.cfg", "r").read()
-        open("caesium.cfg","w").write(default_config)
+        open("caesium.cfg", "w").write(default_config)
+
 
 #
 # Взаимодействие с нодой
@@ -72,7 +89,8 @@ def check_config():
 
 def separate(l, step=20):
     for x in range(0, len(l), step):
-        yield l[x:x+step]
+        yield l[x:x + step]
+
 
 def load_config():
     global nodes, editor, color_theme, show_splash, oldquote, db, browser, twit
@@ -155,10 +173,12 @@ def load_config():
         nodes[i]["echoareas"].insert(0, ["favorites", "Избранные сообщения", True])
         nodes[i]["echoareas"].insert(1, ["carbonarea", "Карбонка", True])
 
+
 def load_colors():
     global bold
     colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "gray"]
-    params = ["border", "titles", "cursor", "text", "quote1", "quote2", "comment", "url", "header", "statusline", "scrollbar", "origin"]
+    params = ["border", "titles", "cursor", "text", "quote1", "quote2", "comment", "url", "header", "statusline",
+              "scrollbar", "origin"]
 
     try:
         theme = open("themes/" + color_theme + ".cfg", "r").read().split("\n")
@@ -248,7 +268,8 @@ def load_colors():
             else:
                 bold[11] = False
 
-def save_out(draft = False):
+
+def save_out(draft=False):
     new = codecs.open("temp", "r", "utf-8").read().strip().replace("\r", "").split("\n")
     if len(new) <= 1:
         os.remove("temp")
@@ -264,30 +285,36 @@ def save_out(draft = False):
             codecs.open(outcount() + ".out", "w", "utf-8").write("\n".join(buf))
         os.remove("temp")
 
-def resave_out(filename, draft = False):
+
+def resave_out(filename, draft=False):
     new = codecs.open("temp", "r", "utf-8").read().strip().split("\n")
     if len(new) <= 1:
         os.remove("temp")
     else:
         if draft:
-            codecs.open("out/" + nodes[node]["nodename"] + "/" + filename.replace(".out", ".draft"), "w", "utf-8").write("\n".join(new))
+            codecs.open("out/" + nodes[node]["nodename"] + "/" + filename.replace(".out", ".draft"), "w",
+                        "utf-8").write("\n".join(new))
         else:
             codecs.open("out/" + nodes[node]["nodename"] + "/" + filename, "w", "utf-8").write("\n".join(new))
         os.remove("temp")
+
 
 def outcount():
     outpath = "out/" + nodes[node]["nodename"]
     i = str(len([x for x in os.listdir(outpath) if not x.endswith(".toss")]) + 1)
     return outpath + "/%s" % i.zfill(5)
 
-def get_out_length(drafts = False):
+
+def get_out_length(drafts=False):
     try:
         if drafts:
             return len([f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".draft")]) - 1
         else:
-            return len([f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".out") or f.endswith(".outmsg")]) - 1
+            return len([f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if
+                        f.endswith(".out") or f.endswith(".outmsg")]) - 1
     except:
         return 0
+
 
 def make_toss():
     lst = [x for x in os.listdir("out/" + nodes[node]["nodename"]) if x.endswith(".out")]
@@ -295,7 +322,9 @@ def make_toss():
         text = codecs.open("out/" + nodes[node]["nodename"] + "/%s" % msg, "r", "utf-8").read()
         coded_text = base64.b64encode(text.encode("utf-8"))
         codecs.open("out/" + nodes[node]["nodename"] + "/%s.toss" % msg, "w", "utf-8").write(coded_text.decode("utf-8"))
-        os.rename("out/" + nodes[node]["nodename"] + "/%s" % msg, "out/" + nodes[node]["nodename"] + "/%s%s" % (msg, "msg"))
+        os.rename("out/" + nodes[node]["nodename"] + "/%s" % msg,
+                  "out/" + nodes[node]["nodename"] + "/%s%s" % (msg, "msg"))
+
 
 def send_mail():
     lst = [x for x in sorted(os.listdir("out/" + nodes[node]["nodename"])) if x.endswith(".toss")]
@@ -305,7 +334,7 @@ def send_mail():
         for msg in lst:
             print("\rОтправка сообщения: " + str(n) + "/" + str(max), end="")
             text = codecs.open("out/" + nodes[node]["nodename"] + "/%s" % msg, "r", "utf-8").read()
-            data = urllib.parse.urlencode({"tmsg": text,"pauth": nodes[node]["auth"]}).encode("utf-8")
+            data = urllib.parse.urlencode({"tmsg": text, "pauth": nodes[node]["auth"]}).encode("utf-8")
             request = urllib.request.Request(nodes[node]["node"] + "u/point")
             result = urllib.request.urlopen(request, data).read().decode("utf-8")
             if result.startswith("msg ok"):
@@ -322,9 +351,11 @@ def send_mail():
     except:
         print("\nОшибка: не удаётся связаться с нодой.")
 
+
 def separate(l, step=40):
     for x in range(0, len(l), step):
-        yield l[x:x+step]
+        yield l[x:x + step]
+
 
 def get_msg_list():
     msg_list = []
@@ -341,6 +372,7 @@ def get_msg_list():
                     msg_list.append(line)
     return msg_list
 
+
 def get_bundle(node, msgids):
     bundle = []
     try:
@@ -351,6 +383,7 @@ def get_bundle(node, msgids):
         None
     return bundle
 
+
 def debundle(bundle):
     global messages
     for msg in bundle:
@@ -360,14 +393,16 @@ def debundle(bundle):
             if len(msgid) == 20 and m[1]:
                 msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
                 messages.append([msgid, msgbody])
-                
+
     if len(messages) >= 1000:
         save_message(messages, nodes[node]["node"], nodes[node]["to"])
         messages = []
 
+
 def echo_filter(ea):
     rr = re.compile(r'^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$')
     if rr.match(ea): return True
+
 
 def get_mail():
     fetch_msg_list = []
@@ -385,12 +420,13 @@ def get_mail():
         count = 0
         for get_list in separate(fetch_msg_list):
             count = count + len(get_list)
-            print("\rПолучение сообщений: " + str(count) + "/"  + msg_list_len, end="")
+            print("\rПолучение сообщений: " + str(count) + "/" + msg_list_len, end="")
             debundle(get_bundle(nodes[node]["node"], "/".join(get_list)))
         save_message(messages, node, nodes[node]["to"])
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
+
 
 def mailer():
     global depth, messages
@@ -405,6 +441,7 @@ def mailer():
         print("ОШИБКА")
     input("Нажмите Enter для продолжения.")
 
+
 #
 # Пользовательский интерфейс
 #
@@ -414,6 +451,7 @@ archive_cursor = 0
 width = 0
 height = 0
 show_splash = True
+
 
 def splash_screen():
     stdscr.clear()
@@ -427,9 +465,11 @@ def splash_screen():
     curses.napms(2000)
     stdscr.clear()
 
+
 def get_term_size():
     global width, height
     height, width = stdscr.getmaxyx()
+
 
 def draw_title(y, x, title):
     x = max(0, x)
@@ -448,6 +488,7 @@ def draw_title(y, x, title):
         color = curses.color_pair(2)
     stdscr.addstr(y, x + 1, title, curses.color_pair(2) + curses.A_BOLD)
 
+
 def draw_status(x, title):
     if bold[8]:
         color = curses.color_pair(9) + curses.A_BOLD
@@ -455,14 +496,17 @@ def draw_status(x, title):
         color = curses.color_pair(9)
     stdscr.addstr(height - 1, x, title, color)
 
+
 def draw_cursor(y, color):
-    for i in range (0, width):
+    for i in range(0, width):
         stdscr.insstr(y + 1, i, " ", color)
+
 
 def current_time():
     draw_status(width - 8, "│ " + datetime.now().strftime("%H:%M"))
 
-def get_counts(new = False, favorites = False):
+
+def get_counts(new=False, favorites=False):
     global echo_counts
     for echoarea in nodes[node]["echoareas"]:
         if not new:
@@ -476,12 +520,13 @@ def get_counts(new = False, favorites = False):
     echo_counts["carbonarea"] = len(get_carbonarea())
     echo_counts["favorites"] = len(get_favorites_list())
 
+
 def rescan_counts(echoareas):
     counts = []
     for echo in echoareas:
         try:
             echocount = echo_counts[echo[0]]
-            if echo[0] in lasts: 
+            if echo[0] in lasts:
                 last = echocount - lasts[echo[0]]
                 if echocount == 0 and lasts[echo[0]] == 0:
                     last = 1
@@ -494,6 +539,7 @@ def rescan_counts(echoareas):
             last = 1
         counts.append([str(echocount), str(last - 1)])
     return counts
+
 
 def draw_echo_selector(start, cursor, archive):
     global counts, counts_rescan
@@ -548,12 +594,12 @@ def draw_echo_selector(start, cursor, archive):
                 if y >= start:
                     if bold[2]:
                         color = curses.color_pair(3) + curses.A_BOLD
-                        stdscr.attron (curses.color_pair(3))
-                        stdscr.attron (curses.A_BOLD)
+                        stdscr.attron(curses.color_pair(3))
+                        stdscr.attron(curses.A_BOLD)
                     else:
                         color = curses.color_pair(3)
-                        stdscr.attron (curses.color_pair(3))
-                        stdscr.attroff (curses.A_BOLD)
+                        stdscr.attron(curses.color_pair(3))
+                        stdscr.attroff(curses.A_BOLD)
                     draw_cursor(y - start, color)
             else:
                 if y >= start:
@@ -563,11 +609,11 @@ def draw_echo_selector(start, cursor, archive):
                         color = curses.color_pair(4)
                     draw_cursor(y - start, color)
                 if bold[3]:
-                    stdscr.attron (curses.color_pair(4))
-                    stdscr.attron (curses.A_BOLD)
+                    stdscr.attron(curses.color_pair(4))
+                    stdscr.attron(curses.A_BOLD)
                 else:
-                    stdscr.attron (curses.color_pair(4))
-                    stdscr.attroff (curses.A_BOLD)
+                    stdscr.attron(curses.color_pair(4))
+                    stdscr.attroff(curses.A_BOLD)
             if y + 1 >= start + 1:
                 if counts_rescan:
                     counts = rescan_counts(echoareas)
@@ -594,6 +640,7 @@ def draw_echo_selector(start, cursor, archive):
     current_time()
     stdscr.refresh()
 
+
 def find_new(cursor):
     ret = cursor
     n = 0
@@ -604,6 +651,7 @@ def find_new(cursor):
             ret = n - 1
             lock = True
     return ret
+
 
 def fetch_mail():
     echoareas = []
@@ -624,6 +672,7 @@ def fetch_mail():
             echoareas.append(echoarea[0])
     mailer()
 
+
 def load_lasts():
     global lasts
     if os.path.exists("lasts.lst"):
@@ -631,7 +680,8 @@ def load_lasts():
         lasts = pickle.load(f)
         f.close()
 
-def edit_config(out = False):
+
+def edit_config(out=False):
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
@@ -646,6 +696,7 @@ def edit_config(out = False):
     curses.curs_set(False)
     stdscr.keypad(True)
     get_term_size()
+
 
 def echo_selector():
     global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node, stdscr
@@ -818,6 +869,7 @@ def echo_selector():
     else:
         echo_cursor = cursor
 
+
 def read_out_msg(msgid):
     size = "0b"
     temp = open("out/" + nodes[node]["nodename"] + "/" + msgid, "r").read().split("\n")
@@ -830,14 +882,15 @@ def read_out_msg(msgid):
     msg.append(temp[1])
     msg.append(temp[2])
     for line in temp[3:]:
-        if not(line.startswith("@repto:")):
-               msg.append(line)
+        if not (line.startswith("@repto:")):
+            msg.append(line)
     size = os.stat("out/" + nodes[node]["nodename"] + "/" + msgid).st_size
     if size < 1024:
         size = str(size) + " B"
     else:
         size = str(int(size / 1024 * 10) / 10) + " KB"
     return msg, size
+
 
 def body_render(tbody):
     body = ""
@@ -883,10 +936,10 @@ def body_render(tbody):
                 body = body[:-1]
                 if len(word) < width:
                     body = body + "\n" + code + word
-                    n = len (word)
+                    n = len(word)
                 else:
                     chunks, chunksize = len(word), width - 1
-                    chunk_list = [ word[i:i+chunksize] for i in range(0, chunks, chunksize) ]
+                    chunk_list = [word[i:i + chunksize] for i in range(0, chunks, chunksize)]
                     for line in chunk_list:
                         body = body + "\n" + code + line
                     n = len(chunk_list[-1])
@@ -897,6 +950,7 @@ def body_render(tbody):
             body = body[:-1]
         body = body + "\n"
     return body.split("\n")
+
 
 def draw_reader(echo, msgid, out):
     for i in range(0, width):
@@ -934,11 +988,11 @@ def draw_reader(echo, msgid, out):
     stdscr.addstr(3, 1, "Тема: ", color)
 
 
-def call_editor(out = False, draft = False):
+def call_editor(out=False, draft=False):
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
-    h = hashlib.sha1(str.encode(open("temp", "r",).read())).hexdigest()
+    h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
     p = subprocess.Popen(editor + " ./temp", shell=True)
     p.wait()
     stdscr = curses.initscr()
@@ -948,7 +1002,7 @@ def call_editor(out = False, draft = False):
     curses.curs_set(False)
     stdscr.keypad(True)
     get_term_size()
-    if h != hashlib.sha1(str.encode(open("temp", "r",).read())).hexdigest():
+    if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
         d = menu("Куда сохранить?", ["Сохранить в исходящие", "Сохранить как черновик"])
         if d:
             if d == 2:
@@ -974,6 +1028,7 @@ def call_editor(out = False, draft = False):
     else:
         os.remove("temp")
 
+
 def draw_message_box(smsg, wait):
     maxlen = 0
     msg = smsg.split("\n")
@@ -981,9 +1036,9 @@ def draw_message_box(smsg, wait):
         if len(line) > maxlen:
             maxlen = len(line)
     if wait:
-        msgwin = curses.newwin(len(msg) + 4, maxlen + 2, int(height / 2 - 2) , int(width / 2 - maxlen / 2 - 2))
+        msgwin = curses.newwin(len(msg) + 4, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
     else:
-        msgwin = curses.newwin(len(msg) + 2, maxlen + 2, int(height / 2 - 2) , int(width / 2 - maxlen / 2 - 2))
+        msgwin = curses.newwin(len(msg) + 2, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
     if bold[0]:
         msgwin.attron(curses.color_pair(1))
         msgwin.attron(curses.A_BOLD)
@@ -991,7 +1046,7 @@ def draw_message_box(smsg, wait):
         msgwin.attron(curses.color_pair(1))
     msgwin.bkgd(' ', curses.color_pair(1))
     msgwin.border()
-    
+
     i = 1
     if bold[3]:
         color = curses.color_pair(4) + curses.A_BOLD
@@ -1008,10 +1063,12 @@ def draw_message_box(smsg, wait):
         msgwin.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), "Нажмите любую клавишу", color)
     msgwin.refresh()
 
+
 def message_box(smsg):
     draw_message_box(smsg, True)
     stdscr.getch()
     stdscr.clear()
+
 
 def save_message_to_file(msgid, echoarea):
     msg, size = read_msg(msgid, echoarea)
@@ -1024,15 +1081,18 @@ def save_message_to_file(msgid, echoarea):
     f.close
     message_box("Сообщение сохранено в файл\n" + str(msgid) + ".txt")
 
-def get_out_msgids(drafts = False):
+
+def get_out_msgids(drafts=False):
     msgids = []
     not_sended = []
     if os.path.exists("out/" + nodes[node]["nodename"]):
         if drafts:
             msgids = [f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".draft")]
         else:
-            msgids = [f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".out") or f.endswith(".outmsg")]
+            msgids = [f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if
+                      f.endswith(".out") or f.endswith(".outmsg")]
     return msgids
+
 
 def quote(to):
     if oldquote == True:
@@ -1045,6 +1105,7 @@ def quote(to):
             for word in to:
                 q = q + word[0]
         return q
+
 
 def show_subject(subject):
     if len(subject) > width - 8:
@@ -1059,6 +1120,7 @@ def show_subject(subject):
         msg = msg + line
         message_box(msg)
 
+
 def calc_scrollbar_size(length):
     if length > 0:
         scrollbar_size = round((height - 6) * (height - 6) / length + 0.49)
@@ -1067,6 +1129,7 @@ def calc_scrollbar_size(length):
     else:
         scrollbar_size = 1
     return scrollbar_size
+
 
 def set_attr(str):
     if str == chr(15):
@@ -1106,6 +1169,7 @@ def set_attr(str):
         else:
             stdscr.attroff(curses.A_BOLD)
 
+
 def get_msg(msgid):
     r = urllib.request.Request(nodes[node]["node"] + "u/m/" + msgid)
     with urllib.request.urlopen(r) as f:
@@ -1122,6 +1186,7 @@ def get_msg(msgid):
                         add_to_carbonarea(msgid, msbbody)
                 save_message(msgid, msgbody)
 
+
 def menu(title, items):
     h = len(items)
     w = 0
@@ -1135,7 +1200,7 @@ def menu(title, items):
     e = "Esc - отмена"
     if w < len(title):
         w = len(title) + 2
-    menu_win = curses.newwin(h + 2, w + 2, int(height / 2 - h / 2 - 2) , int(width / 2 - w / 2 - 2))
+    menu_win = curses.newwin(h + 2, w + 2, int(height / 2 - h / 2 - 2), int(width / 2 - w / 2 - 2))
     if bold[0]:
         menu_win.attron(curses.color_pair(1))
         menu_win.attron(curses.A_BOLD)
@@ -1166,7 +1231,7 @@ def menu(title, items):
     while not quit:
         i = 1
         for item in items:
-            if i == y :
+            if i == y:
                 if bold[2]:
                     color = curses.color_pair(3) + curses.A_BOLD
                 else:
@@ -1207,9 +1272,11 @@ def menu(title, items):
     else:
         return y
 
+
 def open_link(link):
     global browser
     browser.open(link)
+
 
 def get_out(drafts=False):
     if drafts:
@@ -1217,7 +1284,8 @@ def get_out(drafts=False):
     else:
         return get_out_msgids()
 
-def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False):
+
+def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     global lasts, next_echoarea
     stdscr.clear()
     if bold[0]:
@@ -1267,7 +1335,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
         if len(msgids) > 0:
             draw_reader(msg[1], msgids[msgn], out)
             if width >= 80:
-                msg_string = "Сообщение " + str(msgn + 1) + " из " + str(len(msgids)) + " (" + str(len(msgids) - msgn - 1) + " осталось)"
+                msg_string = "Сообщение " + str(msgn + 1) + " из " + str(len(msgids)) + " (" + str(
+                    len(msgids) - msgn - 1) + " осталось)"
             else:
                 msg_string = str(msgn + 1) + "/" + str(len(msgids)) + " [" + str(len(msgids) - msgn - 1) + "]"
             draw_status(len(version) + 2, msg_string)
@@ -1279,7 +1348,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                 dsc = echo[1]
             if len(dsc) > 0 and width >= 80:
                 draw_title(0, width - 2 - len(dsc), dsc)
-            if not(out):
+            if not (out):
                 try:
                     if width >= 80:
                         msgtime = time.strftime("%d %b %Y %H:%M UTC", time.gmtime(int(msg[2])))
@@ -1291,29 +1360,29 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                 color = curses.color_pair(4) + curses.A_BOLD
             else:
                 color = curses.color_pair(4)
-            if not(out):
+            if not (out):
                 if width >= 80:
                     stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
                     stdscr.addstr(1, 7, msg[3], color)
-                stdscr.addstr(1, width  - len(msgtime) - 1, msgtime, color)
+                stdscr.addstr(1, width - len(msgtime) - 1, msgtime, color)
             else:
                 if len(nodes[node]["to"]) > 0:
                     stdscr.addstr(1, 7, nodes[node]["to"][0], color)
             stdscr.addstr(2, 7, msg[5], color)
             stdscr.addstr(3, 7, msg[6][:width - 8], color)
-            draw_title(4, 0, size) 
+            draw_title(4, 0, size)
             tags = msg[0].split("/")
             if "repto" in tags and 36 + len(size) < width:
                 repto = tags[tags.index("repto") + 1]
                 draw_title(4, len(size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            for i in range (0, height - 6):
-                for x in range (0, width):
+            for i in range(0, height - 6):
+                for x in range(0, width):
                     stdscr.addstr(i + 5, x, " ", 1)
                 if i < len(msgbody) - 1:
-                    if y + i < len(msgbody) and len(msgbody[y+i]) > 0:
+                    if y + i < len(msgbody) and len(msgbody[y + i]) > 0:
                         set_attr(msgbody[y + i][0])
                         x = 0
                         for word in msgbody[y + i][1:].split(" "):
@@ -1382,7 +1451,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
         elif key in r_next and msgn < len(msgids) - 1:
             y = 0
             if len(msgids) > 0:
-                msgn = msgn +1
+                msgn = msgn + 1
                 if len(stack) > 0:
                     stack = []
                 if out:
@@ -1441,7 +1510,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                     go = False
                     quit = False
                 else:
-                    msgn = msgn +1
+                    msgn = msgn + 1
                     if len(stack) > 0:
                         stack = []
                     if out:
@@ -1548,7 +1617,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                     call_editor(msgids[msgn])
                     msgids = get_out()
                 if msgn > len(msgids) - 1:
-                    msgn = len(msgids) -1
+                    msgn = len(msgids) - 1
                 if len(msgids) > 0:
                     msg, size = read_out_msg(msgids[msgn])
                     msgbody = body_render(msg[8:])
@@ -1600,14 +1669,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                     open_link(links[i - 1])
             stdscr.clear()
         elif key in r_to_out and drafts:
-            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn], "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".draft", ".out"))
+            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn],
+                     "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".draft", ".out"))
             os.remove("out/" + nodes[node]["nodename"] + "/" + msgids[msgn])
             if drafts:
                 msgids = get_out(True)
             else:
                 msgids = get_out()
             if msgn > len(msgids) - 1:
-                msgn = len(msgids) -1
+                msgn = len(msgids) - 1
             if len(msgids) > 0:
                 msg, size = read_out_msg(msgids[msgn])
                 msgbody = body_render(msg[8:])
@@ -1615,14 +1685,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
                 go = False
                 quit = False
         elif key in r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn], "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".out", ".draft"))
+            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn],
+                     "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".out", ".draft"))
             os.remove("out/" + nodes[node]["nodename"] + "/" + msgids[msgn])
             if drafts:
                 msgids = get_out(True)
             else:
                 msgids = get_out()
             if msgn > len(msgids) - 1:
-                msgn = len(msgids) -1
+                msgn = len(msgids) - 1
             if len(msgids) > 0:
                 msg, size = read_out_msg(msgids[msgn])
                 msgbody = body_render(msg[8:])
@@ -1656,6 +1727,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts = False)
     stdscr.clear()
     return quit
 
+
 def draw_msg_list(echo, lst, msgn):
     stdscr.clear()
     for i in range(0, width):
@@ -1668,6 +1740,7 @@ def draw_msg_list(echo, lst, msgn):
         draw_title(0, 0, "Список сообщений в конференции " + echo)
     else:
         draw_title(0, 0, echo)
+
 
 def msg_list(echoarea, msgids, msgn):
     lst = []
@@ -1701,7 +1774,7 @@ def msg_list(echoarea, msgids, msgn):
                     color = curses.color_pair(4)
             draw_cursor(n - 1, color)
             stdscr.addstr(n, 0, lst[i][1], color)
-            stdscr.addstr(n, 16, lst[i][2][:width-26], color)
+            stdscr.addstr(n, 16, lst[i][2][:width - 26], color)
             stdscr.insstr(n, width - 10, lst[i][3], color)
             n += 1
         key = stdscr.getch()
@@ -1752,6 +1825,7 @@ def msg_list(echoarea, msgids, msgn):
         return -1
     else:
         return y + start
+
 
 loc = locale.getdefaultlocale()
 locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
