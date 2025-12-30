@@ -1,8 +1,10 @@
 .idea/
 .venv/
+.venv2.7/
 
+__pycache__
 ait/
 caesium.cfg
 idec.db
-__pycache__
 lasts.lst
+out/

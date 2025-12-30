@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+# coding=utf-8
 import base64
 import codecs
 import curses
@@ -18,6 +18,12 @@ from shutil import copyfile
 
 from keys import *
 
+# TODO: Add http/https/socks proxy support
+# import socket
+# import socks
+# socks.set_default_proxy(socks.SOCKS5, '127.0.0.1', 8081)
+# socket.socket = socks.socksocket
+
 lasts = {}
 color_theme = "default"
 bold = [False, False, False, False, False, False, False, False, False, False, False, False]
@@ -29,6 +35,11 @@ depth = 50
 fdepth = 5
 messages = []
 twit = []
+nodes = []
+node = 0
+editor = ""
+oldquote = None
+db = None
 
 version = "Caesium/0.5 │"
 
@@ -86,10 +97,9 @@ def check_config():
 #
 # Взаимодействие с нодой
 #
-
-def separate(l, step=20):
-    for x in range(0, len(l), step):
-        yield l[x:x + step]
+def separate(fetch_list, step=20):
+    for x in range(0, len(fetch_list), step):
+        yield fetch_list[x:x + step]
 
 
 def load_config():
@@ -108,7 +118,7 @@ def load_config():
             if not first:
                 node["echoareas"] = echoareas
                 node["archive"] = archive
-                if not "to" in node:
+                if "to" not in node:
                     node["to"] = []
                 nodes.append(node)
             else:
@@ -162,9 +172,9 @@ def load_config():
         elif param[0] == "twit":
             twit = param[1].split(",")
 
-    if not "nodename" in node:
+    if "nodename" not in node:
         node["nodename"] = "untitled node"
-    if not "to" in node:
+    if "to" not in node:
         node["to"] = []
     node["echoareas"] = echoareas
     node["archive"] = archive
@@ -176,9 +186,10 @@ def load_config():
 
 def load_colors():
     global bold
-    colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "gray"]
-    params = ["border", "titles", "cursor", "text", "quote1", "quote2", "comment", "url", "header", "statusline",
-              "scrollbar", "origin"]
+    colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan",
+              "white", "gray"]
+    params = ["border", "titles", "cursor", "text", "quote1", "quote2",
+              "comment", "url", "header", "statusline", "scrollbar", "origin"]
 
     try:
         theme = open("themes/" + color_theme + ".cfg", "r").read().split("\n")
@@ -352,11 +363,6 @@ def send_mail():
         print("\nОшибка: не удаётся связаться с нодой.")
 
 
-def separate(l, step=40):
-    for x in range(0, len(l), step):
-        yield l[x:x + step]
-
-
 def get_msg_list():
     msg_list = []
     echoareas = []
@@ -380,7 +386,7 @@ def get_bundle(node, msgids):
         with urllib.request.urlopen(r) as f:
             bundle = f.read().decode("utf-8").split("\n")
     except:
-        None
+        pass
     return bundle
 
 
@@ -401,7 +407,8 @@ def debundle(bundle):
 
 def echo_filter(ea):
     rr = re.compile(r'^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$')
-    if rr.match(ea): return True
+    if rr.match(ea):
+        return True
 
 
 def get_mail():
@@ -413,7 +420,7 @@ def get_mail():
         if echo_filter(line):
             local_index = get_echo_msgids(line)
         else:
-            if not line in local_index:
+            if line not in local_index:
                 fetch_msg_list.append(line)
     msg_list_len = str(len(fetch_msg_list))
     if len(fetch_msg_list) > 0:
@@ -445,7 +452,6 @@ def mailer():
 #
 # Пользовательский интерфейс
 #
-
 echo_cursor = 0
 archive_cursor = 0
 width = 0
@@ -1013,7 +1019,7 @@ def call_editor(out=False, draft=False):
                         try:
                             os.remove("out/" + nodes[node]["nodename"] + "/" + out)
                         except:
-                            None
+                            pass
                     resave_out(out, True)
             elif d == 1:
                 if not out:
@@ -1023,7 +1029,7 @@ def call_editor(out=False, draft=False):
                         try:
                             os.remove("out/" + nodes[node]["nodename"] + "/" + out)
                         except:
-                            None
+                            pass
                     resave_out(out.replace(".draft", ".out"))
     else:
         os.remove("temp")
@@ -1078,7 +1084,7 @@ def save_message_to_file(msgid, echoarea):
     f.write("Кому: " + msg[5] + "\n")
     f.write("Тема: " + msg[6] + "\n")
     f.write("\n".join(msg[7:]))
-    f.close
+    f.close()
     message_box("Сообщение сохранено в файл\n" + str(msgid) + ".txt")
 
 
@@ -1756,10 +1762,10 @@ def msg_list(echoarea, msgids, msgn):
     else:
         start = echo_length - height + 1
         end = start + height - 1
-    quit = False
+    done = False
     cancel = False
     y = msgn - start
-    while not quit:
+    while not done:
         n = 1
         for i in range(start, end):
             if i == y + start:
@@ -1817,9 +1823,9 @@ def msg_list(echoarea, msgids, msgn):
             start = echo_length - height + 1
             end = start + height - 1
         elif key in s_enter:
-            quit = True
+            done = True
         elif key in r_quit:
-            quit = True
+            done = True
             cancel = True
     if cancel:
         return -1

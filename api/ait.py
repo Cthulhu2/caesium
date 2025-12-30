@@ -1,3 +1,4 @@
+# coding=utf-8
 import base64
 import codecs
 import hashlib
@@ -21,7 +22,7 @@ def save_to_favorites(msgid, msg):
             favorites.append(line.split(":")[0])
     else:
         favorites = []
-    if not msgid in favorites:
+    if msgid not in favorites:
         codecs.open("ait/favorites.iat", "a", "utf-8").write(msgid + "\n")
         codecs.open("ait/favorites.mat", "a", "utf-8").write(msgid + ":" + chr(15).join(msg) + "\n")
         return True
@@ -60,9 +61,9 @@ def add_to_carbonarea(msgid, msgbody):
 
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body.replace("\n", chr(15))]
-    msgid = base64.urlsafe_b64encode(hashlib.sha256("\n".join(msgbody).encode()).digest()).decode("utf-8").replace("-",
-                                                                                                                   "A").replace(
-        "_", "z")[:20]
+    msgid = base64.urlsafe_b64encode(
+        hashlib.sha256("\n".join(msgbody).encode()).digest()
+    ).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     open("ait/carbonarea.iat", "a").write(msgid + "\n")
     codecs.open("ait/carbonarea.mat", "a", "utf-8").write(msgid + ":" + chr(15).join(msgbody) + "\n")
 
@@ -79,7 +80,7 @@ def save_message(raw, node, to):
             except:
                 carbonarea = []
             for name in to:
-                if name in msgbody[5] and not msgid in carbonarea:
+                if name in msgbody[5] and msgid not in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
 
 
@@ -106,11 +107,11 @@ def remove_echoarea(echoarea):
     try:
         os.remove("ait/%s.iat" % echoarea)
     except:
-        None
+        pass
     try:
         os.remove("ait/%s.mat" % echoarea)
     except:
-        None
+        pass
 
 
 def get_msg_list_data(echoarea):

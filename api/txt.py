@@ -1,3 +1,4 @@
+# coding=utf-8
 import base64
 import codecs
 import hashlib
@@ -57,7 +58,9 @@ def add_to_carbonarea(msgid, msgbody):
 
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
-    msgid = base64.urlsafe_b64encode(hashlib.sha256("\n".join(msgbody).encode()).digest()).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
+    msgid = base64.urlsafe_b64encode(
+        hashlib.sha256("\n".join(msgbody).encode()).digest()
+    ).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     codecs.open("msg/%s" % msgid, "w", "utf-8").write("\n".join(msgbody))
     open("echo/carbonarea", "a").write(msgid + "\n")
 
@@ -74,7 +77,7 @@ def save_message(raw, node, to):
         codecs.open("msg/" + msgid, "w", "utf-8").write("\n".join(msgbody))
         if to:
             for name in to:
-                if name in msgbody[5] and not msgid in carbonarea:
+                if name in msgbody[5] and msgid not in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
 
 
@@ -104,11 +107,11 @@ def remove_echoarea(echoarea):
         try:
             os.remove("msg/%s" % msgid)
         except:
-            None
+            pass
     try:
         os.remove("echo/%s" % echoarea)
     except:
-        None
+        pass
 
 
 def read_msg(msgid, echoarea):

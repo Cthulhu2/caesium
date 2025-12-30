@@ -1,3 +1,4 @@
+# coding=utf-8
 import base64
 import hashlib
 import sqlite3
@@ -115,7 +116,7 @@ def read_msg(msgid, echoarea):
     return msg.split("\n"), size
 
 
-# Create databse
+# Create database
 c.execute("""CREATE TABLE IF NOT EXISTS msg(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     msgid TEXT,

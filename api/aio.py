@@ -1,3 +1,4 @@
+# coding=utf-8
 import base64
 import codecs
 import hashlib
@@ -21,7 +22,7 @@ def save_to_favorites(msgid, msg):
             favorites.append(line.split(":")[0])
     else:
         favorites = []
-    if not msgid in favorites:
+    if msgid not in favorites:
         codecs.open("aio/favorites.aio", "a", "utf-8").write(msgid + ":" + chr(15).join(msg) + "\n")
         return True
     else:
@@ -78,7 +79,7 @@ def save_message(raw, node, to):
             except:
                 carbonarea = []
             for name in to:
-                if name in msgbody[5] and not msgid in carbonarea:
+                if name in msgbody[5] and msgid not in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
 
 
@@ -102,7 +103,7 @@ def remove_echoarea(echoarea):
     try:
         os.remove("aio/%s.aio" % echoarea)
     except:
-        None
+        pass
 
 
 def get_msg_list_data(echoarea):
