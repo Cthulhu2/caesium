@@ -25,8 +25,33 @@ from keys import *
 # socket.socket = socks.socksocket
 
 lasts = {}
+# Theme
 color_theme = "default"
-bold = [False, False, False, False, False, False, False, False, False, False, False, False]
+color_pairs = {
+    # "theme-part": [color-pair-NUM, bold-attr]
+    # @formatter:off
+    "border":     [1,  0],
+    "titles":     [2,  0],
+    "cursor":     [3,  0],
+    "text":       [4,  0],
+    "quote1":     [5,  0],
+    "quote2":     [6,  0],
+    "comment":    [7,  0],
+    "url":        [8,  0],
+    "statusline": [9,  0],
+    "header":     [10, 0],
+    "scrollbar":  [11, 0],
+    "origin":     [12, 0],
+    # @formatter:on
+}
+
+
+def get_color(theme_part):
+    cp = color_pairs[theme_part][0]
+    bold = color_pairs[theme_part][1]
+    return curses.color_pair(cp) | bold
+
+
 counts = []
 counts_rescan = True
 echo_counts = {}
@@ -185,99 +210,32 @@ def load_config():
 
 
 def load_colors():
-    global bold
     colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan",
               "white", "gray"]
-    params = ["border", "titles", "cursor", "text", "quote1", "quote2",
-              "comment", "url", "header", "statusline", "scrollbar", "origin"]
 
-    try:
-        theme = open("themes/" + color_theme + ".cfg", "r").read().split("\n")
-    except:
-        theme = open("themes/default.cfg", "r").read().split("\n")
+    theme = open("themes/" + color_theme + ".cfg", "r").read().split("\n")
     for line in theme:
-        param = line.split(" ")
-        if len(param) > 1:
-            if param[1] == "grey":
-                param[1] = "gray"
-            if param[0] in params:
-                fg = colors.index(param[1])
-                if param[2] == "default":
-                    bg = -1
-                else:
-                    bg = colors.index(param[2])
-        if param[0] == "border":
-            curses.init_pair(1, fg, bg)
-            if len(param) == 4:
-                bold[0] = True
-            else:
-                bold[0] = False
-        if param[0] == "titles":
-            curses.init_pair(2, fg, bg)
-            if len(param) == 4:
-                bold[1] = True
-            else:
-                bold[1] = False
-        if param[0] == "cursor":
-            curses.init_pair(3, fg, bg)
-            if len(param) == 4:
-                bold[2] = True
-            else:
-                bold[2] = False
-        if param[0] == "text":
-            curses.init_pair(4, fg, bg)
-            if len(param) == 4:
-                bold[3] = True
-            else:
-                bold[3] = False
-        if param[0] == "quote1":
-            curses.init_pair(5, fg, bg)
-            if len(param) == 4:
-                bold[4] = True
-            else:
-                bold[4] = False
-        if param[0] == "quote2":
-            curses.init_pair(6, fg, bg)
-            if len(param) == 4:
-                bold[5] = True
-            else:
-                bold[5] = False
-        if param[0] == "comment":
-            curses.init_pair(7, fg, bg)
-            if len(param) == 4:
-                bold[6] = True
-            else:
-                bold[6] = False
-        if param[0] == "url":
-            curses.init_pair(8, fg, bg)
-            if len(param) == 4:
-                bold[7] = True
-            else:
-                bold[7] = False
-        if param[0] == "statusline":
-            curses.init_pair(9, fg, bg)
-            if len(param) == 4:
-                bold[8] = True
-            else:
-                bold[8] = False
-        if param[0] == "header":
-            curses.init_pair(10, fg, bg)
-            if len(param) == 4:
-                bold[9] = True
-            else:
-                bold[9] = False
-        if param[0] == "scrollbar":
-            curses.init_pair(11, fg, bg)
-            if len(param) == 4:
-                bold[10] = True
-            else:
-                bold[10] = False
-        if param[0] == "origin":
-            curses.init_pair(12, fg, bg)
-            if len(param) == 4:
-                bold[11] = True
-            else:
-                bold[11] = False
+        # sanitize
+        line = line.replace("\t", " ")
+        while "  " in line:
+            line = line.replace("  ", " ")
+        if line.startswith("#"):
+            continue  # skip comments
+        param = line.strip().split(" ")
+        if len(param) < 3 or 4 < len(param) or param[0] not in color_pairs:
+            continue  # skip unknown lines, theme parts
+        if param[1] == "grey":
+            param[1] = "gray"
+        #
+        fg = colors.index(param[1])
+        if param[2] == "default":
+            bg = -1
+        else:
+            bg = colors.index(param[2])
+        color_pairs[param[0]][1] = curses.A_NORMAL
+        if len(param) == 4:
+            color_pairs[param[0]][1] = curses.A_BOLD
+        curses.init_pair(color_pairs[param[0]][0], fg, bg)
 
 
 def save_out(draft=False):
@@ -465,7 +423,7 @@ def splash_screen():
     y = int((height - len(splash)) / 2)
     i = 0
     for line in splash:
-        stdscr.addstr(y + i, x, line, curses.color_pair(4))
+        stdscr.addstr(y + i, x, line, get_color("text"))
         i = i + 1
     stdscr.refresh()
     curses.napms(2000)
@@ -482,24 +440,15 @@ def draw_title(y, x, title):
     if (x + len(title) + 2) > width:
         title = title[:width - x - 2 - 3] + '...'
     #
-    if bold[0]:
-        color = curses.color_pair(1) + curses.A_BOLD
-    else:
-        color = curses.color_pair(1)
+    color = get_color("border")
     stdscr.addstr(y, x, "[", color)
     stdscr.addstr(y, x + 1 + len(title), "]", color)
-    if bold[1]:
-        color = curses.color_pair(2) + curses.A_BOLD
-    else:
-        color = curses.color_pair(2)
-    stdscr.addstr(y, x + 1, title, curses.color_pair(2) + curses.A_BOLD)
+    color = get_color("titles") | curses.A_BOLD
+    stdscr.addstr(y, x + 1, title, color)
 
 
 def draw_status(x, title):
-    if bold[8]:
-        color = curses.color_pair(9) + curses.A_BOLD
-    else:
-        color = curses.color_pair(9)
+    color = get_color("statusline")
     stdscr.addstr(height - 1, x, title, color)
 
 
@@ -552,21 +501,11 @@ def draw_echo_selector(start, cursor, archive):
     dsc_lens = []
     hidedsc = False
     m = 0
-    if bold[0]:
-        stdscr.attron(curses.color_pair(1))
-        stdscr.attron(curses.A_BOLD)
-    else:
-        stdscr.attron(curses.color_pair(1))
+    stdscr.attrset(get_color("border"))
     for i in range(0, width):
-        if bold[0]:
-            color = curses.color_pair(1) + curses.A_BOLD
-        else:
-            color = curses.color_pair(1)
+        color = get_color("border")
         stdscr.insstr(0, i, "─", color)
-        if bold[2]:
-            color = curses.color_pair(9) + curses.A_BOLD
-        else:
-            color = curses.color_pair(9)
+        color = get_color("statusline")
         stdscr.insstr(height - 1, i, " ", color)
     if archive:
         echoareas = nodes[node]["archive"]
@@ -598,28 +537,14 @@ def draw_echo_selector(start, cursor, archive):
         if y - start < height - 2:
             if y == cursor:
                 if y >= start:
-                    if bold[2]:
-                        color = curses.color_pair(3) + curses.A_BOLD
-                        stdscr.attron(curses.color_pair(3))
-                        stdscr.attron(curses.A_BOLD)
-                    else:
-                        color = curses.color_pair(3)
-                        stdscr.attron(curses.color_pair(3))
-                        stdscr.attroff(curses.A_BOLD)
+                    color = get_color("cursor")
+                    stdscr.attrset(color)
                     draw_cursor(y - start, color)
             else:
                 if y >= start:
-                    if bold[3]:
-                        color = curses.color_pair(4) + curses.A_BOLD
-                    else:
-                        color = curses.color_pair(4)
+                    color = get_color("text")
                     draw_cursor(y - start, color)
-                if bold[3]:
-                    stdscr.attron(curses.color_pair(4))
-                    stdscr.attron(curses.A_BOLD)
-                else:
-                    stdscr.attron(curses.color_pair(4))
-                    stdscr.attroff(curses.A_BOLD)
+                stdscr.attrset(get_color("text"))
             if y + 1 >= start + 1:
                 if counts_rescan:
                     counts = rescan_counts(echoareas)
@@ -960,16 +885,10 @@ def body_render(tbody):
 
 def draw_reader(echo, msgid, out):
     for i in range(0, width):
-        if bold[0]:
-            color = curses.color_pair(1) + curses.A_BOLD
-        else:
-            color = curses.color_pair(1)
+        color = get_color("border")
         stdscr.insstr(0, i, "─", color)
         stdscr.insstr(4, i, "─", color)
-        if bold[2]:
-            color = curses.color_pair(9) + curses.A_BOLD
-        else:
-            color = curses.color_pair(9)
+        color = get_color("statusline")
         stdscr.insstr(height - 1, i, " ", color)
     if out:
         draw_title(0, 0, echo)
@@ -985,10 +904,7 @@ def draw_reader(echo, msgid, out):
     current_time()
     for i in range(0, 3):
         draw_cursor(i, 1)
-    if bold[1]:
-        color = curses.color_pair(2) + curses.A_BOLD
-    else:
-        color = curses.color_pair(2)
+    color = get_color("titles")
     stdscr.addstr(1, 1, "От:   ", color)
     stdscr.addstr(2, 1, "Кому: ", color)
     stdscr.addstr(3, 1, "Тема: ", color)
@@ -1045,26 +961,16 @@ def draw_message_box(smsg, wait):
         msgwin = curses.newwin(len(msg) + 4, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
     else:
         msgwin = curses.newwin(len(msg) + 2, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
-    if bold[0]:
-        msgwin.attron(curses.color_pair(1))
-        msgwin.attron(curses.A_BOLD)
-    else:
-        msgwin.attron(curses.color_pair(1))
+    msgwin.attrset(get_color("border"))
     msgwin.bkgd(' ', curses.color_pair(1))
     msgwin.border()
 
     i = 1
-    if bold[3]:
-        color = curses.color_pair(4) + curses.A_BOLD
-    else:
-        color = curses.color_pair(4)
+    color = get_color("text")
     for line in msg:
         msgwin.addstr(i, 1, line, color)
         i = i + 1
-    if bold[1]:
-        color = curses.color_pair(2) + curses.A_BOLD
-    else:
-        color = curses.color_pair(2)
+    color = get_color("titles")
     if wait:
         msgwin.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), "Нажмите любую клавишу", color)
     msgwin.refresh()
@@ -1137,43 +1043,19 @@ def calc_scrollbar_size(length):
     return scrollbar_size
 
 
-def set_attr(str):
-    if str == chr(15):
-        stdscr.attron(curses.color_pair(5))
-        if bold[4]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
-    elif str == chr(16):
-        stdscr.attron(curses.color_pair(6))
-        if bold[5]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
-    elif str == chr(17):
-        stdscr.attron(curses.color_pair(7))
-        if bold[6]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
-    elif str == chr(18):
-        stdscr.attron(curses.color_pair(10))
-        if bold[9]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
-    elif str == chr(19):
-        stdscr.attron(curses.color_pair(12))
-        if bold[11]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
+def set_attr(s):
+    if s == chr(15):
+        stdscr.attrset(get_color("quote1"))
+    elif s == chr(16):
+        stdscr.attrset(get_color("quote2"))
+    elif s == chr(17):
+        stdscr.attrset(get_color("comment"))
+    elif s == chr(18):
+        stdscr.attrset(get_color("header"))
+    elif s == chr(19):
+        stdscr.attrset(get_color("origin"))
     else:
-        stdscr.attron(curses.color_pair(4))
-        if bold[3]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
+        stdscr.attrset(get_color("text"))
 
 
 def get_msg(msgid):
@@ -1207,50 +1089,29 @@ def menu(title, items):
     if w < len(title):
         w = len(title) + 2
     menu_win = curses.newwin(h + 2, w + 2, int(height / 2 - h / 2 - 2), int(width / 2 - w / 2 - 2))
-    if bold[0]:
-        menu_win.attron(curses.color_pair(1))
-        menu_win.attron(curses.A_BOLD)
-    else:
-        menu_win.attron(curses.color_pair(1))
+    menu_win.attrset(get_color("border"))
     menu_win.border()
-    if bold[0]:
-        color = curses.color_pair(1) + curses.A_BOLD
-    else:
-        color = curses.color_pair(1)
+    color = get_color("border")
     menu_win.addstr(0, 1, "[", color)
     menu_win.addstr(0, 2 + len(title), "]", color)
     menu_win.addstr(h + 1, 1, "[", color)
     menu_win.addstr(h + 1, 2 + len(e), "]", color)
-    if bold[1]:
-        color = curses.color_pair(2) + curses.A_BOLD
-    else:
-        color = curses.color_pair(2)
-    menu_win.addstr(0, 2, title, curses.color_pair(2) + curses.A_BOLD)
-    menu_win.addstr(h + 1, 2, e, curses.color_pair(2) + curses.A_BOLD)
-    if bold[0]:
-        color = curses.color_pair(1) + curses.A_BOLD
-    else:
-        color = curses.color_pair(1)
+
+    color = get_color("titles") | curses.A_BOLD
+    menu_win.addstr(0, 2, title, color)
+    menu_win.addstr(h + 1, 2, e, color)
     y = 1
-    quit = False
+    done = False
     cancel = False
-    while not quit:
+    while not done:
         i = 1
         for item in items:
             if i == y:
-                if bold[2]:
-                    color = curses.color_pair(3) + curses.A_BOLD
-                else:
-                    color = curses.color_pair(3)
-                for x in range(1, w + 1):
-                    menu_win.addstr(i, x, " ", color)
+                color = get_color("cursor")
             else:
-                if bold[3]:
-                    color = curses.color_pair(4) + curses.A_BOLD
-                else:
-                    color = curses.color_pair(4)
-                for x in range(1, w + 1):
-                    menu_win.addstr(i, x, " ", color)
+                color = get_color("text")
+            for x in range(1, w + 1):
+                menu_win.addstr(i, x, " ", color)
             if len(item) < w - 2:
                 menu_win.addstr(i, 1, item, color)
             else:
@@ -1269,10 +1130,10 @@ def menu(title, items):
             else:
                 y = 1
         elif key in s_enter:
-            quit = True
+            done = True
         elif key in r_quit:
             cancel = True
-            quit = True
+            done = True
     if cancel:
         return False
     else:
@@ -1294,11 +1155,7 @@ def get_out(drafts=False):
 def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     global lasts, next_echoarea
     stdscr.clear()
-    if bold[0]:
-        stdscr.attron(curses.color_pair(1))
-        stdscr.attron(curses.A_BOLD)
-    else:
-        stdscr.attron(curses.color_pair(1))
+    stdscr.attrset(get_color("border"))
     y = 0
     msgn = last
     key = 0
@@ -1354,7 +1211,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 dsc = echo[1]
             if len(dsc) > 0 and width >= 80:
                 draw_title(0, width - 2 - len(dsc), dsc)
-            if not (out):
+            if not out:
                 try:
                     if width >= 80:
                         msgtime = time.strftime("%d %b %Y %H:%M UTC", time.gmtime(int(msg[2])))
@@ -1362,11 +1219,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msgtime = time.strftime("%d.%m.%y %H:%M", time.gmtime(int(msg[2])))
                 except:
                     msgtime = ""
-            if bold[3]:
-                color = curses.color_pair(4) + curses.A_BOLD
-            else:
-                color = curses.color_pair(4)
-            if not (out):
+            color = get_color("text")
+            if not out:
                 if width >= 80:
                     stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
@@ -1392,22 +1246,14 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         set_attr(msgbody[y + i][0])
                         x = 0
                         for word in msgbody[y + i][1:].split(" "):
-                            if word.startswith("http://") or word.startswith("https://") or word.startswith("ftp://"):
-                                stdscr.attron(curses.color_pair(8))
-                                if bold[7]:
-                                    stdscr.attron(curses.A_BOLD)
-                                else:
-                                    stdscr.attroff(curses.A_BOLD)
+                            if is_url(word):
+                                stdscr.attrset(get_color("url"))
                                 stdscr.addstr(i + 5, x, word)
                                 set_attr(msgbody[y + i][0])
                             else:
                                 stdscr.addstr(i + 5, x, word)
                             x += len(word) + 1
-            stdscr.attron(curses.color_pair(11))
-            if bold[10]:
-                stdscr.attron(curses.A_BOLD)
-            else:
-                stdscr.attroff(curses.A_BOLD)
+            stdscr.attrset(get_color("scrollbar"))
             if len(msgbody) > height - 5:
                 for i in range(5, height - 1):
                     stdscr.addstr(i, width - 1, "░")
@@ -1421,11 +1267,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         stdscr.addstr(i, width - 1, "█")
         else:
             draw_reader(echo[0], "", out)
-        stdscr.attron(curses.color_pair(1))
-        if bold[0]:
-            stdscr.attron(curses.A_BOLD)
-        else:
-            stdscr.attroff(curses.A_BOLD)
+        stdscr.attrset(get_color("border"))
         stdscr.refresh()
         key = stdscr.getch()
         if key == curses.KEY_RESIZE:
@@ -1734,13 +1576,17 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     return quit
 
 
+def is_url(word: str):
+    return (word.startswith("http://")
+            or word.startswith("https://")
+            or word.startswith("ftp://")
+            or word.startswith("ii://"))
+
+
 def draw_msg_list(echo, lst, msgn):
     stdscr.clear()
     for i in range(0, width):
-        if bold[0]:
-            color = curses.color_pair(1) + curses.A_BOLD
-        else:
-            color = curses.color_pair(1)
+        color = get_color("border")
         stdscr.insstr(0, i, "─", color)
     if width >= 80:
         draw_title(0, 0, "Список сообщений в конференции " + echo)
@@ -1769,15 +1615,9 @@ def msg_list(echoarea, msgids, msgn):
         n = 1
         for i in range(start, end):
             if i == y + start:
-                if bold[2]:
-                    color = curses.color_pair(3) + curses.A_BOLD
-                else:
-                    color = curses.color_pair(3)
+                color = get_color("cursor")
             else:
-                if bold[3]:
-                    color = curses.color_pair(4) + curses.A_BOLD
-                else:
-                    color = curses.color_pair(4)
+                color = get_color("text")
             draw_cursor(n - 1, color)
             stdscr.addstr(n, 0, lst[i][1], color)
             stdscr.addstr(n, 16, lst[i][2][:width - 26], color)
