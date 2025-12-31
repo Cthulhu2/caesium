@@ -9,6 +9,7 @@ import os
 import pickle
 import re
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -1552,10 +1553,10 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             if db == 0:
                 message_box("Функция не поддерживается текстовой базой.")
             else:
-                l = msg_list(echo, msgids, msgn)
-                if l > -1:
+                selected_msgn = show_msg_list_screen(echo, msgn)
+                if selected_msgn > -1:
                     y = 0
-                    msgn = l
+                    msgn = selected_msgn
                     if len(stack) > 0:
                         stack = []
                     msg, size = read_msg(msgids[msgn], echo[0])
@@ -1594,24 +1595,21 @@ def draw_msg_list(echo, lst, msgn):
         draw_title(0, 0, echo)
 
 
-def msg_list(echoarea, msgids, msgn):
-    lst = []
+def show_msg_list_screen(echoarea, msgn):
     lst = get_msg_list_data(echoarea[0])
     draw_msg_list(echoarea[0], lst, msgn)
     echo_length = len(lst)
     if echo_length <= height - 1:
         start = 0
-        end = echo_length - 1
+        end = echo_length
     elif msgn + height - 1 < echo_length:
         start = msgn
         end = msgn + height - 1
     else:
         start = echo_length - height + 1
         end = start + height - 1
-    done = False
-    cancel = False
     y = msgn - start
-    while not done:
+    while True:
         n = 1
         for i in range(start, end):
             if i == y + start:
@@ -1638,42 +1636,38 @@ def msg_list(echoarea, msgids, msgn):
                 end += 1
             if y > height - 2:
                 y = height - 2
+            y = min(y, echo_length - 1)
         elif key in s_ppage:
             if y == 0:
-                start = start - height + 1
-                if start < 0:
-                    start = 0
-                end = start + height - 1
-            if y > 0:
-                y = 0
+                start = max(0, start - height + 1)
+                end = min(echo_length, start + height - 1)
+            y = 0
         elif key in s_npage:
             if y == height - 2:
                 start = start + height - 1
                 if start > echo_length - height + 1:
                     start = echo_length - height + 1
                 end = start + height - 1
-            if y < height - 2:
-                y = height - 2
+            y = min(echo_length - 1, height - 2)
         elif key in s_home:
             y = 0
             start = 0
-            end = height - 1
+            end = min(echo_length, height - 1)
         elif key in s_end:
-            y = height - 2
-            start = echo_length - height + 1
-            end = start + height - 1
+            y = min(echo_length - 1, height - 2)
+            start = max(0, echo_length - height + 1)
+            end = min(echo_length, start + height - 1)
         elif key in s_enter:
-            done = True
+            return y + start  #
         elif key in r_quit:
-            done = True
-            cancel = True
-    if cancel:
-        return -1
-    else:
-        return y + start
+            return -1  #
 
 
-loc = locale.getdefaultlocale()
+if sys.version_info >= (3, 11):
+    loc = locale.getlocale()
+else:
+    # noinspection PyDeprecation
+    loc = locale.getdefaultlocale()
 locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
 
 check_config()
