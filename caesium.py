@@ -326,7 +326,6 @@ def send_mail():
                 print("\nERROR: unknown error!")
         if len(lst) > 0:
             print()
-    # noinspection PyBroadException
     except Exception as ex:
         print("\nОшибка: не удаётся связаться с нодой. " + str(ex))
 
@@ -409,7 +408,6 @@ def mailer():
         send_mail()
     try:
         get_mail()
-    # noinspection PyBroadException
     except Exception as ex:
         print("\nОШИБКА: " + str(ex))
     input("Нажмите Enter для продолжения.")
@@ -637,11 +635,10 @@ def edit_config(out=False):
     get_term_size()
 
 
-def echo_selector():
+def show_echo_selector_screen():
     global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node, stdscr
     archive = False
     echoareas = nodes[node]["echoareas"]
-    key = 0
     go = True
     start = 0
     if archive:
@@ -662,7 +659,7 @@ def echo_selector():
             stdscr.clear()
         elif key in s_up and cursor > 0:
             cursor = cursor - 1
-            if cursor - start < 0 and start > 0:
+            if cursor - start < 0 < start:
                 start = start - 1
         elif key in s_down and cursor < len(echoareas) - 1:
             cursor = cursor + 1
@@ -672,7 +669,7 @@ def echo_selector():
             cursor = cursor - height + 2
             if cursor < 0:
                 cursor = 0
-            if cursor - start < 0 and start > 0:
+            if cursor - start < 0 < start:
                 start = start - height + 2
             if start < 0:
                 start = 0
@@ -810,20 +807,19 @@ def echo_selector():
 
 
 def read_out_msg(msgid):
-    size = "0b"
-    temp = open("out/" + nodes[node]["nodename"] + "/" + msgid, "r").read().split("\n")
-    msg = []
-    msg.append("")
-    msg.append(temp[0])
-    msg.append("")
-    msg.append("")
-    msg.append("")
-    msg.append(temp[1])
-    msg.append(temp[2])
+    node_dir = "out/" + nodes[node]["nodename"]
+    temp = open(node_dir + "/" + msgid, "r").read().split("\n")
+    msg = ["",
+           temp[0],
+           "",
+           "",
+           "",
+           temp[1],
+           temp[2]]
     for line in temp[3:]:
         if not (line.startswith("@repto:")):
             msg.append(line)
-    size = os.stat("out/" + nodes[node]["nodename"] + "/" + msgid).st_size
+    size = os.stat(node_dir + "/" + msgid).st_size
     if size < 1024:
         size = str(size) + " B"
     else:
@@ -918,7 +914,7 @@ def draw_reader(echo, msgid, out):
     stdscr.addstr(3, 1, "Тема: ", color)
 
 
-def call_editor(out=False, draft=False):
+def call_editor(out='', draft=False):
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
@@ -933,28 +929,30 @@ def call_editor(out=False, draft=False):
     stdscr.keypad(True)
     get_term_size()
     if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
-        d = menu("Куда сохранить?", ["Сохранить в исходящие", "Сохранить как черновик"])
-        if d:
-            if d == 2:
-                if not out:
-                    save_out(True)
-                else:
-                    if out.endswith(".out"):
-                        try:
-                            os.remove("out/" + nodes[node]["nodename"] + "/" + out)
-                        except:
-                            pass
-                    resave_out(out, True)
-            elif d == 1:
-                if not out:
-                    save_out()
-                else:
-                    if out.endswith(".draft"):
-                        try:
-                            os.remove("out/" + nodes[node]["nodename"] + "/" + out)
-                        except:
-                            pass
-                    resave_out(out.replace(".draft", ".out"))
+        d = show_menu("Куда сохранить?", ["Сохранить в исходящие",
+                                          "Сохранить как черновик"])
+        if d == 2:
+            if not out:
+                save_out(True)
+            else:
+                if out.endswith(".out"):
+                    # noinspection PyBroadException
+                    try:
+                        os.remove("out/" + nodes[node]["nodename"] + "/" + out)
+                    except Exception:
+                        pass
+                resave_out(out, draft=True)
+        elif d == 1:
+            if not out:
+                save_out()
+            else:
+                if out.endswith(".draft"):
+                    # noinspection PyBroadException
+                    try:
+                        os.remove("out/" + nodes[node]["nodename"] + "/" + out)
+                    except Exception:
+                        pass
+                resave_out(out.replace(".draft", ".out"))
     else:
         os.remove("temp")
 
@@ -1083,7 +1081,7 @@ def get_msg(msgid):
                 save_message(msgid, msgbody)
 
 
-def menu(title, items):
+def show_menu(title, items):
     h = len(items)
     w = 0
     for item in items:
@@ -1096,7 +1094,9 @@ def menu(title, items):
     e = "Esc - отмена"
     if w < len(title):
         w = len(title) + 2
-    menu_win = curses.newwin(h + 2, w + 2, int(height / 2 - h / 2 - 2), int(width / 2 - w / 2 - 2))
+    menu_win = curses.newwin(h + 2, w + 2,
+                             int(height / 2 - h / 2 - 2),
+                             int(width / 2 - w / 2 - 2))
     menu_win.attrset(get_color("border"))
     menu_win.border()
     color = get_color("border")
@@ -1109,22 +1109,15 @@ def menu(title, items):
     menu_win.addstr(0, 2, title, color)
     menu_win.addstr(h + 1, 2, e, color)
     y = 1
-    done = False
-    cancel = False
-    while not done:
-        i = 1
-        for item in items:
-            if i == y:
-                color = get_color("cursor")
-            else:
-                color = get_color("text")
+    while True:
+        for i, item in enumerate(items, start=1):
+            color = get_color("cursor" if i == y else "text")
             for x in range(1, w + 1):
                 menu_win.addstr(i, x, " ", color)
             if len(item) < w - 2:
                 menu_win.addstr(i, 1, item, color)
             else:
                 menu_win.addstr(i, 1, item[:w], color)
-            i = i + 1
         menu_win.refresh()
         key = stdscr.getch()
         if key in r_up:
@@ -1138,14 +1131,9 @@ def menu(title, items):
             else:
                 y = 1
         elif key in s_enter:
-            done = True
+            return y  #
         elif key in r_quit:
-            cancel = True
-            done = True
-    if cancel:
-        return False
-    else:
-        return y
+            return False  #
 
 
 def open_link(link):
@@ -1425,9 +1413,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             draw_message_box("Подождите", False)
             get_counts(False, True)
             if saved:
-                message_box("Собщение добавлено в избранные")
+                message_box("Сообщение добавлено в избранные")
             else:
-                message_box("Собщение уже есть в избранных")
+                message_box("Сообщение уже есть в избранных")
         elif (key in r_quote) and not archive and not out:
             if len(msgids) > 0:
                 t = open("template.txt", "r")
@@ -1450,8 +1438,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                                     quoter = ">"
                                 else:
                                     quoter = "> "
-                                f.write(
-                                    "\n" + line[:rr.match(line).span()[1]] + quoter + line[rr.match(line).span()[1]:])
+                                f.write("\n" + line[:rr.match(line).span()[1]]
+                                        + quoter
+                                        + line[rr.match(line).span()[1]:])
                             else:
                                 f.write("\n" + q + "> " + line)
                 #                        else:
@@ -1510,8 +1499,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msg, size = read_msg(msgids[msgn], echo[0])
                 msgbody = body_render(msg[8:])
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
-            except:
-                message_box("Не удалось определить msgid.")
+            except Exception as ex:
+                message_box("Не удалось определить msgid. " + str(ex))
                 stdscr.clear()
         elif key in r_links:
             results = urltemplate.findall("\n".join(msg[8:]))
@@ -1521,18 +1510,16 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             if len(links) == 1:
                 open_link(links[0])
             else:
-                i = menu("Выберите ссылку", links)
+                i = show_menu("Выберите ссылку", links)
                 if i:
                     open_link(links[i - 1])
             stdscr.clear()
         elif key in r_to_out and drafts:
-            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn],
-                     "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".draft", ".out"))
-            os.remove("out/" + nodes[node]["nodename"] + "/" + msgids[msgn])
-            if drafts:
-                msgids = get_out(True)
-            else:
-                msgids = get_out()
+            node_dir = "out/" + nodes[node]["nodename"]
+            copyfile(node_dir + "/" + msgids[msgn],
+                     node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
+            os.remove(node_dir + "/" + msgids[msgn])
+            msgids = get_out(drafts=drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if len(msgids) > 0:
@@ -1542,13 +1529,11 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 go = False
                 quit = False
         elif key in r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn],
-                     "out/" + nodes[node]["nodename"] + "/" + msgids[msgn].replace(".out", ".draft"))
-            os.remove("out/" + nodes[node]["nodename"] + "/" + msgids[msgn])
-            if drafts:
-                msgids = get_out(True)
-            else:
-                msgids = get_out()
+            node_dir = "out/" + nodes[node]["nodename"]
+            copyfile(node_dir + "/" + msgids[msgn],
+                     node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
+            os.remove(node_dir + "/" + msgids[msgn])
+            msgids = get_out(drafts=drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if len(msgids) > 0:
@@ -1707,7 +1692,7 @@ try:
     draw_message_box("Подождите", False)
     get_counts()
     stdscr.clear()
-    echo_selector()
+    show_echo_selector_screen()
 finally:
     curses.echo()
     curses.curs_set(True)
