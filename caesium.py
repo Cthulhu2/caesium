@@ -844,8 +844,8 @@ def body_render(tbody):
                     chunks, chunksize = len(word), width - 1
                     chunk_list = [word[i:i + chunksize]
                                   for i in range(0, chunks, chunksize)]
-                    for line in chunk_list:
-                        body = body + "\n" + code + line
+                    for chunk_line in chunk_list:
+                        body += "\n" + code + chunk_line
                     n = len(chunk_list[-1])
                 if not word[-1:] == "\n":
                     n = n + 1
@@ -882,7 +882,7 @@ def draw_reader(echo, msgid, out):
     stdscr.addstr(3, 1, "Тема: ", color)
 
 
-def call_editor(out='', draft=False):
+def call_editor(out=''):
     global stdscr
     curses.echo()
     curses.curs_set(True)
@@ -1056,14 +1056,7 @@ def get_msg(msgid):
 
 def show_menu(title, items):
     h = len(items)
-    w = 0
-    for item in items:
-        if len(item) > w:
-            w = len(item)
-        if len(item) > width - 2:
-            item = item[:width - 1]
-    if w >= width - 3:
-        w = width - 3
+    w = min(width - 3, max(items, key=lambda it: len(it)))
     e = "Esc - отмена"
     if w < len(title):
         w = len(title) + 2
@@ -1110,7 +1103,7 @@ def show_menu(title, items):
 
 
 def open_link(link):
-    global browser
+    # TODO: Support open ii:// link
     browser.open(link)
 
 
@@ -1422,12 +1415,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn], "temp")
-                if drafts:
-                    call_editor(msgids[msgn], drafts)
-                    msgids = get_out(True)
-                else:
-                    call_editor(msgids[msgn])
-                    msgids = get_out()
+                call_editor(msgids[msgn])
+                msgids = get_out(drafts=drafts)
                 if msgn > len(msgids) - 1:
                     msgn = len(msgids) - 1
                 if len(msgids) > 0:
