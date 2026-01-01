@@ -26,7 +26,6 @@ import keys
 # socks.set_default_proxy(socks.SOCKS5, '127.0.0.1', 8081)
 # socket.socket = socks.socksocket
 
-lasts = {}
 # Theme
 color_theme = "default"
 color_pairs = {
@@ -54,6 +53,10 @@ def get_color(theme_part):
     return curses.color_pair(cp) | bold
 
 
+lasts = {}
+if os.path.exists("lasts.lst"):
+    with open("lasts.lst", "rb") as f_lasts:
+        lasts = pickle.load(f_lasts)
 counts = []
 counts_rescan = True
 echo_counts = {}
@@ -243,6 +246,8 @@ def save_out(draft=False):
             buf = new
         elif header == 4:
             buf = new[1:5] + ["@repto:%s" % new[0]] + new[5:]
+        else:
+            buf = ()
         if draft:
             codecs.open(outcount() + ".draft", "w", "utf-8").write("\n".join(buf))
         else:
@@ -576,14 +581,6 @@ def find_new(cursor):
             ret = n - 1
             lock = True
     return ret
-
-
-def load_lasts():
-    global lasts
-    if os.path.exists("lasts.lst"):
-        f = open("lasts.lst", "rb")
-        lasts = pickle.load(f)
-        f.close()
 
 
 def edit_config():
@@ -933,9 +930,13 @@ def draw_message_box(smsg, wait):
         if len(line) > maxlen:
             maxlen = len(line)
     if wait:
-        msgwin = curses.newwin(len(msg) + 4, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
+        msgwin = curses.newwin(len(msg) + 4, maxlen + 2,
+                               int(height / 2 - 2),
+                               int(width / 2 - maxlen / 2 - 2))
     else:
-        msgwin = curses.newwin(len(msg) + 2, maxlen + 2, int(height / 2 - 2), int(width / 2 - maxlen / 2 - 2))
+        msgwin = curses.newwin(len(msg) + 2, maxlen + 2,
+                               int(height / 2 - 2),
+                               int(width / 2 - maxlen / 2 - 2))
     msgwin.attrset(get_color("border"))
     msgwin.bkgd(' ', curses.color_pair(1))
     msgwin.border()
@@ -1045,7 +1046,7 @@ def get_msg(msgid):
         msgid = m[0]
         if len(msgid) == 20 and m[1]:
             msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
-            if len(nodes[node]["to"]) > 0:
+            if nodes[node]["to"]:
                 carbonarea = api.get_carbonarea()
                 if msgbody[5] in nodes[node]["to"] and msgid not in carbonarea:
                     pass
@@ -1132,7 +1133,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         msgids = api.get_echo_msgids(echo[0])
     if msgn > len(msgids) - 1:
         msgn = len(msgids) - 1
-    if len(msgids) > 0:
+    if msgids:
         if drafts:
             msg, size = read_out_msg(msgids[msgn])
         elif out:
@@ -1153,15 +1154,17 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     scrollbar_size = calc_scrollbar_size(len(msgbody))
     go = True
     done = False
+    repto = False
     stack = []
     while go:
-        if len(msgids) > 0:
+        if msgids:
             draw_reader(msg[1], msgids[msgn], out)
             if width >= 80:
-                msg_string = "Сообщение " + str(msgn + 1) + " из " + str(len(msgids)) + " (" + str(
-                    len(msgids) - msgn - 1) + " осталось)"
+                msg_string = ("Сообщение " + str(msgn + 1) + " из " + str(len(msgids))
+                              + " (" + str(len(msgids) - msgn - 1) + " осталось)")
             else:
-                msg_string = str(msgn + 1) + "/" + str(len(msgids)) + " [" + str(len(msgids) - msgn - 1) + "]"
+                msg_string = (str(msgn + 1) + "/" + str(len(msgids))
+                              + " [" + str(len(msgids) - msgn - 1) + "]")
             draw_status(len(version) + 2, msg_string)
             if drafts:
                 dsc = "Черновики"
@@ -1169,7 +1172,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 dsc = "Исходящие"
             else:
                 dsc = echo[1]
-            if len(dsc) > 0 and width >= 80:
+            if dsc and width >= 80:
                 draw_title(0, width - 2 - len(dsc), dsc)
             color = get_color("text")
             if not out:
@@ -1231,16 +1234,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         if key == curses.KEY_RESIZE:
             y = 0
             get_term_size()
-            if len(msgids) > 0:
+            if msgids:
                 msgbody = body_render(msg[8:])
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
             stdscr.clear()
         elif key in keys.r_prev and msgn > 0:
             y = 0
-            if len(msgids) > 0:
+            if msgids:
                 msgn = msgn - 1
-                if len(stack) > 0:
-                    stack = []
+                stack.clear()
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
@@ -1256,10 +1258,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_next and msgn < len(msgids) - 1:
             y = 0
-            if len(msgids) > 0:
+            if msgids:
                 msgn = msgn + 1
-                if len(stack) > 0:
-                    stack = []
+                stack.clear()
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
@@ -1289,22 +1290,22 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             msgbody = body_render(msg[8:])
             scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_up and y > 0:
-            if len(msgids) > 0:
+            if msgids:
                 y = y - 1
         elif key in keys.r_ppage:
-            if len(msgids) > 0:
+            if msgids:
                 y = y - height + 6
                 if y < 0:
                     y = 0
         elif key in keys.r_npage:
             if y < len(msgbody) - height + 5:
-                if len(msgids) > 0 and len(msgbody) > height - 5:
+                if msgids and len(msgbody) > height - 5:
                     y = y + height - 6
         elif key in keys.r_home:
-            if len(msgids) > 0:
+            if msgids:
                 y = 0
         elif key in keys.r_mend:
-            if len(msgids) > 0 and len(msgbody) > height - 5:
+            if msgids and len(msgbody) > height - 5:
                 y = len(msgbody) - height + 5
         elif key in keys.r_ukeys:
             if len(msgids) == 0 or y >= len(msgbody) - height + 5:
@@ -1314,8 +1315,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     go = False
                 else:
                     msgn = msgn + 1
-                    if len(stack) > 0:
-                        stack = []
+                    stack.clear()
                     if out:
                         msg, size = read_out_msg(msgids[msgn])
                     else:
@@ -1323,18 +1323,17 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msgbody = body_render(msg[8:])
                     scrollbar_size = calc_scrollbar_size(len(msgbody))
             else:
-                if len(msgids) > 0 and len(msgbody) > height - 5:
+                if msgids and len(msgbody) > height - 5:
                     y = y + height - 6
         elif key in keys.r_down:
-            if len(msgids) > 0:
+            if msgids:
                 if y + height - 5 < len(msgbody):
                     y = y + 1
         elif key in keys.r_begin:
-            if len(msgids) > 0:
+            if msgids:
                 y = 0
                 msgn = 0
-                if len(stack) > 0:
-                    stack = []
+                stack.clear()
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
@@ -1342,11 +1341,10 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgbody = body_render(msg[8:])
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_end:
-            if len(msgids) > 0:
+            if msgids:
                 y = 0
                 msgn = len(msgids) - 1
-                if len(stack) > 0:
-                    stack = []
+                stack.clear()
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
@@ -1376,7 +1374,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             else:
                 message_box("Сообщение уже есть в избранных")
         elif key in keys.r_quote and not archive and not out:
-            if len(msgids) > 0:
+            if msgids:
                 t = open("template.txt", "r")
                 f = open("temp", "w")
                 f.write(msgids[msgn] + "\n")
@@ -1419,7 +1417,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgids = get_out(drafts=drafts)
                 if msgn > len(msgids) - 1:
                     msgn = len(msgids) - 1
-                if len(msgids) > 0:
+                if msgids:
                     msg, size = read_out_msg(msgids[msgn])
                     msgbody = body_render(msg[8:])
                 else:
@@ -1430,12 +1428,12 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 message_box("Сообщение уже отправлено")
                 stdscr.clear()
         elif key in keys.f_delete and favorites and not carbonarea:
-            if len(msgids) > 0:
+            if msgids:
                 api.remove_from_favorites(msgids[msgn])
                 draw_message_box("Подождите", False)
                 get_counts(False, True)
                 msgids = api.get_echo_msgids(echo[0])
-                if len(msgids) > 0:
+                if msgids:
                     if msgn >= len(msgids):
                         msgn = len(msgids) - 1
                     msg, size = api.read_msg(msgids[msgn], echo[0])
@@ -1471,26 +1469,24 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             stdscr.clear()
         elif key in keys.r_to_out and drafts:
             node_dir = "out/" + nodes[node]["nodename"]
-            copyfile(node_dir + "/" + msgids[msgn],
-                     node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
-            os.remove(node_dir + "/" + msgids[msgn])
+            os.rename(node_dir + "/" + msgids[msgn],
+                      node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
             msgids = get_out(drafts=drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
-            if len(msgids) > 0:
+            if msgids:
                 msg, size = read_out_msg(msgids[msgn])
                 msgbody = body_render(msg[8:])
             else:
                 go = False
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
             node_dir = "out/" + nodes[node]["nodename"]
-            copyfile(node_dir + "/" + msgids[msgn],
-                     node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
-            os.remove(node_dir + "/" + msgids[msgn])
+            os.rename(node_dir + "/" + msgids[msgn],
+                      node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
             msgids = get_out(drafts=drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
-            if len(msgids) > 0:
+            if msgids:
                 msg, size = read_out_msg(msgids[msgn])
                 msgbody = body_render(msg[8:])
             else:
@@ -1503,8 +1499,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if selected_msgn > -1:
                     y = 0
                     msgn = selected_msgn
-                    if len(stack) > 0:
-                        stack = []
+                    stack.clear()
                     msg, size = api.read_msg(msgids[msgn], echo[0])
                     msgbody = body_render(msg[8:])
                     scrollbar_size = calc_scrollbar_size(len(msgbody))
@@ -1515,9 +1510,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             go = False
             done = True
     lasts[echo[0]] = msgn
-    f = open("lasts.lst", "wb")
-    pickle.dump(lasts, f)
-    f.close()
+    with open("lasts.lst", "wb") as f:
+        pickle.dump(lasts, f)
     stdscr.clear()
     return done
 
@@ -1627,7 +1621,6 @@ elif db == 2:
 elif db == 3:
     import api.sqlite as api
 check_directories()
-load_lasts()
 stdscr = curses.initscr()
 try:
     curses.start_color()
