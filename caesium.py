@@ -84,7 +84,11 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "           ncurses ii/idec client      v.0.5",
           "           Andrew Lobanov             01.11.2024"]
 
-urltemplate = re.compile("((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
+url_template = re.compile(r"((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
+# noinspection RegExpRedundantEscape
+ps_template = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
+# noinspection RegExpRedundantEscape
+quote_template = re.compile(r"^[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 
 
 def reset_config():
@@ -799,19 +803,16 @@ def body_render(tbody):
     sep = "─" * (width - 1)
     for line in tbody:
         n = 0
-        rr = re.compile(r"^[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
-        cc = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
-        # noinspection PyBroadException
-        try:
-            count = line[0:rr.match(line).span()[1]].count(">")
-        except Exception:
-            count = 0
+        count = 0
+        qq = quote_template.match(line)
+        if qq:
+            count = line[0:qq.span()[1]].count(">")
         if count > 0:
             if count % 2 == 1:
                 code = chr(15)
             elif count % 2 == 0:
                 code = chr(16)
-        elif cc.match(line):
+        elif ps_template.match(line):
             code = chr(17)
         elif line.startswith("== "):
             code = chr(18)
@@ -1386,22 +1387,19 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     f.write("Re: " + msg[6] + "\n")
                 else:
                     f.write(msg[6] + "\n")
-                rr = re.compile(r"^[a-zA-Zа-яА-Я0-9_\(\)-]{0,20}>{1,20}")
                 for line in msg[8:]:
-                    if not line.startswith("+++"):
-                        if line.strip() != "":
-                            if rr.match(line):
-                                if line[rr.match(line).span()[1]] == " ":
-                                    quoter = ">"
-                                else:
-                                    quoter = "> "
-                                f.write("\n" + line[:rr.match(line).span()[1]]
-                                        + quoter
-                                        + line[rr.match(line).span()[1]:])
-                            else:
-                                f.write("\n" + q + "> " + line)
-                #                        else:
-                #                            f.write("\n" + line)
+                    if line.startswith("+++") or line.strip() == "":
+                        continue  # skip sign and empty lines
+                    qq = quote_template.match(line)
+                    if qq:
+                        quoter = ">"
+                        if not line[qq.span()[1]] == " ":
+                            quoter += " "
+                        f.write("\n" + line[:qq.span()[1]]
+                                + quoter
+                                + line[qq.span()[1]:])
+                    else:
+                        f.write("\n" + q + "> " + line)
                 f.write(t.read())
                 f.close()
                 t.close()
@@ -1456,7 +1454,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 stdscr.clear()
         elif key in keys.r_links:
             # TODO: Find and open ii:// links
-            results = urltemplate.findall("\n".join(msg[8:]))
+            results = url_template.findall("\n".join(msg[8:]))
             links = []
             for item in results:
                 links.append(item[0])
