@@ -271,45 +271,53 @@ def resave_out(filename, draft=False):
 
 def outcount():
     outpath = "out/" + nodes[node]["nodename"]
-    i = str(len([x for x in os.listdir(outpath) if not x.endswith(".toss")]) + 1)
+    i = str(len([x for x in os.listdir(outpath)
+                 if not x.endswith(".toss")]) + 1)
     return outpath + "/%s" % i.zfill(5)
 
 
 def get_out_length(drafts=False):
-    try:
-        if drafts:
-            return len([f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".draft")]) - 1
-        else:
-            return len([f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if
-                        f.endswith(".out") or f.endswith(".outmsg")]) - 1
-    except:
-        return 0
+    node_dir = "out/" + nodes[node]["nodename"]
+    if drafts:
+        return len([f for f in sorted(os.listdir(node_dir))
+                    if f.endswith(".draft")]) - 1
+    else:
+        return len([f for f in sorted(os.listdir(node_dir))
+                    if f.endswith(".out") or f.endswith(".outmsg")]) - 1
 
 
 def make_toss():
-    lst = [x for x in os.listdir("out/" + nodes[node]["nodename"]) if x.endswith(".out")]
+    node_dir = "out/" + nodes[node]["nodename"]
+    lst = [x for x in os.listdir(node_dir)
+           if x.endswith(".out")]
     for msg in lst:
-        text = codecs.open("out/" + nodes[node]["nodename"] + "/%s" % msg, "r", "utf-8").read()
-        coded_text = base64.b64encode(text.encode("utf-8"))
-        codecs.open("out/" + nodes[node]["nodename"] + "/%s.toss" % msg, "w", "utf-8").write(coded_text.decode("utf-8"))
-        os.rename("out/" + nodes[node]["nodename"] + "/%s" % msg,
-                  "out/" + nodes[node]["nodename"] + "/%s%s" % (msg, "msg"))
+        text_raw = codecs.open(node_dir + "/%s" % msg, "r", "utf-8").read()
+        text_b64 = base64.b64encode(text_raw.encode("utf-8")).decode("utf-8")
+        codecs.open(node_dir + "/%s.toss" % msg, "w", "utf-8").write(text_b64)
+        os.rename(node_dir + "/%s" % msg,
+                  node_dir + "/%s%s" % (msg, "msg"))
 
 
 def send_mail():
-    lst = [x for x in sorted(os.listdir("out/" + nodes[node]["nodename"])) if x.endswith(".toss")]
-    max = len(lst)
-    n = 1
+    lst = [x for x in sorted(os.listdir("out/" + nodes[node]["nodename"]))
+           if x.endswith(".toss")]
+    total = str(len(lst))
     try:
-        for msg in lst:
-            print("\rОтправка сообщения: " + str(n) + "/" + str(max), end="")
-            text = codecs.open("out/" + nodes[node]["nodename"] + "/%s" % msg, "r", "utf-8").read()
-            data = urllib.parse.urlencode({"tmsg": text, "pauth": nodes[node]["auth"]}).encode("utf-8")
-            request = urllib.request.Request(nodes[node]["node"] + "u/point")
-            result = urllib.request.urlopen(request, data).read().decode("utf-8")
+        node_dir = "out/" + nodes[node]["nodename"]
+        for n, msg in enumerate(lst, start=1):
+            print("\rОтправка сообщения: " + str(n) + "/" + total, end="")
+            msg_toss = node_dir + "/%s" % msg
+            text = codecs.open(msg_toss, "r", "utf-8").read()
+            #
+            data = urllib.parse.urlencode({
+                "tmsg": text,
+                "pauth": nodes[node]["auth"],
+            }).encode("utf-8")
+            req = urllib.request.Request(nodes[node]["node"] + "u/point")
+            result = urllib.request.urlopen(req, data).read().decode("utf-8")
+            #
             if result.startswith("msg ok"):
-                os.remove("out/" + nodes[node]["nodename"] + "/%s" % msg)
-                n = n + 1
+                os.remove(msg_toss)
             elif result == "msg big!":
                 print("\nERROR: very big message (limit 64K)!")
             elif result == "auth error!":
@@ -318,8 +326,9 @@ def send_mail():
                 print("\nERROR: unknown error!")
         if len(lst) > 0:
             print()
-    except:
-        print("\nОшибка: не удаётся связаться с нодой.")
+    # noinspection PyBroadException
+    except Exception as ex:
+        print("\nОшибка: не удаётся связаться с нодой. " + str(ex))
 
 
 def get_msg_list():
@@ -338,14 +347,10 @@ def get_msg_list():
     return msg_list
 
 
-def get_bundle(node, msgids):
-    bundle = []
-    try:
-        r = urllib.request.Request(node + "u/m/" + msgids)
-        with urllib.request.urlopen(r) as f:
-            bundle = f.read().decode("utf-8").split("\n")
-    except:
-        pass
+def get_bundle(node_url, msgids):
+    r = urllib.request.Request(node_url + "u/m/" + msgids)
+    with urllib.request.urlopen(r) as f:
+        bundle = f.read().decode("utf-8").split("\n")
     return bundle
 
 
@@ -375,18 +380,19 @@ def get_mail():
     print("Получение индекса от ноды...")
     remote_msg_list = get_msg_list()
     print("Построение разностного индекса...")
+    local_index = None
     for line in remote_msg_list:
         if echo_filter(line):
             local_index = get_echo_msgids(line)
         else:
             if line not in local_index:
                 fetch_msg_list.append(line)
-    msg_list_len = str(len(fetch_msg_list))
-    if len(fetch_msg_list) > 0:
+    if fetch_msg_list:
+        total = str(len(fetch_msg_list))
         count = 0
         for get_list in separate(fetch_msg_list):
-            count = count + len(get_list)
-            print("\rПолучение сообщений: " + str(count) + "/" + msg_list_len, end="")
+            count += len(get_list)
+            print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
             debundle(get_bundle(nodes[node]["node"], "/".join(get_list)))
         save_message(messages, node, nodes[node]["to"])
     else:
@@ -403,8 +409,9 @@ def mailer():
         send_mail()
     try:
         get_mail()
-    except:
-        print("ОШИБКА")
+    # noinspection PyBroadException
+    except Exception as ex:
+        print("\nОШИБКА: " + str(ex))
     input("Нажмите Enter для продолжения.")
 
 
@@ -755,7 +762,7 @@ def echo_selector():
             if out_length > -1:
                 go = not echo_reader("out", out_length, archive, False, True, False)
         elif key in s_drafts:
-            out_length = get_out_length(True)
+            out_length = get_out_length(drafts=True)
             if out_length > -1:
                 go = not echo_reader("out", out_length, archive, False, True, False, True)
         elif key in s_nnode:
@@ -1443,11 +1450,12 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                                     quoter = ">"
                                 else:
                                     quoter = "> "
-                                f.write("\n" + line[:rr.match(line).span()[1]] + quoter + line[rr.match(line).span()[1]:])
+                                f.write(
+                                    "\n" + line[:rr.match(line).span()[1]] + quoter + line[rr.match(line).span()[1]:])
                             else:
                                 f.write("\n" + q + "> " + line)
-#                        else:
-#                            f.write("\n" + line)
+                #                        else:
+                #                            f.write("\n" + line)
                 f.write(t.read())
                 f.close()
                 t.close()
