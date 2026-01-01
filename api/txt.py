@@ -114,6 +114,13 @@ def remove_echoarea(echoarea):
 
 
 # noinspection PyUnusedLocal
+def get_msg_list_data(echoarea):
+    # TODO: Text API get_msg_list_data
+    raise NotImplemented("Getting message list metadata"
+                         " is unsupported in Text API")
+
+
+# noinspection PyUnusedLocal
 def read_msg(msgid, echoarea):
     size = "0b"
     if os.path.exists("msg/" + msgid) and msgid != "":
