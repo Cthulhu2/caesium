@@ -62,11 +62,12 @@ depth = 50
 fdepth = 5
 messages = []
 twit = []
-nodes = []  # type: List[Dict[str, Union[str, Tuple[str, str, bool]]]]
+nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]]
 node = 0
 editor = ""
 oldquote = False
 db = None
+browser = webbrowser
 
 version = "Caesium/0.5 │"
 
@@ -133,41 +134,44 @@ def load_config():
     global nodes, editor, color_theme, show_splash, oldquote, db, browser, twit
     nodes = []
     first = True
-    node = {}
+    browser = webbrowser
+    # current node
+    cnode = {}  # type: Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]
     echoareas = []  # type: List[Tuple[str, str, bool]]
     archive = []  # type: List[Tuple[str, str, bool]]
-    browser = webbrowser
-
+    #
     config = open("caesium.cfg").read().split("\n")
+    shrink_spaces = re.compile(r"(\s\s+|\t+)")
     for line in config:
-        param = line.strip().split(" ", maxsplit=2)
+        param = shrink_spaces.sub(" ", line.strip()).split(" ", maxsplit=2)
         if param[0] == "nodename":
             if not first:
-                node["echoareas"] = echoareas
-                node["archive"] = archive
-                if "to" not in node:
-                    node["to"] = []
-                nodes.append(node)
+                cnode["echoareas"] = echoareas
+                cnode["archive"] = archive
+                if "to" not in cnode:
+                    cnode["to"] = []
+                nodes.append(cnode)
             else:
                 first = False
-            node = {}
+            cnode = {}
             echoareas = []
             archive = []
-            node["nodename"] = " ".join(param[1:])
+            cnode["nodename"] = " ".join(param[1:])
         elif param[0] == "node":
-            node["node"] = param[1]
-            if not node["node"].endswith("/"):
-                node["node"] = node["node"] + "/"
+            cnode["node"] = param[1]
+            if not cnode["node"].endswith("/"):
+                cnode["node"] += "/"
         elif param[0] == "auth":
-            node["auth"] = param[1]
+            cnode["auth"] = param[1]
         elif param[0] == "echo":
             echoareas.append((param[1], "".join(param[2:]), False))
         elif param[0] == "stat":
             echoareas.append((param[1], "".join(param[2:]), True))
         elif param[0] == "to":
-            node["to"] = " ".join(param[1:]).split(",")
+            cnode["to"] = " ".join(param[1:]).split(",")
         elif param[0] == "archive":
             archive.append((param[1], "".join(param[2:]), True))
+        #
         elif param[0] == "editor":
             editor = " ".join(param[1:])
         elif param[0] == "theme":
@@ -190,13 +194,13 @@ def load_config():
         elif param[0] == "twit":
             twit = param[1].split(",")
 
-    if "nodename" not in node:
-        node["nodename"] = "untitled node"
-    if "to" not in node:
-        node["to"] = []
-    node["echoareas"] = echoareas
-    node["archive"] = archive
-    nodes.append(node)
+    if "nodename" not in cnode:
+        cnode["nodename"] = "untitled node"
+    if "to" not in cnode:
+        cnode["to"] = []
+    cnode["echoareas"] = echoareas
+    cnode["archive"] = archive
+    nodes.append(cnode)
     for i in range(0, len(nodes)):
         nodes[i]["echoareas"].insert(0, ("favorites", "Избранные сообщения", True))
         nodes[i]["echoareas"].insert(1, ("carbonarea", "Карбонка", True))
@@ -206,15 +210,13 @@ def load_colors():
     colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan",
               "white", "gray"]
 
-    theme = open("themes/" + color_theme + ".cfg", "r").read().split("\n")
-    for line in theme:
+    shrink_spaces = re.compile(r"(\s\s+|\t+)")
+    for line in open("themes/" + color_theme + ".cfg", "r").readlines():
         # sanitize
-        line = line.replace("\t", " ")
-        while "  " in line:
-            line = line.replace("  ", " ")
+        line = shrink_spaces.sub(" ", line.strip())
         if line.startswith("#"):
             continue  # skip comments
-        param = line.strip().split(" ")
+        param = line.split(" ")
         if len(param) < 3 or 4 < len(param) or param[0] not in color_pairs:
             continue  # skip unknown lines, theme parts
         if param[1] == "grey":
@@ -459,6 +461,7 @@ def current_time():
     draw_status(width - 8, "│ " + datetime.now().strftime("%H:%M"))
 
 
+# noinspection PyUnusedLocal
 def get_counts(new=False, favorites=False):
     global echo_counts
     for echoarea in nodes[node]["echoareas"]:
