@@ -17,9 +17,10 @@ def get_echocount(echo):
     return get_echo_length(echo)
 
 
+# noinspection PyUnusedLocal
 def save_to_favorites(msgid, msg):
-    favoritep = c.execute("SELECT COUNT(1) FROM msg WHERE msgid = ? AND favorites = 1", (msgid,)).fetchone()[0]
-    if favoritep == 0:
+    favorites = c.execute("SELECT COUNT(1) FROM msg WHERE msgid = ? AND favorites = 1", (msgid,)).fetchone()[0]
+    if favorites == 0:
         c.execute("UPDATE msg SET favorites = 1 WHERE msgid = ?;", (msgid,))
         con.commit()
         return True
@@ -42,6 +43,7 @@ def get_carbonarea():
     return msgids
 
 
+# noinspection PyUnusedLocal
 def add_to_carbonarea(msgid, msgbody):
     c.execute("UPDATE msg SET carbonarea = 1 WHERE msgid = ?;", (msgid,))
     con.commit()
@@ -49,31 +51,38 @@ def add_to_carbonarea(msgid, msgbody):
 
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
-    msgid = base64.urlsafe_b64encode(hashlib.sha256("\n".join(msgbody).encode()).digest()).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
+    digest = hashlib.sha256("\n".join(msgbody).encode()).digest()
+    msgid = base64.urlsafe_b64encode(digest).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     c.execute(
-        "INSERT INTO msg (msgid, tags, echoarea, time, fr, addr, t, subject, body, carbonarea) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        (msgid, msgbody[0], msgbody[1], msgbody[2], msgbody[3], msgbody[4], msgbody[5], msgbody[6], "\n".join(msgbody[7:]), 1))
+        "INSERT INTO msg ("
+        " msgid, tags, echoarea, time, fr, addr,"
+        " t, subject, body, carbonarea"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        (msgid, msgbody[0], msgbody[1], msgbody[2], msgbody[3], msgbody[4],
+         msgbody[5], msgbody[6], "\n".join(msgbody[7:]), 1))
     con.commit()
 
 
+# noinspection PyUnusedLocal
 def save_message(raw, node, to):
     for msg in raw:
         msgid = msg[0]
         msgbody = msg[1]
         c.execute(
-            "INSERT INTO msg (msgid, tags, echoarea, time, fr, addr, t, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            (msgid, msgbody[0], msgbody[1], msgbody[2], msgbody[3], msgbody[4], msgbody[5], msgbody[6], "\n".join(msgbody[7:])))
+            "INSERT INTO msg ("
+            " msgid, tags, echoarea, time, fr, addr,"
+            " t, subject, body"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            (msgid, msgbody[0], msgbody[1], msgbody[2], msgbody[3], msgbody[4],
+             msgbody[5], msgbody[6], "\n".join(msgbody[7:])))
     con.commit()
     for msg in raw:
         msgid = msg[0]
         msgbody = msg[1]
         if to:
-            try:
-                carbonarea = get_carbonarea()
-            except:
-                carbonarea = []
+            carbonarea = get_carbonarea()
             for name in to:
-                if name in msgbody[5] and not msgid in carbonarea:
+                if name in msgbody[5] and msgid not in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
 
 
@@ -96,15 +105,25 @@ def remove_echoarea(echoarea):
 
 def get_msg_list_data(echoarea):
     lst = []
-    for row in c.execute("SELECT msgid, fr, subject, time FROM msg WHERE echoarea = ? ORDER BY id;", (echoarea,)):
-        lst.append([row[0], row[1], row[2], time.strftime("%Y.%m.%d", time.gmtime(int(row[3])))])
+    for row in c.execute("SELECT msgid, fr, subject, time"
+                         " FROM msg WHERE echoarea = ? ORDER BY id;",
+                         (echoarea,)):
+        lst.append([
+            row[0],
+            row[1],
+            row[2],
+            time.strftime("%Y.%m.%d", time.gmtime(int(row[3]))),
+        ])
     return lst
 
 
+# noinspection PyUnusedLocal
 def read_msg(msgid, echoarea):
-    size = "0b"
-    row = c.execute("SELECT tags, echoarea, time, fr, addr, t, subject, body FROM msg WHERE msgid = ?;", (msgid,)).fetchone()
-    msg = row[0] + "\n" + row[1] + "\n" + str(row[2]) + "\n" + row[3] + "\n" + row[4] + "\n" + row[5] + "\n" + row[6] + "\n" + row[7]
+    row = c.execute("SELECT tags, echoarea, time, fr, addr, t, subject, body"
+                    " FROM msg WHERE msgid = ?;",
+                    (msgid,)).fetchone()
+    msg = "\n".join((row[0], row[1], str(row[2]), row[3],
+                     row[4], row[5], row[6], row[7]))
     if msg:
         size = len(msg.encode("utf-8"))
     else:

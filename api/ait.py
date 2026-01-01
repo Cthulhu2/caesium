@@ -8,7 +8,7 @@ import time
 
 def get_echo_length(echo):
     if os.path.exists("ait/" + echo + ".iat"):
-        echo_length = sum(1 for l in open("ait/" + echo + ".iat", "r", newline="\n"))
+        echo_length = sum(1 for _ in open("ait/" + echo + ".iat", "r", newline="\n"))
     else:
         echo_length = 0
     return echo_length
@@ -61,13 +61,13 @@ def add_to_carbonarea(msgid, msgbody):
 
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body.replace("\n", chr(15))]
-    msgid = base64.urlsafe_b64encode(
-        hashlib.sha256("\n".join(msgbody).encode()).digest()
-    ).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
+    digest = hashlib.sha256("\n".join(msgbody).encode()).digest()
+    msgid = base64.urlsafe_b64encode(digest).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     open("ait/carbonarea.iat", "a").write(msgid + "\n")
     codecs.open("ait/carbonarea.mat", "a", "utf-8").write(msgid + ":" + chr(15).join(msgbody) + "\n")
 
 
+# noinspection PyUnusedLocal
 def save_message(raw, node, to):
     for msg in raw:
         msgid = msg[0]
@@ -75,10 +75,7 @@ def save_message(raw, node, to):
         codecs.open("ait/" + msgbody[1] + ".iat", "a", "utf-8").write(msgid + "\n")
         codecs.open("ait/" + msgbody[1] + ".mat", "a", "utf-8").write(msgid + ":" + chr(15).join(msgbody) + "\n")
         if to:
-            try:
-                carbonarea = get_carbonarea()
-            except:
-                carbonarea = []
+            carbonarea = get_carbonarea()
             for name in to:
                 if name in msgbody[5] and msgid not in carbonarea:
                     add_to_carbonarea(msgid, msgbody)
@@ -120,8 +117,12 @@ def get_msg_list_data(echoarea):
     for msg in f:
         if len(msg) > 1:
             rawmsg = msg.split(chr(15))
-            lst.append(
-                [rawmsg[0].split(":")[0], rawmsg[3], rawmsg[6], time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2])))])
+            lst.append([
+                rawmsg[0].split(":")[0],
+                rawmsg[3],
+                rawmsg[6],
+                time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2]))),
+            ])
     return lst
 
 

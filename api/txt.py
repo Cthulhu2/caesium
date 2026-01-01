@@ -18,12 +18,13 @@ def get_echocount(echoarea):
     return len(open("echo/" + echoarea, "r").read().split("\n")) - 1
 
 
+# noinspection PyUnusedLocal
 def save_to_favorites(msgid, msg):
     if os.path.exists("echo/favorites"):
         favorites = open("echo/favorites", "r").read().split("\n")
     else:
         favorites = []
-    if not msgid in favorites:
+    if msgid not in favorites:
         open("echo/favorites", "a").write(msgid + "\n")
         return True
     else:
@@ -49,6 +50,7 @@ def get_carbonarea():
         return []
 
 
+# noinspection PyUnusedLocal
 def add_to_carbonarea(msgid, msgbody):
     if os.path.exists("echo/carbonarea"):
         return codecs.open("echo/carbonarea", "a", "utf-8").write(msgid + "\n")
@@ -58,18 +60,15 @@ def add_to_carbonarea(msgid, msgbody):
 
 def save_to_carbonarea(fr, subj, body):
     msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
-    msgid = base64.urlsafe_b64encode(
-        hashlib.sha256("\n".join(msgbody).encode()).digest()
-    ).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
+    digest = hashlib.sha256("\n".join(msgbody).encode()).digest()
+    msgid = base64.urlsafe_b64encode(digest).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
     codecs.open("msg/%s" % msgid, "w", "utf-8").write("\n".join(msgbody))
     open("echo/carbonarea", "a").write(msgid + "\n")
 
 
+# noinspection PyUnusedLocal
 def save_message(raw, node, to):
-    try:
-        carbonarea = get_carbonarea()
-    except:
-        carbonarea = []
+    carbonarea = get_carbonarea()
     for msg in raw:
         msgid = msg[0]
         msgbody = msg[1]
@@ -114,6 +113,7 @@ def remove_echoarea(echoarea):
         pass
 
 
+# noinspection PyUnusedLocal
 def read_msg(msgid, echoarea):
     size = "0b"
     if os.path.exists("msg/" + msgid) and msgid != "":
