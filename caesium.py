@@ -478,23 +478,20 @@ def get_counts(new=False, favorites=False):
 
 
 def rescan_counts(echoareas):
-    counts = []
+    counts_ = []
     for echo in echoareas:
-        try:
-            echocount = echo_counts[echo[0]]
-            if echo[0] in lasts:
-                last = echocount - lasts[echo[0]]
-                if echocount == 0 and lasts[echo[0]] == 0:
-                    last = 1
-            else:
-                last = echocount + 1
-        except:
-            echocount = 0
-            last = 1
+        echocount = echo_counts[echo[0]]
+        if echo[0] in lasts:
+            last = echocount - lasts[echo[0]]
+            if echocount == 0 and lasts[echo[0]] == 0:
+                last = 1
+        else:
+            last = echocount + 1
+
         if last - 1 < 0:
             last = 1
-        counts.append([str(echocount), str(last - 1)])
-    return counts
+        counts_.append([str(echocount), str(last - 1)])
+    return counts_
 
 
 def draw_echo_selector(start, cursor, archive):
@@ -517,12 +514,12 @@ def draw_echo_selector(start, cursor, archive):
     draw_status(1, version)
     draw_status(len(version) + 2, nodes[node]["nodename"])
     for echo in echoareas:
-        l = len(echo[1])
-        if l > m:
-            m = l
+        desc_len = len(echo[1])
+        if desc_len > m:
+            m = desc_len
         if m > width - 38:
             m = width - 38
-        dsc_lens.append(l)
+        dsc_lens.append(desc_len)
     y = 0
     count = "Сообщений"
     unread = "Не прочитано"
