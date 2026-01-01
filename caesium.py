@@ -16,6 +16,7 @@ import urllib.request
 import webbrowser
 from datetime import datetime
 from shutil import copyfile
+from typing import List, Dict, Union, Tuple
 
 from keys import *
 
@@ -61,10 +62,10 @@ depth = 50
 fdepth = 5
 messages = []
 twit = []
-nodes = []
+nodes = []  # type: List[Dict[str, Union[str, Tuple[str, str, bool]]]]
 node = 0
 editor = ""
-oldquote = None
+oldquote = False
 db = None
 
 version = "Caesium/0.5 │"
@@ -133,13 +134,13 @@ def load_config():
     nodes = []
     first = True
     node = {}
-    echoareas = []
-    archive = []
+    echoareas = []  # type: List[Tuple[str, str, bool]]
+    archive = []  # type: List[Tuple[str, str, bool]]
     browser = webbrowser
 
     config = open("caesium.cfg").read().split("\n")
     for line in config:
-        param = line.split(" ")
+        param = line.strip().split(" ", maxsplit=2)
         if param[0] == "nodename":
             if not first:
                 node["echoareas"] = echoareas
@@ -160,22 +161,13 @@ def load_config():
         elif param[0] == "auth":
             node["auth"] = param[1]
         elif param[0] == "echo":
-            if len(param) == 2:
-                echoareas.append([param[1], "", False])
-            else:
-                echoareas.append([param[1], " ".join(param[2:]), False])
+            echoareas.append((param[1], "".join(param[2:]), False))
         elif param[0] == "stat":
-            if len(param) == 2:
-                echoareas.append([param[1], "", True])
-            else:
-                echoareas.append([param[1], " ".join(param[2:]), True])
+            echoareas.append((param[1], "".join(param[2:]), True))
         elif param[0] == "to":
             node["to"] = " ".join(param[1:]).split(",")
         elif param[0] == "archive":
-            if len(param) == 2:
-                archive.append([param[1], "", True])
-            else:
-                archive.append([param[1], " ".join(param[2:]), True])
+            archive.append((param[1], "".join(param[2:]), True))
         elif param[0] == "editor":
             editor = " ".join(param[1:])
         elif param[0] == "theme":
@@ -206,8 +198,8 @@ def load_config():
     node["archive"] = archive
     nodes.append(node)
     for i in range(0, len(nodes)):
-        nodes[i]["echoareas"].insert(0, ["favorites", "Избранные сообщения", True])
-        nodes[i]["echoareas"].insert(1, ["carbonarea", "Карбонка", True])
+        nodes[i]["echoareas"].insert(0, ("favorites", "Избранные сообщения", True))
+        nodes[i]["echoareas"].insert(1, ("carbonarea", "Карбонка", True))
 
 
 def load_colors():
@@ -332,12 +324,12 @@ def send_mail():
 
 def get_msg_list():
     msg_list = []
-    echoareas = []
-    for echoarea in nodes[node]["echoareas"]:
-        if not echoarea[0] in ["favorites", "carbonarea"]:
-            echoareas.append(echoarea[0])
-    if len(echoareas) > 0:
-        r = urllib.request.Request(nodes[node]["node"] + "u/e/" + "/".join(echoareas))
+    echoareas = "/".join(map(
+        lambda echo: echo[0],  # echo name
+        filter(lambda echo: not echo[2],  # skip stat, carbonarea, favorites
+               nodes[node]["echoareas"])))
+    if echoareas:
+        r = urllib.request.Request(nodes[node]["node"] + "u/e/" + echoareas)
         with urllib.request.urlopen(r) as f:
             lines = f.read().decode("utf-8").split("\n")
             for line in lines:
@@ -399,7 +391,7 @@ def get_mail():
     print()
 
 
-def mailer():
+def fetch_mail():
     global depth, messages
     messages = []
     print("Работа с " + nodes[node]["node"])
@@ -590,26 +582,6 @@ def find_new(cursor):
     return ret
 
 
-def fetch_mail():
-    echoareas = []
-    to = ""
-    if len(nodes[node]["to"]) > 0:
-        to = "\"" + ",".join(nodes[node]["to"]) + "\""
-    else:
-        to = False
-    d = "txt"
-    if db == 1:
-        d = "aio"
-    elif db == 2:
-        d = "ait"
-    elif db == 3:
-        d = "sqlite"
-    for echoarea in nodes[node]["echoareas"][2:]:
-        if not echoarea[2]:
-            echoareas.append(echoarea[0])
-    mailer()
-
-
 def load_lasts():
     global lasts
     if os.path.exists("lasts.lst"):
@@ -737,7 +709,7 @@ def show_echo_selector_screen():
                 echo_length = len(get_carbonarea())
             else:
                 echo_length = get_echo_length(echoareas[cursor][0])
-            if last > 0 and last < echo_length:
+            if 0 < last < echo_length:
                 last = last + 1
             if last >= echo_length:
                 last = echo_length
@@ -837,9 +809,10 @@ def body_render(tbody):
         n = 0
         rr = re.compile(r"^[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
         cc = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
+        # noinspection PyBroadException
         try:
             count = line[0:rr.match(line).span()[1]].count(">")
-        except:
+        except Exception:
             count = 0
         if count > 0:
             if count % 2 == 1:
@@ -874,7 +847,8 @@ def body_render(tbody):
                     n = len(word)
                 else:
                     chunks, chunksize = len(word), width - 1
-                    chunk_list = [word[i:i + chunksize] for i in range(0, chunks, chunksize)]
+                    chunk_list = [word[i:i + chunksize]
+                                  for i in range(0, chunks, chunksize)]
                     for line in chunk_list:
                         body = body + "\n" + code + line
                     n = len(chunk_list[-1])
@@ -1002,18 +976,19 @@ def save_message_to_file(msgid, echoarea):
 
 def get_out_msgids(drafts=False):
     msgids = []
-    not_sended = []
-    if os.path.exists("out/" + nodes[node]["nodename"]):
+    node_dir = "out/" + nodes[node]["nodename"]
+    if os.path.exists(node_dir):
         if drafts:
-            msgids = [f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if f.endswith(".draft")]
+            msgids = [f for f in sorted(os.listdir(node_dir))
+                      if f.endswith(".draft")]
         else:
-            msgids = [f for f in sorted(os.listdir("out/" + nodes[node]["nodename"])) if
-                      f.endswith(".out") or f.endswith(".outmsg")]
+            msgids = [f for f in sorted(os.listdir(node_dir))
+                      if f.endswith(".out") or f.endswith(".outmsg")]
     return msgids
 
 
 def quote(to):
-    if oldquote == True:
+    if oldquote:
         return ""
     else:
         if len(to) == 1:
@@ -1503,6 +1478,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 message_box("Не удалось определить msgid. " + str(ex))
                 stdscr.clear()
         elif key in r_links:
+            # TODO: Find and open ii:// links
             results = urltemplate.findall("\n".join(msg[8:]))
             links = []
             for item in results:
