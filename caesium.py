@@ -1047,16 +1047,19 @@ def get_msg(msgid):
     with urllib.request.urlopen(r) as f:
         bundle = f.read().decode("utf-8").split("\n")
     for msg in bundle:
-        if msg:
-            m = msg.split(":")
-            msgid = m[0]
-            if len(msgid) == 20 and m[1]:
-                msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8")
-                if len(nodes[node]["to"]) > 0:
-                    carbonarea = get_carbonarea()
-                    if msgbody.split("\n")[5] in nodes[node]["to"] and not msgid in carbonarea:
-                        add_to_carbonarea(msgid, msbbody)
-                save_message(msgid, msgbody)
+        if not msg:
+            continue
+        m = msg.split(":")
+        msgid = m[0]
+        if len(msgid) == 20 and m[1]:
+            msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
+            if len(nodes[node]["to"]) > 0:
+                carbonarea = get_carbonarea()
+                if msgbody[5] in nodes[node]["to"] and msgid not in carbonarea:
+                    pass
+                    # add_to_carbonarea(msgid, msgbody)
+            # save_message(msgid, msgbody)
+    # TODO: Restore message body only w/o duplicates in echo index
 
 
 def show_menu(title, items):
@@ -1132,7 +1135,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     stdscr.attrset(get_color("border"))
     y = 0
     msgn = last
-    key = 0
     if drafts:
         msgids = get_out_msgids(True)
     elif out:
@@ -1155,8 +1157,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             while msg[3] in twit or msg[5] in twit:
                 msgn -= 1
                 if msgn < 0:
-                    go = False
-                    quit = False
                     next_echoarea = True
                     break
                 msg, size = read_msg(msgids[msgn], echo[0])
@@ -1167,6 +1167,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     msgbody = body_render(msg[8:])
     scrollbar_size = calc_scrollbar_size(len(msgbody))
     go = True
+    done = False
     stack = []
     while go:
         if len(msgids) > 0:
@@ -1185,16 +1186,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 dsc = echo[1]
             if len(dsc) > 0 and width >= 80:
                 draw_title(0, width - 2 - len(dsc), dsc)
-            if not out:
-                try:
-                    if width >= 80:
-                        msgtime = time.strftime("%d %b %Y %H:%M UTC", time.gmtime(int(msg[2])))
-                    else:
-                        msgtime = time.strftime("%d.%m.%y %H:%M", time.gmtime(int(msg[2])))
-                except:
-                    msgtime = ""
             color = get_color("text")
             if not out:
+                try:
+                    fmt = "%d.%m.%y %H:%M"
+                    if width >= 80:
+                        fmt = "%d %b %Y %H:%M UTC"
+                    msgtime = time.strftime(fmt, time.gmtime(int(msg[2])))
+                except ValueError:
+                    msgtime = ""
                 if width >= 80:
                     stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
@@ -1284,7 +1284,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msgn += 1
                     if msgn >= len(msgids) or len(msgids) == 0:
                         go = False
-                        quit = False
                         next_echoarea = True
                         break
                     msg, size = read_msg(msgids[msgn], echo[0])
@@ -1292,7 +1291,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
-            quit = False
             next_echoarea = True
         elif key in r_prep and not echo[0] == "carbonarea" and not echo[0] == "favorites" and not out and repto:
             if repto in msgids:
@@ -1330,7 +1328,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if msgn == len(msgids) - 1 or len(msgids) == 0:
                     next_echoarea = True
                     go = False
-                    quit = False
                 else:
                     msgn = msgn + 1
                     if len(stack) > 0:
@@ -1447,7 +1444,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msgbody = body_render(msg[8:])
                 else:
                     go = False
-                    quit = False
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
                 stdscr.clear()
             else:
@@ -1506,7 +1502,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgbody = body_render(msg[8:])
             else:
                 go = False
-                quit = False
         elif key in r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
             node_dir = "out/" + nodes[node]["nodename"]
             copyfile(node_dir + "/" + msgids[msgn],
@@ -1520,7 +1515,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgbody = body_render(msg[8:])
             else:
                 go = False
-                quit = False
         elif key in r_list and not out and not drafts:
             if db == 0:
                 message_box("Функция не поддерживается текстовой базой.")
@@ -1536,17 +1530,16 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in r_quit:
             go = False
-            quit = False
             next_echoarea = False
         elif key in g_quit:
             go = False
-            quit = True
+            done = True
     lasts[echo[0]] = msgn
     f = open("lasts.lst", "wb")
     pickle.dump(lasts, f)
     f.close()
     stdscr.clear()
-    return quit
+    return done
 
 
 def is_url(word: str):
@@ -1556,6 +1549,7 @@ def is_url(word: str):
             or word.startswith("ii://"))
 
 
+# noinspection PyUnusedLocal
 def draw_msg_list(echo, lst, msgn):
     stdscr.clear()
     for i in range(0, width):
