@@ -453,8 +453,7 @@ def draw_status(x, title):
 
 
 def draw_cursor(y, color):
-    for i in range(0, width):
-        stdscr.insstr(y + 1, i, " ", color)
+    stdscr.insstr(y + 1, 0, " " * width, color)
 
 
 def current_time():
@@ -500,11 +499,10 @@ def draw_echo_selector(start, cursor, archive):
     hidedsc = False
     m = 0
     stdscr.attrset(get_color("border"))
-    for i in range(0, width):
-        color = get_color("border")
-        stdscr.insstr(0, i, "─", color)
-        color = get_color("statusline")
-        stdscr.insstr(height - 1, i, " ", color)
+    color = get_color("border")
+    stdscr.insstr(0, 0, "─" * width, color)
+    color = get_color("statusline")
+    stdscr.insstr(height - 1, 0, " " * width, color)
     if archive:
         echoareas = nodes[node]["archive"]
         draw_title(0, 0, "Архив")
@@ -554,8 +552,6 @@ def draw_echo_selector(start, cursor, archive):
                     last = -1
                 if last < echo_length - 1 or last == -1 and echo_length == 1:
                     stdscr.addstr(y + 1 - start, 0, "+")
-                if last < 0:
-                    last = 0
                 stdscr.addstr(y + 1 - start, 2, echo[0])
                 if width >= 80:
                     if width - 38 >= len(echo[1]):
@@ -590,7 +586,8 @@ def load_lasts():
         f.close()
 
 
-def edit_config(out=False):
+def edit_config():
+    global stdscr
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
@@ -802,9 +799,7 @@ def read_out_msg(msgid):
 def body_render(tbody):
     body = ""
     code = ""
-    sep = ""
-    for i in range(0, width - 1):
-        sep += "─"
+    sep = "─" * (width - 1)
     for line in tbody:
         n = 0
         rr = re.compile(r"^[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
@@ -862,12 +857,11 @@ def body_render(tbody):
 
 
 def draw_reader(echo, msgid, out):
-    for i in range(0, width):
-        color = get_color("border")
-        stdscr.insstr(0, i, "─", color)
-        stdscr.insstr(4, i, "─", color)
-        color = get_color("statusline")
-        stdscr.insstr(height - 1, i, " ", color)
+    color = get_color("border")
+    stdscr.insstr(0, 0, "─" * width, color)
+    stdscr.insstr(4, 0, "─" * width, color)
+    color = get_color("statusline")
+    stdscr.insstr(height - 1, 0, " " * width, color)
     if out:
         draw_title(0, 0, echo)
         if msgid.endswith(".out"):
@@ -889,6 +883,7 @@ def draw_reader(echo, msgid, out):
 
 
 def call_editor(out='', draft=False):
+    global stdscr
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
@@ -1210,8 +1205,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             else:
                 repto = False
             for i in range(0, height - 6):
-                for x in range(0, width):
-                    stdscr.addstr(i + 5, x, " ", 1)
+                stdscr.addstr(i + 5, 0, " " * width, 1)
                 if i < len(msgbody) - 1:
                     if y + i < len(msgbody) and len(msgbody[y + i]) > 0:
                         set_attr(msgbody[y + i][0])
@@ -1549,9 +1543,8 @@ def is_url(word: str):
 # noinspection PyUnusedLocal
 def draw_msg_list(echo, lst, msgn):
     stdscr.clear()
-    for i in range(0, width):
-        color = get_color("border")
-        stdscr.insstr(0, i, "─", color)
+    color = get_color("border")
+    stdscr.insstr(0, 0, "─" * width, color)
     if width >= 80:
         draw_title(0, 0, "Список сообщений в конференции " + echo)
     else:
