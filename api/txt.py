@@ -6,6 +6,17 @@ import os
 import time
 
 
+def init():
+    if not os.path.exists("echo"):
+        os.mkdir("echo")
+    if not os.path.exists("msg"):
+        os.mkdir("msg")
+    if not os.path.exists("echo/favorites"):
+        open("echo/favorites", "w")
+    if not os.path.exists("echo/carbonarea"):
+        open("echo/carbonarea", "w")
+
+
 def get_echo_length(echo):
     if os.path.exists("echo/" + echo):
         echo_length = len(open("echo/" + echo, "r").read().split("\n")) - 1

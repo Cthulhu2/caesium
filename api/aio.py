@@ -6,6 +6,11 @@ import os
 import time
 
 
+def init():
+    if not os.path.exists("aio"):
+        os.mkdir("aio")
+
+
 def get_echo_length(echo):
     if os.path.exists("aio/" + echo + ".aio"):
         echo_length = sum(1 for _ in open("aio/" + echo + ".aio", "r", newline="\n"))

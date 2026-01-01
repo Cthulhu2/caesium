@@ -3,9 +3,38 @@ import base64
 import hashlib
 import sqlite3
 import time
+from typing import Optional
 
-con = sqlite3.connect("idec.db")
-c = con.cursor()
+con = None  # type: Optional[sqlite3.Connection]
+c = None  # type: Optional[sqlite3.Cursor]
+
+
+def init():
+    global con, c
+    con = sqlite3.connect("idec.db")
+    c = con.cursor()
+
+    # Create database
+    c.execute("""CREATE TABLE IF NOT EXISTS msg(
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        msgid TEXT,
+        favorites INTEGER DEFAULT 0,
+        carbonarea INTEGER DEFAULT 0,
+        tags TEXT,
+        echoarea TEXT,
+        time INTEGER,
+        fr TEXT,
+        addr TEXT,
+        t TEXT,
+        subject TEXT,
+        body TEXT,
+        UNIQUE (id));""")
+    c.execute("CREATE INDEX IF NOT EXISTS msgid ON 'msg' ('msgid');")
+    c.execute("CREATE INDEX IF NOT EXISTS echoarea ON 'msg' ('echoarea');")
+    c.execute("CREATE INDEX IF NOT EXISTS time ON 'msg' ('time');")
+    c.execute("CREATE INDEX IF NOT EXISTS subject ON 'msg' ('subject');")
+    c.execute("CREATE INDEX IF NOT EXISTS body ON 'msg' ('body');")
+    con.commit()
 
 
 def get_echo_length(echo):
@@ -133,26 +162,3 @@ def read_msg(msgid, echoarea):
     else:
         size = str(format(size / 1024, ".2f")) + " KB"
     return msg.split("\n"), size
-
-
-# Create database
-c.execute("""CREATE TABLE IF NOT EXISTS msg(
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    msgid TEXT,
-    favorites INTEGER DEFAULT 0,
-    carbonarea INTEGER DEFAULT 0,
-    tags TEXT,
-    echoarea TEXT,
-    time INTEGER,
-    fr TEXT,
-    addr TEXT,
-    t TEXT,
-    subject TEXT,
-    body TEXT,
-    UNIQUE (id));""")
-c.execute("CREATE INDEX IF NOT EXISTS msgid ON 'msg' ('msgid');")
-c.execute("CREATE INDEX IF NOT EXISTS echoarea ON 'msg' ('echoarea');")
-c.execute("CREATE INDEX IF NOT EXISTS time ON 'msg' ('time');")
-c.execute("CREATE INDEX IF NOT EXISTS subject ON 'msg' ('subject');")
-c.execute("CREATE INDEX IF NOT EXISTS body ON 'msg' ('body');")
-con.commit()

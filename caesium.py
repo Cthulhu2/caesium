@@ -106,21 +106,7 @@ def check_directories():
     for n in nodes:
         if not os.path.exists("out/" + n["nodename"]):
             os.mkdir("out/" + n["nodename"])
-    if db == 0:
-        if not os.path.exists("echo"):
-            os.mkdir("echo")
-        if not os.path.exists("msg"):
-            os.mkdir("msg")
-        if not os.path.exists("echo/favorites"):
-            open("echo/favorites", "w")
-        if not os.path.exists("echo/carbonarea"):
-            open("echo/carbonarea", "w")
-    elif db == 1:
-        if not os.path.exists("aio"):
-            os.mkdir("aio")
-    elif db == 2:
-        if not os.path.exists("ait"):
-            os.mkdir("ait")
+    api.init()
 
 
 def check_config():
