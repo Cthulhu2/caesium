@@ -67,7 +67,7 @@ nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bo
 node = 0
 editor = ""
 oldquote = False
-db = None
+db = "ait"
 browser = webbrowser
 
 version = "Caesium/0.5 │"
@@ -95,7 +95,7 @@ def reset_config():
     node = 0
     editor = ""
     oldquote = False
-    db = 2
+    db = "ait"
 
 
 def check_directories():
@@ -172,14 +172,7 @@ def load_config():
         elif param[0] == "oldquote":
             oldquote = True
         elif param[0] == "db":
-            if param[1] == "txt":
-                db = 0
-            elif param[1] == "aio":
-                db = 1
-            elif param[1] == "ait":
-                db = 2
-            elif param[1] == "sqlite":
-                db = 3
+            db = param[1]
         elif param[0] == "browser":
             browser = webbrowser.GenericBrowser(param[1])
         elif param[0] == "twit":
@@ -1090,7 +1083,8 @@ def show_menu(title, items):
 
 def open_link(link):
     # TODO: Support open ii:// link
-    browser.open(link)
+    if not browser.open(link):
+        message_box("Не удалось запустить Интернет-браузер")
 
 
 def get_out(drafts=False):
@@ -1472,7 +1466,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             else:
                 go = False
         elif key in keys.r_list and not out and not drafts:
-            if db == 0:
+            if db == "txt":
                 message_box("Функция не поддерживается текстовой базой.")
             else:
                 selected_msgn = show_msg_list_screen(echo, msgn)
@@ -1592,14 +1586,16 @@ locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
 check_config()
 reset_config()
 load_config()
-if db == 0:
+if db == "txt":
     import api.txt as api
-elif db == 1:
+elif db == "aio":
     import api.aio as api
-elif db == 2:
+elif db == "ait":
     import api.ait as api
-elif db == 3:
+elif db == "sqlite":
     import api.sqlite as api
+else:
+    raise Exception("Unsupported DB API :: " + db)
 check_directories()
 stdscr = curses.initscr()
 try:
