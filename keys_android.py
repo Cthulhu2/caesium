@@ -1,96 +1,55 @@
 import curses
 
-## Клавиши для экрана выбора эхоконференции
-# курсор вверх
-s_up = [curses.KEY_UP, ord("k")]
-# курсор вниз
-s_down = [curses.KEY_DOWN, ord("j")]
-# страница вверх
-s_ppage = [curses.KEY_PPAGE, ord("K")]
-# страница вниз
-s_npage = [curses.KEY_NPAGE, ord("J")]
-# в начало
-s_home = [curses.KEY_HOME, ord("H")]
-# в конец
-s_end = [curses.KEY_END, ord("L")]
-# получить сообщения
-s_get = [ord("g"), ord("G")]
-# переключение в архив и обратно
-s_archive = [9, ord("t")]
-# открыть эху
-s_enter = [10, curses.KEY_RIGHT, ord(" "), ord("l")]
-# исходящие сообщения
-s_out = [ord("o"), ord("O")]
-# черновики
-s_drafts = [ord("d"), ord("D")]
-# следующая нода
-s_nnode = [ord(".")]
-# предыдущая нода
-s_pnode = [ord(",")]
-# клонировать эху
-s_clone = [ord("c")]
-# редактировать конфиг
-s_config = [ord("e"), ord("E")]
+# @formatter:off
+# Клавиши для экрана выбора эхоконференции
+s_up =      [curses.KEY_UP, ord("k")]     # noqa: E222  курсор вверх
+s_down =    [curses.KEY_DOWN, ord("j")]   # noqa: E222  курсор вниз
+s_ppage =   [curses.KEY_PPAGE, ord("K")]  # noqa: E222  страница вверх
+s_npage =   [curses.KEY_NPAGE, ord("J")]  # noqa: E222  страница вниз
+s_home =    [curses.KEY_HOME, ord("H")]   # noqa: E222  в начало
+s_end =     [curses.KEY_END, ord("L")]    # noqa: E222  в конец
+s_get =     [ord("g"), ord("G")]          # noqa: E222  получить сообщения
+s_archive = [9, ord("t")]                 # noqa: E222  переключение в архив и обратно
+s_enter =   [10, curses.KEY_RIGHT, ord(" "), ord("l")]  # noqa: E222  открыть эху
+s_out =     [ord("o"), ord("O")]          # noqa: E222  исходящие сообщения
+s_drafts =  [ord("d"), ord("D")]          # noqa: E222  черновики
+s_nnode =   [ord(".")]                    # noqa: E222  следующая нода
+s_pnode =   [ord(",")]                    # noqa: E222  предыдущая нода
+s_clone =   [ord("c")]                    # noqa: E222  клонировать эху
+s_config =  [ord("e"), ord("E")]          # noqa: E222  редактировать конфиг
 
 ## Клавиши для экрана чтения
-# предыдущее сообщение
-r_prev = [curses.KEY_LEFT, ord("h")]
-# следующее сообщение
-r_next = [curses.KEY_RIGHT, ord("l")]
-# перейти ниже по цепочке ответов
-r_prep = [ord("N")]
-# вернуться по цепочке ответов
-r_nrep = [ord("n")]
-# прокрутка вверх
-r_up = [curses.KEY_UP, ord("k")]
-# прокрутка вниз
-r_down = [curses.KEY_DOWN, ord("j")]
-# страница вверх
-r_ppage = [curses.KEY_PPAGE, ord("B")]
-# страница вниз
-r_npage = [curses.KEY_NPAGE, ord("F")]
-# клавиша прокрутки или перехода к следующему сообщению
-r_ukeys = [10, ord(" ")]
-# в начало сообщения
-r_home = [curses.KEY_HOME, ord("K")]
-# в конец сообщения
-r_mend = [curses.KEY_END, ord("J")]
-# в начало эхоконференции
-r_begin = [ord("H")]
-# в конец эхоконференции
-r_end = [ord("L")]
-# добавить сообщение
-r_ins = [ord("i"), ord("I")]
-# сохранить сообщение в файл
-r_save = [ord("w"), ord("W")]
-# добавить сообщение в избранные
-r_favorites = [ord("f")]
-# ответить с цитированием
-r_quote = [ord("r"), ord("R")]
-# показать messagebox с темой сообщения
-r_subj = [ord("s"), ord("S")]
-# показать msgid и адрес
-r_info = [ord("m"), ord("M")]
-# работа со ссылками
-r_links = [ord("v"), ord("V")]
-# получить текущее сообщение с ноды
-r_getmsg = [ord("g"), ord("G")]
-# перенести неотправленное исходящее сообщение в черновики
-r_to_out = [ord("o"), ord("O")]
-# перенести черновик в исходящие сообщения
-r_to_drafts = [ord("d"), ord("D")]
-# список сообщений
-r_list = [ord("t"), ord("t")]
-# вернуться на экран выбора эхоконференции
-r_quit = [27, ord("b"), ord("B")]
+r_prev =    [curses.KEY_LEFT, ord("h")]   # noqa: E222  предыдущее сообщение
+r_next =    [curses.KEY_RIGHT, ord("l")]  # noqa: E222  следующее сообщение
+r_prep =    [ord("N")]                    # noqa: E222  перейти ниже по цепочке ответов
+r_nrep =    [ord("n")]                    # noqa: E222  вернуться по цепочке ответов
+r_up =      [curses.KEY_UP, ord("k")]     # noqa: E222  прокрутка вверх
+r_down =    [curses.KEY_DOWN, ord("j")]   # noqa: E222  прокрутка вниз
+r_ppage =   [curses.KEY_PPAGE, ord("B")]  # noqa: E222  страница вверх
+r_npage =   [curses.KEY_NPAGE, ord("F")]  # noqa: E222  страница вниз
+r_ukeys =   [10, ord(" ")]                # noqa: E222  клавиша прокрутки или перехода к следующему сообщению
+r_home =    [curses.KEY_HOME, ord("K")]   # noqa: E222  в начало сообщения
+r_mend =    [curses.KEY_END, ord("J")]    # noqa: E222  в конец сообщения
+r_begin =   [ord("H")]                    # noqa: E222  в начало эхоконференции
+r_end =     [ord("L")]                    # noqa: E222  в конец эхоконференции
+r_ins =     [ord("i"), ord("I")]          # noqa: E222  добавить сообщение
+r_save =    [ord("w"), ord("W")]          # noqa: E222  сохранить сообщение в файл
+r_favorites = [ord("f")]                  # noqa: E222  добавить сообщение в избранные
+r_quote =   [ord("r"), ord("R")]          # noqa: E222  ответить с цитированием
+r_subj =    [ord("s"), ord("S")]          # noqa: E222  показать messagebox с темой сообщения
+r_info =    [ord("m"), ord("M")]          # noqa: E222  показать msgid и адрес
+r_links =   [ord("v"), ord("V")]          # noqa: E222  работа со ссылками
+r_getmsg =  [ord("g"), ord("G")]          # noqa: E222  получить текущее сообщение с ноды
+r_to_out =  [ord("o"), ord("O")]          # noqa: E222  перенести неотправленное исходящее сообщение в черновики
+r_to_drafts = [ord("d"), ord("D")]        # noqa: E222  перенести черновик в исходящие сообщения
+r_list =    [ord("t"), ord("t")]          # noqa: E222  список сообщений
+r_quit =    [27, ord("b"), ord("B")]      # noqa: E222  вернуться на экран выбора эхоконференции
 
-## Клавиши для просмотра исходящих и черновиков
-# редактировать сообщение
-o_edit = [ord("e"), ord("E")]
+# Клавиши для просмотра исходящих и черновиков
+o_edit = [ord("e"), ord("E")]  # редактировать сообщение
 
 # Клавиши для просмотра избранных сообщений
-# удалить из избранных
-f_delete = [curses.KEY_DC, ord("x"), ord("X")]
+f_delete = [curses.KEY_DC, ord("x"), ord("X")]  # удалить из избранных
 
-# закрыть клиент
-g_quit = [curses.KEY_F10, ord("q"), ord("Q")]
+g_quit = [curses.KEY_F10, ord("q"), ord("Q")]  # закрыть клиент
+# @formatter:on
