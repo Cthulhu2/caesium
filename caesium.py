@@ -392,11 +392,13 @@ def fetch_mail():
     global depth, messages
     messages = []
     print("Работа с " + nodes[node]["node"])
-    if "auth" in nodes[node]:
-        make_toss()
-        send_mail()
     try:
+        if "auth" in nodes[node]:
+            make_toss()
+            send_mail()
         get_mail()
+    except KeyboardInterrupt:
+        print("\nПрервано пользователем")
     except Exception as ex:
         print("\nОШИБКА: " + str(ex))
     input("Нажмите Enter для продолжения.")
@@ -924,8 +926,8 @@ def draw_message_box(smsg, wait):
         msgwin = curses.newwin(len(msg) + 2, maxlen + 2,
                                int(height / 2 - 2),
                                int(width / 2 - maxlen / 2 - 2))
+    msgwin.bkgd(' ', get_color("text"))
     msgwin.attrset(get_color("border"))
-    msgwin.bkgd(' ', curses.color_pair(1))
     msgwin.border()
 
     i = 1
@@ -1044,7 +1046,7 @@ def get_msg(msgid):
 
 def show_menu(title, items):
     h = len(items)
-    w = min(width - 3, max(items, key=lambda it: len(it)))
+    w = 0 if not items else min(width - 3, max(map(lambda it: len(it), items)))
     e = "Esc - отмена"
     if w < len(title):
         w = len(title) + 2
@@ -1441,12 +1443,10 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif key in keys.r_links:
             # TODO: Find and open ii:// links
             results = url_template.findall("\n".join(msg[8:]))
-            links = []
-            for item in results:
-                links.append(item[0])
+            links = [it[0] for it in results]
             if len(links) == 1:
                 open_link(links[0])
-            else:
+            elif links:
                 i = show_menu("Выберите ссылку", links)
                 if i:
                     open_link(links[i - 1])
@@ -1611,10 +1611,11 @@ try:
     curses.use_default_colors()
     load_colors()
     curses.noecho()
+    curses.set_escdelay(50)  # ms
     curses.curs_set(False)
     stdscr.keypad(True)
 
-    stdscr.bkgd(" ", curses.color_pair(1))
+    stdscr.bkgd(" ", get_color("text"))
     get_term_size()
     if show_splash:
         splash_screen()
