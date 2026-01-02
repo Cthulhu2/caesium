@@ -61,8 +61,6 @@ counts = []
 counts_rescan = True
 echo_counts = {}
 next_echoarea = False
-depth = 50
-fdepth = 5
 messages = []
 twit = []
 nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]]
@@ -389,8 +387,6 @@ def get_mail():
 
 
 def fetch_mail():
-    global depth, messages
-    messages = []
     print("Работа с " + nodes[node]["node"])
     try:
         if "auth" in nodes[node]:
