@@ -902,12 +902,11 @@ def call_editor(out=''):
 
 
 def draw_message_box(smsg, wait):
-    maxlen = 0
     msg = smsg.split("\n")
-    for line in msg:
-        if len(line) > maxlen:
-            maxlen = len(line)
+    maxlen = max(map(lambda x: len(x), msg))
+    any_key = "Нажмите любую клавишу"
     if wait:
+        maxlen = max(len(any_key), maxlen)
         msgwin = curses.newwin(len(msg) + 4, maxlen + 2,
                                int(height / 2 - 2),
                                int(width / 2 - maxlen / 2 - 2))
@@ -926,7 +925,7 @@ def draw_message_box(smsg, wait):
         i = i + 1
     color = get_color("titles")
     if wait:
-        msgwin.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), "Нажмите любую клавишу", color)
+        msgwin.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), any_key, color)
     msgwin.refresh()
 
 
