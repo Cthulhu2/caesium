@@ -29,7 +29,7 @@ import keys
 # Theme
 color_theme = "default"
 color_pairs = {
-    # "theme-part": [color-pair-NUM, bold-attr]
+    # "ui-element": [color-pair-NUM, bold-attr]
     # @formatter:off
     "border":     [1,  0],
     "titles":     [2,  0],
@@ -45,6 +45,7 @@ color_pairs = {
     "origin":     [12, 0],
     # @formatter:on
 }
+can_change_color = False
 
 
 def get_color(theme_part):
@@ -190,31 +191,80 @@ def load_config():
         nodes[i]["echoareas"].insert(1, ("carbonarea", "Карбонка", True))
 
 
-def load_colors():
-    colors = ["black", "red", "green", "yellow", "blue", "magenta", "cyan",
-              "white", "gray"]
+def init_hex_color(color, cache, idx):
+    if not can_change_color:
+        raise ValueError("No extended color support in the terminal "
+                         + str(curses.termname()))
 
+    if len(color) == 7 and color[0] == "#":
+        r = int("0x" + color[1:3], 16)
+        g = int("0x" + color[3:5], 16)
+        b = int("0x" + color[5:7], 16)
+    elif len(color) == 4 and color[0] == "#":
+        r = int("0x" + color[1] * 2, 16)
+        g = int("0x" + color[2] * 2, 16)
+        b = int("0x" + color[3] * 2, 16)
+    else:
+        raise ValueError("Invalid color value :: " + color)
+    if (r, g, b) in cache:
+        return cache[(r, g, b)], False
+    curses_r = int(round(r / 255 * 1000))  # to 0..1000
+    curses_g = int(round(g / 255 * 1000))
+    curses_b = int(round(b / 255 * 1000))
+    curses.init_color(idx, curses_r, curses_g, curses_b)
+    cache[(r, g, b)] = idx
+    return idx, True
+
+
+def load_colors(theme):
+    colors = ["black", "red", "green", "yellow", "blue",
+              "magenta", "cyan", "white",
+              "brblack", "brred", "brgreen", "bryellow", "brblue",
+              "brmagenta", "brcyan", "brwhite"]
+    c256cache = {}
+    c256idx = curses.COLORS - 1
     shrink_spaces = re.compile(r"(\s\s+|\t+)")
-    for line in open("themes/" + color_theme + ".cfg", "r").readlines():
+    color3_regex = re.compile(r"#[a-fA-F0-9]{3}")
+    color6_regex = re.compile(r"#[a-fA-F0-9]{6}")
+    for line in open("themes/" + theme + ".cfg", "r").readlines():
         # sanitize
         line = shrink_spaces.sub(" ", line.strip())
-        if line.startswith("#"):
-            continue  # skip comments
-        param = line.split(" ")
-        if len(param) < 3 or 4 < len(param) or param[0] not in color_pairs:
-            continue  # skip unknown lines, theme parts
-        if param[1] == "grey":
-            param[1] = "gray"
-        #
-        fg = colors.index(param[1])
-        if param[2] == "default":
-            bg = -1
+        nocolor = color3_regex.sub("-" * 4, color6_regex.sub("-" * 7, line))
+        if "#" in nocolor:
+            line = line[0:nocolor.index("#")].strip()  # skip comments
+        if not line:
+            continue
+        params = line.split(" ")
+        if (len(params) not in (3, 4)
+                or params[0] not in color_pairs
+                or len(params) == 4 and params[3] != "bold"):
+            raise ValueError("Invalid theme params :: " + line)
+        # foreground
+        if params[1].startswith("#"):
+            fg, idxChange = init_hex_color(params[1], c256cache, c256idx)
+            if idxChange:
+                c256idx -= 1
+        elif params[1].startswith("color"):
+            fg = int(params[1][5:])
         else:
-            bg = colors.index(param[2])
-        color_pairs[param[0]][1] = curses.A_NORMAL
-        if len(param) == 4:
-            color_pairs[param[0]][1] = curses.A_BOLD
-        curses.init_pair(color_pairs[param[0]][0], fg, bg)
+            fg = colors.index(params[1])
+        # background
+        if params[2] == "default":
+            bg = -1
+        elif params[2].startswith("#"):
+            bg, idxChange = init_hex_color(params[2], c256cache, c256idx)
+            if idxChange:
+                c256idx -= 1
+        elif params[2].startswith("color"):
+            bg = int(params[2][5:])
+        else:
+            bg = colors.index(params[2])
+        # bold
+        color_pairs[params[0]][1] = curses.A_NORMAL
+        if len(params) == 4:
+            color_pairs[params[0]][1] = curses.A_BOLD
+        #
+        curses.init_pair(color_pairs[params[0]][0], fg, bg)
 
 
 def save_out(draft=False):
@@ -429,7 +479,7 @@ def draw_title(y, x, title):
     color = get_color("border")
     stdscr.addstr(y, x, "[", color)
     stdscr.addstr(y, x + 1 + len(title), "]", color)
-    color = get_color("titles") | curses.A_BOLD
+    color = get_color("titles")
     stdscr.addstr(y, x + 1, title, color)
 
 
@@ -737,7 +787,7 @@ def show_echo_selector_screen():
             edit_config()
             reset_config()
             load_config()
-            load_colors()
+            load_colors(color_theme)
             get_counts()
             stdscr.clear()
             counts_rescan = True
@@ -1049,7 +1099,7 @@ def show_menu(title, items):
     menu_win.addstr(h + 1, 1, "[", color)
     menu_win.addstr(h + 1, 2 + len(e), "]", color)
 
-    color = get_color("titles") | curses.A_BOLD
+    color = get_color("titles")
     menu_win.addstr(0, 2, title, color)
     menu_win.addstr(h + 1, 2, e, color)
     y = 1
@@ -1597,17 +1647,30 @@ else:
     raise Exception("Unsupported DB API :: " + db)
 check_directories()
 stdscr = curses.initscr()
+if sys.version_info >= (3, 10):
+    can_change_color = (curses.has_extended_color_support()
+                        and curses.can_change_color())
+else:
+    can_change_color = ("256" in os.environ.get("TERM", "linux")
+                        and curses.can_change_color())
 try:
     curses.start_color()
     curses.use_default_colors()
-    load_colors()
     curses.noecho()
     curses.set_escdelay(50)  # ms
     curses.curs_set(False)
     stdscr.keypad(True)
-
-    stdscr.bkgd(" ", get_color("text"))
     get_term_size()
+    try:
+        load_colors(color_theme)
+    except ValueError as err:
+        load_colors("default")
+        stdscr.refresh()
+        message_box("Цветовая схема " + color_theme + " не установлена.\n"
+                    + str(err) + "\nБудет использована схема по-умолчанию.")
+        color_theme = "default"
+    stdscr.bkgd(" ", get_color("text"))
+
     if show_splash:
         splash_screen()
     draw_message_box("Подождите", False)
