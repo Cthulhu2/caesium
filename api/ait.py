@@ -40,7 +40,7 @@ def get_echo_msgids(echo):
         f = codecs.open("ait/" + echo + ".iat", "r", "utf-8").read().split("\n")
         msgids = []
         for line in f:
-            if len(line) > 0:
+            if line:
                 msgids.append(line)
     else:
         msgids = []

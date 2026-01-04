@@ -60,7 +60,7 @@ def save_to_favorites(msgid, msg):
 def get_echo_msgids(echo):
     msgids = []
     for row in c.execute("SELECT msgid FROM msg WHERE echoarea = ? ORDER BY id;", (echo,)):
-        if len(row[0]) > 0:
+        if row[0]:
             msgids.append(row[0])
     return msgids
 

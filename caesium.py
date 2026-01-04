@@ -1307,7 +1307,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
-        elif key in keys.r_prep and not echo[0] == "carbonarea" and not echo[0] == "favorites" and not out and repto:
+        elif key in keys.r_prep and echo[0] not in ("carbonarea", "favorites") and not out and repto:
             if repto in msgids:
                 stack.append(msgn)
                 msgn = msgids.index(repto)
