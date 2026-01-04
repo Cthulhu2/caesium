@@ -18,8 +18,6 @@ from datetime import datetime
 from shutil import copyfile
 from typing import List, Dict, Union, Tuple
 
-import keys
-
 # TODO: Add http/https/socks proxy support
 # import socket
 # import socks
@@ -70,6 +68,7 @@ editor = ""
 oldquote = False
 db = "ait"
 browser = webbrowser
+keys_scheme = "default"
 
 version = "Caesium/0.5 │"
 
@@ -124,6 +123,7 @@ def separate(fetch_list, step=20):
 
 def load_config():
     global nodes, editor, color_theme, show_splash, oldquote, db, browser, twit
+    global keys_scheme
     nodes = []
     first = True
     browser = webbrowser
@@ -178,6 +178,8 @@ def load_config():
             browser = webbrowser.GenericBrowser(param[1])
         elif param[0] == "twit":
             twit = param[1].split(",")
+        elif param[0] == "keys":
+            keys_scheme = param[1]
 
     if "nodename" not in cnode:
         cnode["nodename"] = "untitled node"
@@ -1646,6 +1648,14 @@ elif db == "sqlite":
 else:
     raise Exception("Unsupported DB API :: " + db)
 check_directories()
+if keys_scheme == "default":
+    import keys
+elif keys_scheme == "android":
+    import keys_android as keys
+elif keys_scheme == "vi":
+    import keys_vi as keys
+else:
+    raise Exception("Unknown Keys Scheme :: " + keys_scheme)
 stdscr = curses.initscr()
 if sys.version_info >= (3, 10):
     can_change_color = (curses.has_extended_color_support()
