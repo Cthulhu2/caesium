@@ -1649,11 +1649,11 @@ else:
     raise Exception("Unsupported DB API :: " + db)
 check_directories()
 if keys_scheme == "default":
-    import keys
+    import keys.default as keys
 elif keys_scheme == "android":
-    import keys_android as keys
+    import keys.android as keys
 elif keys_scheme == "vi":
-    import keys_vi as keys
+    import keys.vi as keys
 else:
     raise Exception("Unknown Keys Scheme :: " + keys_scheme)
 stdscr = curses.initscr()
