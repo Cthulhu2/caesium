@@ -70,7 +70,7 @@ db = "ait"
 browser = webbrowser
 keys_scheme = "default"
 
-version = "Caesium/0.5 │"
+version = "Caesium/0.6 │"
 
 splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
@@ -79,8 +79,8 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "███      ███  ███ ███           ███ ███ ███  ███ ███ ██ ███",
           "████████ ████████ ████████ ████████ ███ ████████ ███ ██ ███",
           "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
-          "           ncurses ii/idec client      v.0.5",
-          "           Andrew Lobanov             01.11.2024"]
+          "           ncurses ii/idec client        v0.6",
+          "           Andrew Lobanov             04.01.2026"]
 
 url_template = re.compile(r"((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
 # noinspection RegExpRedundantEscape
