@@ -1,6 +1,4 @@
 # coding=utf-8
-import base64
-import hashlib
 import sqlite3
 import time
 from typing import Optional
@@ -9,9 +7,9 @@ con = None  # type: Optional[sqlite3.Connection]
 c = None  # type: Optional[sqlite3.Cursor]
 
 
-def init():
+def init(db="idec.db"):
     global con, c
-    con = sqlite3.connect("idec.db")
+    con = sqlite3.connect(db)
     c = con.cursor()
 
     # Create database
@@ -38,7 +36,8 @@ def init():
 
 
 def get_echo_length(echo):
-    row = c.execute("SELECT COUNT(1) FROM msg WHERE echoarea = ?;", (echo,)).fetchone()
+    row = c.execute("SELECT COUNT(1) FROM msg WHERE echoarea = ?;",
+                    (echo,)).fetchone()
     return row[0]
 
 
@@ -48,7 +47,8 @@ def get_echocount(echo):
 
 # noinspection PyUnusedLocal
 def save_to_favorites(msgid, msg):
-    favorites = c.execute("SELECT COUNT(1) FROM msg WHERE msgid = ? AND favorites = 1", (msgid,)).fetchone()[0]
+    favorites = c.execute("SELECT COUNT(1) FROM msg WHERE msgid = ? AND favorites = 1",
+                          (msgid,)).fetchone()[0]
     if favorites == 0:
         c.execute("UPDATE msg SET favorites = 1 WHERE msgid = ?;", (msgid,))
         con.commit()
@@ -59,7 +59,8 @@ def save_to_favorites(msgid, msg):
 
 def get_echo_msgids(echo):
     msgids = []
-    for row in c.execute("SELECT msgid FROM msg WHERE echoarea = ? ORDER BY id;", (echo,)):
+    for row in c.execute("SELECT msgid FROM msg WHERE echoarea = ? ORDER BY id;",
+                         (echo,)):
         if row[0]:
             msgids.append(row[0])
     return msgids
@@ -74,21 +75,8 @@ def get_carbonarea():
 
 # noinspection PyUnusedLocal
 def add_to_carbonarea(msgid, msgbody):
-    c.execute("UPDATE msg SET carbonarea = 1 WHERE msgid = ?;", (msgid,))
-    con.commit()
-
-
-def save_to_carbonarea(fr, subj, body):
-    msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
-    digest = hashlib.sha256("\n".join(msgbody).encode()).digest()
-    msgid = base64.urlsafe_b64encode(digest).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
-    c.execute(
-        "INSERT INTO msg ("
-        " msgid, tags, echoarea, time, fr, addr,"
-        " t, subject, body, carbonarea"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        (msgid, msgbody[0], msgbody[1], msgbody[2], msgbody[3], msgbody[4],
-         msgbody[5], msgbody[6], "\n".join(msgbody[7:]), 1))
+    c.execute("UPDATE msg SET carbonarea = 1 WHERE msgid = ?;",
+              (msgid,))
     con.commit()
 
 

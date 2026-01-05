@@ -109,8 +109,9 @@ def check_directories():
 
 def check_config():
     if not os.path.exists("caesium.cfg"):
-        default_config = open("caesium.def.cfg", "r").read()
-        open("caesium.cfg", "w").write(default_config)
+        with open("caesium.def.cfg", "r") as def_cfg:
+            with open("caesium.cfg", "w") as cfg:
+                cfg.write(def_cfg.read())
 
 
 #
@@ -132,7 +133,8 @@ def load_config():
     echoareas = []  # type: List[Tuple[str, str, bool]]
     archive = []  # type: List[Tuple[str, str, bool]]
     #
-    config = open("caesium.cfg").read().split("\n")
+    with open("caesium.cfg") as f:
+        config = f.read().splitlines()
     shrink_spaces = re.compile(r"(\s\s+|\t+)")
     for line in config:
         param = shrink_spaces.sub(" ", line.strip()).split(" ", maxsplit=2)
@@ -228,7 +230,9 @@ def load_colors(theme):
     shrink_spaces = re.compile(r"(\s\s+|\t+)")
     color3_regex = re.compile(r"#[a-fA-F0-9]{3}")
     color6_regex = re.compile(r"#[a-fA-F0-9]{6}")
-    for line in open("themes/" + theme + ".cfg", "r").readlines():
+    with open("themes/" + theme + ".cfg", "r") as f:
+        lines = f.readlines()
+    for line in lines:
         # sanitize
         line = shrink_spaces.sub(" ", line.strip())
         nocolor = color3_regex.sub("-" * 4, color6_regex.sub("-" * 7, line))
@@ -270,7 +274,8 @@ def load_colors(theme):
 
 
 def save_out(draft=False):
-    new = codecs.open("temp", "r", "utf-8").read().strip().replace("\r", "").split("\n")
+    with codecs.open("temp", "r", "utf-8") as f:
+        new = f.read().strip().replace("\r", "").split("\n")
     if len(new) <= 1:
         os.remove("temp")
     else:
@@ -281,23 +286,23 @@ def save_out(draft=False):
             buf = new[1:5] + ["@repto:%s" % new[0]] + new[5:]
         else:
             buf = ()
-        if draft:
-            codecs.open(outcount() + ".draft", "w", "utf-8").write("\n".join(buf))
-        else:
-            codecs.open(outcount() + ".out", "w", "utf-8").write("\n".join(buf))
+        ext = ".draft" if draft else ".out"
+        with codecs.open(outcount() + ext, "w", "utf-8") as f:
+            f.write("\n".join(buf))
         os.remove("temp")
 
 
 def resave_out(filename, draft=False):
-    new = codecs.open("temp", "r", "utf-8").read().strip().split("\n")
+    with codecs.open("temp", "r", "utf-8") as f:
+        new = f.read().strip().split("\n")
     if len(new) <= 1:
         os.remove("temp")
     else:
+        out_dir = "out/" + nodes[node]["nodename"] + "/"
         if draft:
-            codecs.open("out/" + nodes[node]["nodename"] + "/" + filename.replace(".out", ".draft"), "w",
-                        "utf-8").write("\n".join(new))
-        else:
-            codecs.open("out/" + nodes[node]["nodename"] + "/" + filename, "w", "utf-8").write("\n".join(new))
+            filename = filename.replace(".out", ".draft")
+        with codecs.open(out_dir + filename, "w", "utf-8") as f:
+            f.write("\n".join(new))
         os.remove("temp")
 
 
@@ -323,9 +328,11 @@ def make_toss():
     lst = [x for x in os.listdir(node_dir)
            if x.endswith(".out")]
     for msg in lst:
-        text_raw = codecs.open(node_dir + "/%s" % msg, "r", "utf-8").read()
+        with codecs.open(node_dir + "/%s" % msg, "r", "utf-8") as f:
+            text_raw = f.read()
         text_b64 = base64.b64encode(text_raw.encode("utf-8")).decode("utf-8")
-        codecs.open(node_dir + "/%s.toss" % msg, "w", "utf-8").write(text_b64)
+        with codecs.open(node_dir + "/%s.toss" % msg, "w", "utf-8") as f:
+            f.write(text_b64)
         os.rename(node_dir + "/%s" % msg,
                   node_dir + "/%s%s" % (msg, "msg"))
 
@@ -339,7 +346,8 @@ def send_mail():
         for n, msg in enumerate(lst, start=1):
             print("\rОтправка сообщения: " + str(n) + "/" + total, end="")
             msg_toss = node_dir + "/%s" % msg
-            text = codecs.open(msg_toss, "r", "utf-8").read()
+            with codecs.open(msg_toss, "r", "utf-8") as f:
+                text = f.read()
             #
             data = urllib.parse.urlencode({
                 "tmsg": text,
@@ -808,7 +816,8 @@ def show_echo_selector_screen():
 
 def read_out_msg(msgid):
     node_dir = "out/" + nodes[node]["nodename"]
-    temp = open(node_dir + "/" + msgid, "r").read().split("\n")
+    with open(node_dir + "/" + msgid, "r") as f:
+        temp = f.read().splitlines()
     msg = ["",
            temp[0],
            "",
@@ -990,13 +999,12 @@ def message_box(smsg):
 
 def save_message_to_file(msgid, echoarea):
     msg, size = api.read_msg(msgid, echoarea)
-    f = open(msgid + ".txt", "w")
-    f.write("== " + msg[1] + " ==================== " + str(msgid) + "\n")
-    f.write("От:   " + msg[3] + " (" + msg[4] + ")\n")
-    f.write("Кому: " + msg[5] + "\n")
-    f.write("Тема: " + msg[6] + "\n")
-    f.write("\n".join(msg[7:]))
-    f.close()
+    with open(msgid + ".txt", "w") as f:
+        f.write("== " + msg[1] + " ==================== " + str(msgid) + "\n")
+        f.write("От:   " + msg[3] + " (" + msg[4] + ")\n")
+        f.write("Кому: " + msg[5] + "\n")
+        f.write("Тема: " + msg[6] + "\n")
+        f.write("\n".join(msg[7:]))
     message_box("Сообщение сохранено в файл\n" + str(msgid) + ".txt")
 
 
@@ -1384,14 +1392,12 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_ins and not archive and not out:
             if not favorites:
-                t = open("template.txt", "r")
-                f = open("temp", "w")
-                f.write(echo[0] + "\n")
-                f.write("All\n")
-                f.write("No subject\n\n")
-                f.write(t.read())
-                f.close()
-                t.close()
+                with open("template.txt", "r") as t:
+                    with open("temp", "r") as f:
+                        f.write(echo[0] + "\n")
+                        f.write("All\n")
+                        f.write("No subject\n\n")
+                        f.write(t.read())
                 call_editor()
                 stdscr.clear()
         elif key in keys.r_save and not out:

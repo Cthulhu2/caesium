@@ -1,80 +1,74 @@
 # coding=utf-8
-import base64
 import codecs
-import hashlib
 import os
-import time
+
+storage = "txt"
 
 
-def init():
-    if not os.path.exists("echo"):
-        os.mkdir("echo")
-    if not os.path.exists("msg"):
-        os.mkdir("msg")
-    if not os.path.exists("echo/favorites"):
-        open("echo/favorites", "w")
+def init(directory=""):
+    global storage
+    storage = directory
+    if storage:
+        if not storage.endswith("/"):
+            storage += "/"
+        if not os.path.exists(storage):
+            os.mkdir(storage)
+    if not os.path.exists(storage + "echo"):
+        os.mkdir(storage + "echo")
+    if not os.path.exists(storage + "msg"):
+        os.mkdir(storage + "msg")
+    if not os.path.exists(storage + "echo/favorites"):
+        open(storage + "echo/favorites", "w")
     if not os.path.exists("echo/carbonarea"):
-        open("echo/carbonarea", "w")
+        open(storage + "echo/carbonarea", "w")
 
 
 def get_echo_length(echo):
-    if os.path.exists("echo/" + echo):
-        echo_length = len(open("echo/" + echo, "r").read().split("\n")) - 1
+    if os.path.exists(storage + "echo/" + echo):
+        echo_length = len(open(storage + "echo/" + echo, "r").read().split("\n")) - 1
     else:
         echo_length = 0
     return echo_length
 
 
 def get_echocount(echoarea):
-    return len(open("echo/" + echoarea, "r").read().split("\n")) - 1
+    return len(open(storage + "echo/" + echoarea, "r").read().split("\n")) - 1
 
 
 # noinspection PyUnusedLocal
 def save_to_favorites(msgid, msg):
-    if os.path.exists("echo/favorites"):
-        favorites = open("echo/favorites", "r").read().split("\n")
-    else:
-        favorites = []
+    favorites = []
+    if os.path.exists(storage + "echo/favorites"):
+        with open(storage + "echo/favorites", "r") as f:
+            favorites = f.read().splitlines()
+
     if msgid not in favorites:
-        open("echo/favorites", "a").write(msgid + "\n")
+        with open(storage + "echo/favorites", "a") as f:
+            f.write(msgid + "\n")
         return True
     else:
         return False
 
 
 def get_echo_msgids(echo):
-    if os.path.exists("echo/" + echo):
-        msgids = open("echo/" + echo, "r").read().split("\n")[:-1]
-    else:
-        msgids = []
-    return msgids
+    if not os.path.exists(storage + "echo/" + echo):
+        return []
+    with open(storage + "echo/" + echo, "r") as f:
+        return f.read().splitlines()
 
 
 def get_carbonarea():
-    try:
-        msgids = []
-        for msgid in open("echo/carbonarea", "r").read().split("\n"):
-            if len(msgid) == 20:
-                msgids.append(msgid)
-        return msgids
-    except:
+    if not os.path.exists(storage + "echo/carbonarea"):
         return []
+    with open(storage + "echo/carbonarea", "r") as f:
+        return list(filter(lambda item: len(item) == 20,
+                           f.read().splitlines()))
 
 
 # noinspection PyUnusedLocal
 def add_to_carbonarea(msgid, msgbody):
-    if os.path.exists("echo/carbonarea"):
-        return codecs.open("echo/carbonarea", "a", "utf-8").write(msgid + "\n")
-    else:
-        return []
-
-
-def save_to_carbonarea(fr, subj, body):
-    msgbody = ["ii/ok", "carbonarea", str(round(time.time())), fr, "local", "", subj, "", body]
-    digest = hashlib.sha256("\n".join(msgbody).encode()).digest()
-    msgid = base64.urlsafe_b64encode(digest).decode("utf-8").replace("-", "A").replace("_", "z")[:20]
-    codecs.open("msg/%s" % msgid, "w", "utf-8").write("\n".join(msgbody))
-    open("echo/carbonarea", "a").write(msgid + "\n")
+    with codecs.open(storage + "echo/carbonarea", "a", "utf-8") as f:
+        f.write(msgid + "\n")
 
 
 # noinspection PyUnusedLocal
@@ -83,8 +77,10 @@ def save_message(raw, node, to):
     for msg in raw:
         msgid = msg[0]
         msgbody = msg[1]
-        codecs.open("echo/" + msgbody[1], "a", "utf-8").write(msgid + "\n")
-        codecs.open("msg/" + msgid, "w", "utf-8").write("\n".join(msgbody))
+        with codecs.open(storage + "echo/" + msgbody[1], "a", "utf-8") as f:
+            f.write(msgid + "\n")
+        with codecs.open(storage + "msg/" + msgid, "w", "utf-8") as f:
+            f.write("\n".join(msgbody))
         if to:
             for name in to:
                 if name in msgbody[5] and msgid not in carbonarea:
@@ -92,36 +88,34 @@ def save_message(raw, node, to):
 
 
 def get_favorites_list():
-    try:
-        msgids = []
-        for msgid in open("echo/favorites", "r").read().split("\n"):
-            if len(msgid) == 20:
-                msgids.append(msgid)
-        return msgids
-    except:
+    if not os.path.exists(storage + "echo/favorites"):
         return []
+
+    with open(storage + "echo/favorites", "r") as f:
+        return list(filter(lambda it: len(it) == 20, f.read().splitlines()))
 
 
 def remove_from_favorites(msgid):
     favorites_list = get_favorites_list()
     favorites_list.remove(msgid)
-    open("echo/favorites", "w").write("\n".join(favorites_list))
+    with open(storage + "echo/favorites", "w") as f:
+        f.write("\n".join(favorites_list))
 
 
 def remove_echoarea(echoarea):
-    try:
-        echoarea = open("echo/%s" % echoarea, "r").read().split("\n")
-    except:
-        echoarea = []
-    for msgid in echoarea:
-        try:
-            os.remove("msg/%s" % msgid)
-        except:
-            pass
-    try:
-        os.remove("echo/%s" % echoarea)
-    except:
-        pass
+    msgids = []
+    f_echo = storage + "echo/%s" % echoarea
+    if os.path.exists(f_echo):
+        with open(f_echo, "r") as f:
+            msgids = f.read().splitlines()
+    #
+    for msgid in msgids:
+        msgid = storage + "msg/%s" % msgid
+        if os.path.exists(msgid):
+            os.remove(msgid)
+    #
+    if os.path.exists(f_echo):
+        os.remove(f_echo)
 
 
 # noinspection PyUnusedLocal
@@ -133,14 +127,14 @@ def get_msg_list_data(echoarea):
 
 # noinspection PyUnusedLocal
 def read_msg(msgid, echoarea):
-    size = "0b"
-    if os.path.exists("msg/" + msgid) and msgid != "":
-        msg = open("msg/" + msgid, "r").read().split("\n")
-        size = os.stat("msg/" + msgid).st_size
-        if size < 1024:
-            size = str(size) + " B"
-        else:
-            size = str(format(size / 1024, ".2f")) + " KB"
+    if not os.path.exists(storage + "msg/" + msgid) or not msgid:
+        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], "0b"
+
+    with open(storage + "msg/" + msgid, "r") as f:
+        msg = f.read().splitlines()
+    size = os.stat(storage + "msg/" + msgid).st_size
+    if size < 1024:
+        size = str(size) + " B"
     else:
-        msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
+        size = str(format(size / 1024, ".2f")) + " KB"
     return msg, size
