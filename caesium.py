@@ -11,12 +11,12 @@ import re
 import subprocess
 import sys
 import time
-import urllib.parse
-import urllib.request
 import webbrowser
 from datetime import datetime
 from shutil import copyfile
 from typing import List, Dict, Union, Tuple
+
+import client
 
 # TODO: Add http/https/socks proxy support
 # import socket
@@ -60,7 +60,6 @@ counts = []
 counts_rescan = True
 echo_counts = {}
 next_echoarea = False
-messages = []
 twit = []
 nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]]
 node = 0
@@ -71,6 +70,7 @@ browser = webbrowser
 keys_scheme = "default"
 
 version = "Caesium/0.6 │"
+client.USER_AGENT = "Caesium/0.6"
 
 splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
@@ -351,12 +351,7 @@ def send_mail():
             with codecs.open(msg_toss, "r", "utf-8") as f:
                 text = f.read()
             #
-            data = urllib.parse.urlencode({
-                "tmsg": text,
-                "pauth": nodes[node]["auth"],
-            }).encode("utf-8")
-            req = urllib.request.Request(nodes[node]["node"] + "u/point")
-            result = urllib.request.urlopen(req, data).read().decode("utf-8")
+            result = client.send_msg(nodes[node]["node"], nodes[node]["auth"], text)
             #
             if result.startswith("msg ok"):
                 os.remove(msg_toss)
@@ -373,30 +368,15 @@ def send_mail():
 
 
 def get_msg_list():
-    msg_list = []
-    echoareas = "/".join(map(
+    echoareas = list(map(
         lambda echo: echo[0],  # echo name
         filter(lambda echo: not echo[2],  # skip stat, carbonarea, favorites
                nodes[node]["echoareas"])))
-    if echoareas:
-        r = urllib.request.Request(nodes[node]["node"] + "u/e/" + echoareas)
-        with urllib.request.urlopen(r) as f:
-            lines = f.read().decode("utf-8").split("\n")
-            for line in lines:
-                if len(line) > 0:
-                    msg_list.append(line)
-    return msg_list
-
-
-def get_bundle(node_url, msgids):
-    r = urllib.request.Request(node_url + "u/m/" + msgids)
-    with urllib.request.urlopen(r) as f:
-        bundle = f.read().decode("utf-8").split("\n")
-    return bundle
+    return client.get_msg_list(nodes[node]["node"], echoareas)
 
 
 def debundle(bundle):
-    global messages
+    messages = []
     for msg in bundle:
         if msg:
             m = msg.split(":")
@@ -407,10 +387,9 @@ def debundle(bundle):
 
         if len(messages) >= 1000:
             api.save_message(messages, nodes[node]["node"], nodes[node]["to"])
-            messages = []
+            messages.clear()
     if messages:
         api.save_message(messages, node, nodes[node]["to"])
-        messages = []
 
 
 def echo_filter(ea):
@@ -436,7 +415,7 @@ def get_mail():
         for get_list in separate(fetch_msg_list):
             count += len(get_list)
             print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
-            debundle(get_bundle(nodes[node]["node"], "/".join(get_list)))
+            debundle(client.get_bundle(nodes[node]["node"], "/".join(get_list)))
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
@@ -1076,9 +1055,7 @@ def set_attr(s):
 
 
 def get_msg(msgid):
-    r = urllib.request.Request(nodes[node]["node"] + "u/m/" + msgid)
-    with urllib.request.urlopen(r) as f:
-        bundle = f.read().decode("utf-8").split("\n")
+    bundle = client.get_bundle(nodes[node]["node"], [msgid])
     for msg in bundle:
         if not msg:
             continue
