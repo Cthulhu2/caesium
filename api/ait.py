@@ -1,5 +1,4 @@
 # coding=utf-8
-import base64
 import codecs
 import os
 import time
@@ -124,7 +123,7 @@ def read_msg(msgid, echoarea):
         return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], "0b"
 
     with codecs.open(storage + echoarea + ".mat", "r", "utf-8") as f:
-        index = list(filter(lambda i: i.startswith(msgid), f.read().splitlines()))
+        index = list(filter(lambda i: i.startswith(msgid), f.read().split("\n")))
     msg = None
     if index:
         msg = ":".join(index[-1].split(":")[1:]).split(chr(15))

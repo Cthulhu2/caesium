@@ -27,7 +27,7 @@ def save_to_favorites(msgid, msg):
     if os.path.exists(storage + "favorites.aio"):
         with open(storage + "favorites.aio", "r") as f:
             favorites = list(map(lambda it: it.split(":")[0],
-                                 f.read().splitlines()))
+                                 filter(lambda it: it, f.read().split("\n"))))
     if msgid not in favorites:
         with codecs.open(storage + "favorites.aio", "a", "utf-8") as f:
             f.write(msgid + ":" + chr(15).join(msg) + "\n")
@@ -42,7 +42,7 @@ def get_echo_msgids(echo):
 
     with codecs.open(storage + echo + ".aio", "r", "utf-8") as f:
         return list(map(lambda it: it.split(":")[0],
-                        filter(lambda it: it, f.read().splitlines())))
+                        filter(lambda it: it, f.read().split("\n"))))
 
 
 def get_carbonarea():
@@ -51,7 +51,7 @@ def get_carbonarea():
     with open(storage + "carbonarea.aio", "r") as f:
         return list(filter(lambda it: len(it) == 20,
                            map(lambda it: it.split(":")[0],
-                               f.read().splitlines())))
+                               filter(lambda it: it, f.read().split("\n")))))
 
 
 def add_to_carbonarea(msgid, msgbody):
@@ -77,7 +77,8 @@ def get_favorites_list():
     if not os.path.exists(storage + "favorites.aio"):
         return []
     with codecs.open(storage + "favorites.aio", "r", "utf-8") as f:
-        return list(map(lambda msg: msg.split(":")[0], f.read().splitlines()))
+        return list(map(lambda msg: msg.split(":")[0],
+                        filter(lambda it: it, f.read().split("\n"))))
 
 
 def remove_from_favorites(msgid):
@@ -93,7 +94,7 @@ def remove_echoarea(echoarea):
 
 def get_msg_list_data(echoarea):
     with codecs.open(storage + "%s.aio" % echoarea, "r", "utf-8") as f:
-        lines = f.read().splitlines()
+        lines = f.read().split("\n")
     lst = []
     for msg in filter(lambda line: line, lines):
         rawmsg = msg.split(chr(15))
@@ -112,7 +113,7 @@ def read_msg(msgid, echoarea):
 
     with codecs.open(storage + echoarea + ".aio", "r", "utf-8") as f:
         index = list(filter(lambda i: i.startswith(msgid),
-                            f.read().splitlines()))
+                            f.read().split("\n")))
     msg = None
     if index:
         msg = ":".join(index[-1].split(":")[1:]).split(chr(15))

@@ -131,7 +131,7 @@ def read_msg(msgid, echoarea):
         return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], "0b"
 
     with open(storage + "msg/" + msgid, "r") as f:
-        msg = f.read().splitlines()
+        msg = f.read().split("\n")
     size = os.stat(storage + "msg/" + msgid).st_size
     if size < 1024:
         size = str(size) + " B"

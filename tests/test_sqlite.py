@@ -1,3 +1,4 @@
+import base64
 import os
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def test_local(api):
     api.remove_echoarea("test.local")
     api.remove_echoarea("carbonarea")
     api.remove_echoarea("favorites")
+    api.remove_echoarea("idec.talks")
 
 
 def test_get_echo_length(api, test_local):
@@ -88,3 +90,23 @@ def test_save_favorites(api, test_local):
 
     api.remove_from_favorites("22")
     assert not api.get_favorites_list()
+
+
+def test_non_printable(api, test_local):
+    msgid = "nFaF9Z8R81USSRIE7YUF"
+    msgbody = ("aWkvb2sKaWRlYy50YWxrcwoxNzI5NjA0OTcyCnJldm9sdGVj"
+               "aAp0Z2ksMTUKQWxsCkZpcnN0IHRlc3QKChwVLyASGBQePwo=")
+    msgbody = base64.b64decode(msgbody).decode("utf8").split("\n")
+    #
+    api.save_message([(msgid, msgbody)], "", "")
+    #
+    assert api.get_echo_length("idec.talks") == 1
+    assertListEquals(api.get_echo_msgids("idec.talks"), [msgid])
+    #
+    msg, _ = api.read_msg(msgid, "idec.talks")
+    assertListEquals(msgbody, msg)
+    #
+    api.save_to_favorites(msgid, msgbody)
+    assertListEquals([msgid], api.get_favorites_list())
+    msg, _ = api.read_msg(msgid, "favorites")
+    assertListEquals(msgbody, msg)
