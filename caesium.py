@@ -395,8 +395,11 @@ def debundle(bundle):
                 msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
                 messages.append([msgid, msgbody])
 
-    if len(messages) >= 1000:
-        api.save_message(messages, nodes[node]["node"], nodes[node]["to"])
+        if len(messages) >= 1000:
+            api.save_message(messages, nodes[node]["node"], nodes[node]["to"])
+            messages = []
+    if messages:
+        api.save_message(messages, node, nodes[node]["to"])
         messages = []
 
 
@@ -415,9 +418,8 @@ def get_mail():
     for line in remote_msg_list:
         if echo_filter(line):
             local_index = api.get_echo_msgids(line)
-        else:
-            if line not in local_index:
-                fetch_msg_list.append(line)
+        elif len(line) == 20 and line not in local_index:
+            fetch_msg_list.append(line)
     if fetch_msg_list:
         total = str(len(fetch_msg_list))
         count = 0
@@ -425,7 +427,6 @@ def get_mail():
             count += len(get_list)
             print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
             debundle(get_bundle(nodes[node]["node"], "/".join(get_list)))
-        api.save_message(messages, node, nodes[node]["to"])
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
