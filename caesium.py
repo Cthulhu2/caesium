@@ -56,6 +56,11 @@ lasts = {}
 if os.path.exists("lasts.lst"):
     with open("lasts.lst", "rb") as f_lasts:
         lasts = pickle.load(f_lasts)
+blacklist = []
+if os.path.exists("blacklist.txt"):
+    with open("blacklist.txt", "r") as bl:
+        blacklist = list(filter(lambda it: it,
+                                map(lambda it: it.strip(), bl.readlines())))
 counts = []
 counts_rescan = True
 echo_counts = {}
@@ -384,10 +389,6 @@ def debundle(bundle):
             if len(msgid) == 20 and m[1]:
                 msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
                 messages.append([msgid, msgbody])
-
-        if len(messages) >= 1000:
-            api.save_message(messages, nodes[node]["node"], nodes[node]["to"])
-            messages.clear()
     if messages:
         api.save_message(messages, node, nodes[node]["to"])
 
@@ -407,7 +408,7 @@ def get_mail():
     for line in remote_msg_list:
         if echo_filter(line):
             local_index = api.get_echo_msgids(line)
-        elif len(line) == 20 and line not in local_index:
+        elif len(line) == 20 and line not in local_index and line not in blacklist:
             fetch_msg_list.append(line)
     if fetch_msg_list:
         total = str(len(fetch_msg_list))
