@@ -140,6 +140,7 @@ def load_config():
         param = shrink_spaces.sub(" ", line.strip()).split(" ", maxsplit=2)
         if param[0] == "nodename":
             if not first:
+                echoareas.sort()
                 cnode["echoareas"] = echoareas
                 cnode["archive"] = archive
                 if "to" not in cnode:
@@ -187,6 +188,7 @@ def load_config():
         cnode["nodename"] = "untitled node"
     if "to" not in cnode:
         cnode["to"] = []
+    echoareas.sort()
     cnode["echoareas"] = echoareas
     cnode["archive"] = archive
     nodes.append(cnode)
