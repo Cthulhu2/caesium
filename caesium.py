@@ -1373,7 +1373,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif key in keys.r_ins and not archive and not out:
             if not favorites:
                 with open("template.txt", "r") as t:
-                    with open("temp", "r") as f:
+                    with open("temp", "w") as f:
                         f.write(echo[0] + "\n")
                         f.write("All\n")
                         f.write("No subject\n\n")
