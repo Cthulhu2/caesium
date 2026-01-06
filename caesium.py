@@ -1504,17 +1504,14 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             else:
                 go = False
         elif key in keys.r_list and not out and not drafts:
-            if db == "txt":
-                message_box("Функция не поддерживается текстовой базой.")
-            else:
-                selected_msgn = show_msg_list_screen(echo, msgn)
-                if selected_msgn > -1:
-                    y = 0
-                    msgn = selected_msgn
-                    stack.clear()
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
-                    msgbody = body_render(msg[8:])
-                    scrollbar_size = calc_scrollbar_size(len(msgbody))
+            selected_msgn = show_msg_list_screen(echo, msgn)
+            if selected_msgn > -1:
+                y = 0
+                msgn = selected_msgn
+                stack.clear()
+                msg, size = api.read_msg(msgids[msgn], echo[0])
+                msgbody = body_render(msg[8:])
+                scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_quit:
             go = False
             next_echoarea = False

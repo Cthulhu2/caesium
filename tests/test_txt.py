@@ -1,5 +1,4 @@
 import base64
-import os
 import shutil
 from pathlib import Path
 
@@ -56,6 +55,10 @@ def test_save_messages(api, test_local):
     msgids = api.get_echo_msgids("test.local")
     assertListEquals(msgids, ["11", "22"])
 
+    data = api.get_msg_list_data("test.local")
+    assertListEquals(data, [['11', 'admin', 'Subj', '1970.01.01'],
+                            ["22", "admin", "Subj", "1970.01.01"]])
+
 
 def test_add_to_carbonarea(api, test_local):
     assert api.get_echo_length("test.local") == 0
@@ -73,6 +76,9 @@ def test_add_to_carbonarea(api, test_local):
     msg, size = api.read_msg("2" * 20, "carbonarea")
     assertListEquals(msg, msg2)
 
+    data = api.get_msg_list_data("carbonarea")
+    assertListEquals(data, [["2" * 20, "admin", "Subj", "1970.01.01"]])
+
 
 def test_save_favorites(api, test_local):
     assert not api.get_favorites_list()
@@ -88,8 +94,14 @@ def test_save_favorites(api, test_local):
     msg, size = api.read_msg("2" * 20, "favorites")
     assertListEquals(msg, msg2)
 
+    data = api.get_msg_list_data("favorites")
+    assertListEquals(data, [["2" * 20, "admin", "Subj", "1970.01.01"]])
+
     api.remove_from_favorites("2" * 20)
     assert not api.get_favorites_list()
+
+    data = api.get_msg_list_data("favorites")
+    assertListEquals(data, [])
 
 
 def test_non_printable(api, test_local):
@@ -110,3 +122,6 @@ def test_non_printable(api, test_local):
     assertListEquals([msgid], api.get_favorites_list())
     msg, _ = api.read_msg(msgid, "favorites")
     assertListEquals(msgbody, msg)
+
+    data = api.get_msg_list_data("idec.talks")
+    assertListEquals(data, [[msgid, "revoltech", "First test", "2024.10.22"]])

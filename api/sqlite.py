@@ -122,9 +122,17 @@ def remove_echoarea(echoarea):
 
 def get_msg_list_data(echoarea):
     lst = []
-    for row in c.execute("SELECT msgid, fr, subject, time"
+    if echoarea == "favorites":
+        rows = c.execute("SELECT msgid, fr, subject, time"
+                         " FROM msg WHERE favorites = 1 ORDER BY id;")
+    elif echoarea == "carbonarea":
+        rows = c.execute("SELECT msgid, fr, subject, time"
+                         " FROM msg WHERE carbonarea = 1 ORDER BY id;")
+    else:
+        rows = c.execute("SELECT msgid, fr, subject, time"
                          " FROM msg WHERE echoarea = ? ORDER BY id;",
-                         (echoarea,)):
+                         (echoarea,))
+    for row in rows:
         lst.append([
             row[0],
             row[1],

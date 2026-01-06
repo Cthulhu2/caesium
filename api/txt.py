@@ -1,6 +1,7 @@
 # coding=utf-8
 import codecs
 import os
+import time
 
 storage = "txt"
 
@@ -120,9 +121,27 @@ def remove_echoarea(echoarea):
 
 # noinspection PyUnusedLocal
 def get_msg_list_data(echoarea):
-    # TODO: Text API get_msg_list_data
-    raise NotImplemented("Getting message list metadata"
-                         " is unsupported in Text API")
+    msgids = get_echo_msgids(echoarea)
+    lst = []
+    for msgid in msgids:
+        with codecs.open(storage + "msg/" + msgid, "r", "utf-8") as f:
+            header = []
+            last_line = ""
+            while len(header) < 6:
+                buf = f.read(200)
+                lines = buf.split("\n")
+                lines[0] = last_line + lines[0]
+                if len(lines) > 1:
+                    header.extend(lines[0:-1])
+                last_line = lines[-1]
+            #
+            lst.append([
+                msgid,
+                header[3],
+                header[6],
+                time.strftime("%Y.%m.%d", time.gmtime(int(header[2]))),
+            ])
+    return lst
 
 
 # noinspection PyUnusedLocal
