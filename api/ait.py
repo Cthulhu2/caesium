@@ -107,7 +107,7 @@ def remove_echoarea(echoarea):
 def get_msg_list_data(echoarea):
     lst = []
     with codecs.open(storage + "%s.mat" % echoarea, "r", "utf-8") as f:
-        for msg in filter(lambda line: line, f.readlines()):
+        for msg in filter(lambda line: line, f.read().split("\n")):
             rawmsg = msg.split(chr(15))
             lst.append([
                 rawmsg[0].split(":")[0],
