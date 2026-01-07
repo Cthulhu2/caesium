@@ -1298,12 +1298,14 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             next_echoarea = True
         elif key in keys.r_prep and echo[0] not in ("carbonarea", "favorites") and not out and repto:
             if repto in msgids:
+                y = 0
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = api.read_msg(msgids[msgn], echo[0])
                 msgbody = body_render(msg[8:])
                 scrollbar_size = calc_scrollbar_size(len(msgbody))
         elif key in keys.r_nrep and not out and len(stack) > 0:
+            y = 0
             msgn = stack.pop()
             msg, size = api.read_msg(msgids[msgn], echo[0])
             msgbody = body_render(msg[8:])
