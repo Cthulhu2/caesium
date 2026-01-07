@@ -1215,7 +1215,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             draw_title(4, 0, size)
             tags = msg[0].split("/")
             if "repto" in tags and 36 + len(size) < width:
-                repto = tags[tags.index("repto") + 1]
+                repto = tags[tags.index("repto") + 1].strip()
                 draw_title(4, len(size) + 3, "Ответ на " + repto)
             else:
                 repto = False
