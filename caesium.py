@@ -16,8 +16,7 @@ from datetime import datetime
 from shutil import copyfile
 from typing import List, Dict, Union, Tuple
 
-import client
-from core import parser
+from core import parser, client
 
 # TODO: Add http/https/socks proxy support
 # import socket
