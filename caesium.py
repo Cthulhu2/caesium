@@ -17,6 +17,7 @@ from shutil import copyfile
 from typing import List, Dict, Union, Tuple
 
 import client
+from core import parser
 
 # TODO: Add http/https/socks proxy support
 # import socket
@@ -47,6 +48,8 @@ can_change_color = False
 
 
 def get_color(theme_part):
+    if theme_part not in color_pairs:
+        theme_part = "text"
     cp = color_pairs[theme_part][0]
     bold = color_pairs[theme_part][1]
     return curses.color_pair(cp) | bold
@@ -86,12 +89,6 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
           "           ncurses ii/idec client        v0.6",
           "           Andrew Lobanov             04.01.2026"]
-
-url_template = re.compile(r"((https?|ftp|file)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
-# noinspection RegExpRedundantEscape
-ps_template = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
-# noinspection RegExpRedundantEscape
-quote_template = re.compile(r"^[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 
 
 def reset_config():
@@ -818,61 +815,22 @@ def read_out_msg(msgid):
     return msg, size
 
 
-def body_render(tbody):
-    body = ""
-    code = ""
-    sep = "─" * (width - 1)
-    for line in tbody:
-        n = 0
-        count = 0
-        qq = quote_template.match(line)
-        if qq:
-            count = line[0:qq.span()[1]].count(">")
-        if count > 0:
-            if count % 2 == 1:
-                code = chr(15)
-            elif count % 2 == 0:
-                code = chr(16)
-        elif ps_template.match(line):
-            code = chr(17)
-        elif line.startswith("== "):
-            code = chr(18)
+def render_token(token: parser.Token, y, x, offset):
+    for i, line in enumerate(token.render[offset:]):
+        attr = get_color("text")
+        if token.type in ("HEADER", "URL", "QUOTE1", "QUOTE2",
+                          "COMMENT", "CODE", "ORIGIN"):
+            attr = get_color(token.type.lower())
+
+        stdscr.addstr(y + i, x, line, attr)
+
+        if len(token.render) > 1 and i < len(token.render) - 1:
+            x = 0  # new line in multiline token -- carriage return
         else:
-            code = " "
-        if line == "----":
-            code = chr(17)
-            line = sep
-        if line.startswith("+++"):
-            code = chr(19)
-        if code != " " and code != chr(17) and code != chr(18) and code != chr(19):
-            line = " " + line
-        body = body + code
-        for word in line.split(" "):
-            if n + len(word) < width:
-                n = n + len(word)
-                body = body + word
-                if not word[-1:] == "\n":
-                    n = n + 1
-                    body = body + " "
-            else:
-                body = body[:-1]
-                if len(word) < width:
-                    body = body + "\n" + code + word
-                    n = len(word)
-                else:
-                    chunks, chunksize = len(word), width - 1
-                    chunk_list = [word[i:i + chunksize]
-                                  for i in range(0, chunks, chunksize)]
-                    for chunk_line in chunk_list:
-                        body += "\n" + code + chunk_line
-                    n = len(chunk_list[-1])
-                if not word[-1:] == "\n":
-                    n = n + 1
-                    body = body + " "
-        if body.endswith(" "):
-            body = body[:-1]
-        body = body + "\n"
-    return body.split("\n")
+            x += len(line)  # last/single line -- move caret in line
+        if y + i + 1 >= height - 1:
+            return y + i, x
+    return y + (len(token.render) - 1) - offset, x
 
 
 def draw_reader(echo, msgid, out):
@@ -1040,21 +998,6 @@ def calc_scrollbar_size(length):
     return scrollbar_size
 
 
-def set_attr(s):
-    if s == chr(15):
-        stdscr.attrset(get_color("quote1"))
-    elif s == chr(16):
-        stdscr.attrset(get_color("quote2"))
-    elif s == chr(17):
-        stdscr.attrset(get_color("comment"))
-    elif s == chr(18):
-        stdscr.attrset(get_color("header"))
-    elif s == chr(19):
-        stdscr.attrset(get_color("origin"))
-    else:
-        stdscr.attrset(get_color("text"))
-
-
 def get_msg(msgid):
     bundle = client.get_bundle(nodes[node]["node"], [msgid])
     for msg in bundle:
@@ -1169,8 +1112,14 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     else:
         msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
         size = "0b"
-    msgbody = body_render(msg[8:])
-    scrollbar_size = calc_scrollbar_size(len(msgbody))
+
+    def prerender(msgbody):
+        tokens = parser.tokenize(msgbody)
+        b_height = parser.prerender(tokens, width, height - 5)
+        scrollbar_sz = calc_scrollbar_size(b_height)
+        return tokens, b_height, scrollbar_sz
+
+    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
     go = True
     done = False
     repto = False
@@ -1219,28 +1168,31 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 draw_title(4, len(size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            for i in range(0, height - 6):
-                stdscr.addstr(i + 5, 0, " " * width, 1)
-                if i < len(msgbody) - 1:
-                    if y + i < len(msgbody) and len(msgbody[y + i]) > 0:
-                        set_attr(msgbody[y + i][0])
-                        x = 0
-                        for word in msgbody[y + i][1:].split(" "):
-                            if is_url(word):
-                                stdscr.attrset(get_color("url"))
-                                stdscr.addstr(i + 5, x, word)
-                                set_attr(msgbody[y + i][0])
-                            else:
-                                stdscr.addstr(i + 5, x, word)
-                            x += len(word) + 1
+            # Render body
+            tnum, offset = parser.find_visible_token(body_tokens, y)
+            line_num = body_tokens[tnum].line_num
+            for i in range(5, height - 1):
+                stdscr.addstr(i, 0, " " * width, 1)
+            i = 5
+            x = 0
+            for token in body_tokens[tnum:]:
+                if token.line_num > line_num:
+                    line_num = token.line_num
+                    i += 1
+                    x = 0
+                if i >= height - 1:
+                    break
+                i, x = render_token(token, i, x, offset)
+                offset = 0  # required in the first partial multiline token only
+            #
             stdscr.attrset(get_color("scrollbar"))
-            if len(msgbody) > height - 5:
+            if body_height > height - 5:
                 for i in range(5, height - 1):
                     stdscr.addstr(i, width - 1, "░")
-                scrollbar_y = round(y * (height - 6) / len(msgbody) + 0.49)
+                scrollbar_y = round(y * (height - 6) / body_height + 0.49)
                 if scrollbar_y < 0:
                     scrollbar_y = 0
-                elif scrollbar_y > height - 6 - scrollbar_size or y >= len(msgbody) - (height - 6):
+                elif scrollbar_y > height - 6 - scrollbar_size or y >= body_height - (height - 6):
                     scrollbar_y = height - 6 - scrollbar_size
                 for i in range(scrollbar_y + 5, scrollbar_y + 5 + scrollbar_size):
                     if i < height - 1:
@@ -1254,8 +1206,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             y = 0
             get_term_size()
             if msgids:
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
             stdscr.clear()
         elif key in keys.r_prev and msgn > 0:
             y = 0
@@ -1273,8 +1224,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msgn = tmp + 1
                         break
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_next and msgn < len(msgids) - 1:
             y = 0
             if msgids:
@@ -1291,8 +1241,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         next_echoarea = True
                         break
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
@@ -1302,14 +1251,12 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_nrep and not out and len(stack) > 0:
             y = 0
             msgn = stack.pop()
             msg, size = api.read_msg(msgids[msgn], echo[0])
-            msgbody = body_render(msg[8:])
-            scrollbar_size = calc_scrollbar_size(len(msgbody))
+            body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_up and y > 0:
             if msgids:
                 y = y - 1
@@ -1319,17 +1266,17 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if y < 0:
                     y = 0
         elif key in keys.r_npage:
-            if y < len(msgbody) - height + 5:
-                if msgids and len(msgbody) > height - 5:
+            if y < body_height - height + 5:
+                if msgids and body_height > height - 5:
                     y = y + height - 6
         elif key in keys.r_home:
             if msgids:
                 y = 0
         elif key in keys.r_mend:
-            if msgids and len(msgbody) > height - 5:
-                y = len(msgbody) - height + 5
+            if msgids and body_height > height - 5:
+                y = body_height - height + 5
         elif key in keys.r_ukeys:
-            if len(msgids) == 0 or y >= len(msgbody) - height + 5:
+            if len(msgids) == 0 or y >= body_height - height + 5:
                 y = 0
                 if msgn == len(msgids) - 1 or len(msgids) == 0:
                     next_echoarea = True
@@ -1341,14 +1288,13 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msg, size = read_out_msg(msgids[msgn])
                     else:
                         msg, size = api.read_msg(msgids[msgn], echo[0])
-                    msgbody = body_render(msg[8:])
-                    scrollbar_size = calc_scrollbar_size(len(msgbody))
+                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
             else:
-                if msgids and len(msgbody) > height - 5:
+                if msgids and body_height > height - 5:
                     y = y + height - 6
         elif key in keys.r_down:
             if msgids:
-                if y + height - 5 < len(msgbody):
+                if y + height - 5 < body_height:
                     y = y + 1
         elif key in keys.r_begin:
             if msgids:
@@ -1359,8 +1305,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msg, size = read_out_msg(msgids[msgn])
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_end:
             if msgids:
                 y = 0
@@ -1370,8 +1315,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msg, size = read_out_msg(msgids[msgn])
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_ins and not archive and not out:
             if not favorites:
                 with open("template.txt", "r") as t:
@@ -1406,9 +1350,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 else:
                     f.write(msg[6] + "\n")
                 for line in msg[8:]:
-                    if line.startswith("+++") or line.strip() == "":
+                    if line.startswith("+++") or line.strip():
                         continue  # skip sign and empty lines
-                    qq = quote_template.match(line)
+                    qq = parser.quote_template.match(line)
                     if qq:
                         quoter = ">"
                         if not line[qq.span()[1]] == " ":
@@ -1435,10 +1379,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msgn = len(msgids) - 1
                 if msgids:
                     msg, size = read_out_msg(msgids[msgn])
-                    msgbody = body_render(msg[8:])
+                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
                 else:
                     go = False
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
                 stdscr.clear()
             else:
                 message_box("Сообщение уже отправлено")
@@ -1453,10 +1396,10 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     if msgn >= len(msgids):
                         msgn = len(msgids) - 1
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                    msgbody = body_render(msg[8:])
-                    scrollbar_size = calc_scrollbar_size(len(msgbody))
+                    #
+                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
                 else:
-                    msgbody = []
+                    body_tokens, body_height, scrollbar_size = prerender([""])
                 stdscr.clear()
         elif key in keys.r_getmsg and size == "0b":
             try:
@@ -1465,14 +1408,13 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 get_counts(True, False)
                 stdscr.clear()
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
             except Exception as ex:
                 message_box("Не удалось определить msgid. " + str(ex))
                 stdscr.clear()
         elif key in keys.r_links:
             # TODO: Find and open ii:// links
-            results = url_template.findall("\n".join(msg[8:]))
+            results = parser.url_template.findall("\n".join(msg[8:]))
             links = [it[0] for it in results]
             if len(links) == 1:
                 open_link(links[0])
@@ -1490,7 +1432,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = len(msgids) - 1
             if msgids:
                 msg, size = read_out_msg(msgids[msgn])
-                msgbody = body_render(msg[8:])
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
             else:
                 go = False
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
@@ -1502,7 +1444,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = len(msgids) - 1
             if msgids:
                 msg, size = read_out_msg(msgids[msgn])
-                msgbody = body_render(msg[8:])
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
             else:
                 go = False
         elif key in keys.r_list and not out and not drafts:
@@ -1512,8 +1454,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = selected_msgn
                 stack.clear()
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                msgbody = body_render(msg[8:])
-                scrollbar_size = calc_scrollbar_size(len(msgbody))
+                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
