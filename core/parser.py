@@ -131,8 +131,8 @@ def prerender(tokens, width, height=None):
             token.render = []
         else:
             token.render.clear()
-        if height and y > height:
-            # scrollable, reserve scrollbar width
+        if height and y + 1 > height:
+            # early scrollable detected, reserve scrollbar width
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
         value = token.value
@@ -182,6 +182,9 @@ def prerender(tokens, width, height=None):
         if line:
             token.render.append(line)
         y += len(token.render) - 1
+    if height and y + 1 > height:
+        # scrollable detected, reserve scrollbar width
+        return prerender(tokens, width=width - 1, height=None)
     return y + 1  #
 
 

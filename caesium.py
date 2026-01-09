@@ -1468,13 +1468,6 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     return done
 
 
-def is_url(word: str):
-    return (word.startswith("http://")
-            or word.startswith("https://")
-            or word.startswith("ftp://")
-            or word.startswith("ii://"))
-
-
 # noinspection PyUnusedLocal
 def draw_msg_list(echo, lst, msgn):
     stdscr.clear()

@@ -214,3 +214,19 @@ def test_scrollable_size():
 
     tokens = parser.tokenize(SOFT_WRAP_TRAILING.splitlines())
     assert parser.prerender(tokens, width=14) == 6
+
+
+def test_scrollable_last_token():
+    tokens = parser.tokenize(["1234 5678 9012 3456"])
+    parser.prerender(tokens, width=4, height=2)
+    #
+    line_num = 0
+    body = ""
+    for t in tokens:
+        if t.line_num > line_num:
+            body += "\n"
+            line_num = t.line_num
+        body += "\n".join(t.render)
+    #
+    b_width = max([len(line) for line in body.split("\n")])
+    assert b_width == 3
