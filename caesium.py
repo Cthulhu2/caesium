@@ -987,9 +987,9 @@ def show_subject(subject):
         message_box(msg)
 
 
-def calc_scroll_thumb_size(length):
+def calc_scroll_thumb_size(length, scroll_view):
     if length > 0:
-        thumb_size = round((height - 6) * (height - 6) / length + 0.49)
+        thumb_size = int(scroll_view * scroll_view / length + 0.49)
         if thumb_size < 1:
             thumb_size = 1
     else:
@@ -1116,7 +1116,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     def prerender(msgbody):
         tokens = parser.tokenize(msgbody)
         b_height = parser.prerender(tokens, width, scroll_view)
-        thumb_size = calc_scroll_thumb_size(b_height)
+        thumb_size = calc_scroll_thumb_size(b_height, scroll_view)
         return tokens, b_height, thumb_size
 
     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1189,12 +1189,11 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             if body_height > scroll_view:
                 for i in range(5, height - 1):
                     stdscr.addstr(i, width - 1, "░")
-                scrollbar_y = round(y * scroll_view / body_height + 0.49)
-                if scrollbar_y < 0:
-                    scrollbar_y = 0
-                elif scrollbar_y > scroll_view - scroll_thumb_size or y >= body_height - scroll_view:
-                    scrollbar_y = scroll_view - scroll_thumb_size
-                for i in range(scrollbar_y + 5, scrollbar_y + 5 + scroll_thumb_size):
+                thumb_y = int((y / (body_height - scroll_view))
+                              * (scroll_view - scroll_thumb_size)
+                              + 0.49)
+                thumb_y = max(0, min(scroll_view - scroll_thumb_size, thumb_y))
+                for i in range(thumb_y + 5, thumb_y + 5 + scroll_thumb_size):
                     if i < height - 1:
                         stdscr.addstr(i, width - 1, "█")
         else:
