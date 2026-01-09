@@ -987,14 +987,14 @@ def show_subject(subject):
         message_box(msg)
 
 
-def calc_scrollbar_size(length):
+def calc_scroll_thumb_size(length):
     if length > 0:
-        scrollbar_size = round((height - 6) * (height - 6) / length + 0.49)
-        if scrollbar_size < 1:
-            scrollbar_size = 1
+        thumb_size = round((height - 6) * (height - 6) / length + 0.49)
+        if thumb_size < 1:
+            thumb_size = 1
     else:
-        scrollbar_size = 1
-    return scrollbar_size
+        thumb_size = 1
+    return thumb_size
 
 
 def get_msg(msgid):
@@ -1111,14 +1111,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     else:
         msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
         size = "0b"
+    scroll_view = height - 5 - 1  # screen height - header - status line
 
     def prerender(msgbody):
         tokens = parser.tokenize(msgbody)
-        b_height = parser.prerender(tokens, width, height - 5)
-        scrollbar_sz = calc_scrollbar_size(b_height)
-        return tokens, b_height, scrollbar_sz
+        b_height = parser.prerender(tokens, width, scroll_view)
+        thumb_size = calc_scroll_thumb_size(b_height)
+        return tokens, b_height, thumb_size
 
-    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
     go = True
     done = False
     repto = False
@@ -1185,15 +1186,15 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 offset = 0  # required in the first partial multiline token only
             #
             stdscr.attrset(get_color("scrollbar"))
-            if body_height > height - 5:
+            if body_height > scroll_view:
                 for i in range(5, height - 1):
                     stdscr.addstr(i, width - 1, "░")
-                scrollbar_y = round(y * (height - 6) / body_height + 0.49)
+                scrollbar_y = round(y * scroll_view / body_height + 0.49)
                 if scrollbar_y < 0:
                     scrollbar_y = 0
-                elif scrollbar_y > height - 6 - scrollbar_size or y >= body_height - (height - 6):
-                    scrollbar_y = height - 6 - scrollbar_size
-                for i in range(scrollbar_y + 5, scrollbar_y + 5 + scrollbar_size):
+                elif scrollbar_y > scroll_view - scroll_thumb_size or y >= body_height - scroll_view:
+                    scrollbar_y = scroll_view - scroll_thumb_size
+                for i in range(scrollbar_y + 5, scrollbar_y + 5 + scroll_thumb_size):
                     if i < height - 1:
                         stdscr.addstr(i, width - 1, "█")
         else:
@@ -1204,8 +1205,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         if key == curses.KEY_RESIZE:
             y = 0
             get_term_size()
+            scroll_view = height - 5 - 1
             if msgids:
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             stdscr.clear()
         elif key in keys.r_prev and msgn > 0:
             y = 0
@@ -1223,7 +1225,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msgn = tmp + 1
                         break
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_next and msgn < len(msgids) - 1:
             y = 0
             if msgids:
@@ -1240,7 +1242,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         next_echoarea = True
                         break
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
@@ -1250,30 +1252,29 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_nrep and not out and len(stack) > 0:
             y = 0
             msgn = stack.pop()
             msg, size = api.read_msg(msgids[msgn], echo[0])
-            body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_up and y > 0:
             if msgids:
                 y = y - 1
         elif key in keys.r_ppage:
             if msgids:
-                y = y - height + 6
+                y = y - scroll_view
                 if y < 0:
                     y = 0
         elif key in keys.r_npage:
-            if y < body_height - height + 5:
-                if msgids and body_height > height - 5:
-                    y = y + height - 6
+            if msgids and y + scroll_view < body_height:
+                y = min(body_height - scroll_view, y + scroll_view)
         elif key in keys.r_home:
             if msgids:
                 y = 0
         elif key in keys.r_mend:
-            if msgids and body_height > height - 5:
-                y = body_height - height + 5
+            if msgids and body_height > scroll_view:
+                y = body_height - scroll_view
         elif key in keys.r_ukeys:
             if len(msgids) == 0 or y >= body_height - height + 5:
                 y = 0
@@ -1287,13 +1288,13 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msg, size = read_out_msg(msgids[msgn])
                     else:
                         msg, size = api.read_msg(msgids[msgn], echo[0])
-                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
-                if msgids and body_height > height - 5:
-                    y = y + height - 6
+                if msgids and body_height > scroll_view:
+                    y = min(body_height - scroll_view, y + scroll_view)
         elif key in keys.r_down:
             if msgids:
-                if y + height - 5 < body_height:
+                if y + scroll_view < body_height:
                     y = y + 1
         elif key in keys.r_begin:
             if msgids:
@@ -1304,7 +1305,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msg, size = read_out_msg(msgids[msgn])
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_end:
             if msgids:
                 y = 0
@@ -1314,7 +1315,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msg, size = read_out_msg(msgids[msgn])
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_ins and not archive and not out:
             if not favorites:
                 with open("template.txt", "r") as t:
@@ -1378,7 +1379,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msgn = len(msgids) - 1
                 if msgids:
                     msg, size = read_out_msg(msgids[msgn])
-                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 else:
                     go = False
                 stdscr.clear()
@@ -1396,9 +1397,9 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                         msgn = len(msgids) - 1
                     msg, size = api.read_msg(msgids[msgn], echo[0])
                     #
-                    body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 else:
-                    body_tokens, body_height, scrollbar_size = prerender([""])
+                    body_tokens, body_height, scroll_thumb_size = prerender([""])
                 stdscr.clear()
         elif key in keys.r_getmsg and size == "0b":
             try:
@@ -1407,7 +1408,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 get_counts(True, False)
                 stdscr.clear()
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             except Exception as ex:
                 message_box("Не удалось определить msgid. " + str(ex))
                 stdscr.clear()
@@ -1431,7 +1432,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = len(msgids) - 1
             if msgids:
                 msg, size = read_out_msg(msgids[msgn])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
                 go = False
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
@@ -1443,7 +1444,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = len(msgids) - 1
             if msgids:
                 msg, size = read_out_msg(msgids[msgn])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
                 go = False
         elif key in keys.r_list and not out and not drafts:
@@ -1453,7 +1454,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 msgn = selected_msgn
                 stack.clear()
                 msg, size = api.read_msg(msgids[msgn], echo[0])
-                body_tokens, body_height, scrollbar_size = prerender(msg[8:])
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
