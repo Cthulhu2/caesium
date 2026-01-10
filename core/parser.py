@@ -123,12 +123,12 @@ def prerender(tokens, width, height=None):
     if not tokens:
         return 1  #
     line_num = tokens[0].line_num
-    w = 0
+    x = 0
     y = 0
     for token in tokens:
         if token.line_num > line_num:
             y += 1
-            w = 0
+            x = 0
             line_num = token.line_num
         if token.render is None:
             token.render = []
@@ -144,23 +144,15 @@ def prerender(tokens, width, height=None):
         if token.type == "HR":
             value = "─" * width
         value = value.replace("\t", "    ")
+
         # render token
-        if w + len(value) <= width:
-            w += len(value)
+        if x + len(value) <= width:
+            x += len(value)
             token.render.append(value)
             continue  # tokens
         if token.type == "CODE":
             # do not split leading spaces
-            line = ""
-            chunk = value[0:width - w]
-            value = value[width - w:]
-            while chunk:
-                line += chunk
-                token.render.append(line)
-                line = ""
-                w = 0
-                chunk = value[0:width]
-                value = value[width:]
+            x = render_chunks(token, x, width, value)
             y += len(token.render) - 1
             continue  # tokens
 
@@ -171,33 +163,25 @@ def prerender(tokens, width, height=None):
         for word in words:
             word = space + word
             space = " "
-            if w + len(word) <= width:
+            if x + len(word) <= width:
                 line += word
-                w += len(word)
+                x += len(word)
                 continue  # words
             # new line
-            if w:
+            if x:
                 token.render.append(line)
             line = ""
-            w = 0
+            x = 0
             if word.startswith(" "):
                 word = word[1:]
             if len(word) <= width:
                 line += word
-                w += len(word)
+                x += len(word)
                 space = " "
                 continue  # words
 
             # len(word) > width
-            chunk = word[0:width]
-            word = word[width:]
-            while chunk:
-                line += chunk
-                token.render.append(line)
-                line = ""
-                w = 0
-                chunk = word[0:width]
-                word = word[width:]
+            x = render_chunks(token, x, width, word)
         if line:
             token.render.append(line)
         y += len(token.render) - 1
@@ -205,6 +189,19 @@ def prerender(tokens, width, height=None):
         # scrollable detected, reserve scrollbar width
         return prerender(tokens, width=width - 1, height=None)
     return y + 1  #
+
+
+def render_chunks(token, x, width, word):
+    chunk = word[0:width - x]
+    word = word[width - x:]
+    while chunk:
+        if token.render:
+            x = 0
+        token.render.append(chunk)
+        x += len(chunk)
+        chunk = word[0:width]
+        word = word[width:]
+    return x
 
 
 def find_visible_token(tokens, scroll):
