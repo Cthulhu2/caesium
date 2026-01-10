@@ -249,3 +249,11 @@ def test_render_tabs():
     assert tokens[3].render == ["    }"]
     assert tokens[4].render == ["===="]
     assert b_height == 7
+
+
+def test_quote_url():
+    tokens = parser.tokenize([">http://in-quote"])
+    b_height = parser.prerender(tokens, width=20)
+    assert tokens[0].render == [" >"]
+    assert tokens[1].render == ["http://in-quote"]
+    assert b_height == 1

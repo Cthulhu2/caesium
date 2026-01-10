@@ -100,6 +100,9 @@ def _tokenize_inline(text: str, line_num: int, token: Token) -> List[Token]:
         match = url_template.search(text, pos)
         if match and match.start() == pos:
             url = match.group()
+            if token.value:
+                tokens.append(token)
+                token = Token(token.type, "", line_num)
             tokens.append(Token("URL", url, line_num))
             pos = match.end()
         else:
