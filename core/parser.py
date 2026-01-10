@@ -152,7 +152,7 @@ def prerender(tokens, width, height=None):
             continue  # tokens
         if token.type == "CODE":
             # do not split leading spaces
-            x = render_chunks(token, x, width, value)
+            x = render_chunks(token, "", x, width, value)
             y += len(token.render) - 1
             continue  # tokens
 
@@ -163,25 +163,30 @@ def prerender(tokens, width, height=None):
         for word in words:
             word = space + word
             space = " "
+            # insert word
             if x + len(word) <= width:
                 line += word
                 x += len(word)
                 continue  # words
+            # insert chunks
+            if x + 1 < width < len(word):
+                x = render_chunks(token, line, x, width, word)
+                line = token.render.pop(len(token.render) - 1)
+                continue  # words
             # new line
             if x:
                 token.render.append(line)
-            line = ""
-            x = 0
             if word.startswith(" "):
                 word = word[1:]
             if len(word) <= width:
-                line += word
-                x += len(word)
+                line = word
+                x = len(word)
                 space = " "
                 continue  # words
 
             # len(word) > width
-            x = render_chunks(token, x, width, word)
+            x = render_chunks(token, "", 0, width, word)
+            line = token.render.pop(len(token.render) - 1)
         if line:
             token.render.append(line)
         y += len(token.render) - 1
@@ -191,14 +196,13 @@ def prerender(tokens, width, height=None):
     return y + 1  #
 
 
-def render_chunks(token, x, width, word):
+def render_chunks(token, line, x, width, word):
     chunk = word[0:width - x]
     word = word[width - x:]
     while chunk:
-        if token.render:
-            x = 0
-        token.render.append(chunk)
-        x += len(chunk)
+        token.render.append(line + chunk)
+        x = len(line + chunk)
+        line = ""
         chunk = word[0:width]
         word = word[width:]
     return x

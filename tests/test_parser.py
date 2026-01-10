@@ -133,22 +133,21 @@ def test_soft_wrap():
     assert tokens[6] == Token("HR", "----", 4)
 
     assert parser.prerender(tokens, width=10) == 14
-    assert tokens[0].render == ["==    ",
-                                "long-long-",
-                                "long-long-",
-                                "header"]
+    assert tokens[0].render == ["==     lon",
+                                "g-long-lon",
+                                "g-long-hea",
+                                "der"]
     assert tokens[1].render == ["New line",
                                 "with many",
                                 "words."]
     assert tokens[2].render == [""]
     assert tokens[3].render == ["Long "]
     # @formatter:off
-    assert tokens[4].render == [     "",  # noqa
-
-                                "http://url",
-                                "-with-many",
-                                "-words/and",
-                                "?query"]
+    assert tokens[4].render == [     "http:",  # noqa
+                                "//url-with",
+                                "-many-word",
+                                "s/and?quer",
+                                "y"]
     # @formatter:on
     assert tokens[5].render == ["."]
     assert tokens[6].render == ["──────────"]
@@ -191,7 +190,7 @@ def test_find_visible_token():
     #
     y, offset = parser.find_visible_token(tokens, 3)
     assert (y, offset) == (0, 3)
-    assert tokens[y].render[offset] == "header"
+    assert tokens[y].render[offset] == "der"
     #
     y, offset = parser.find_visible_token(tokens, 4)
     assert (y, offset) == (1, 0)
@@ -199,7 +198,7 @@ def test_find_visible_token():
     #
     y, offset = parser.find_visible_token(tokens, 9)
     assert (y, offset) == (4, 1)
-    assert tokens[y].render[offset] == "http://url"
+    assert tokens[y].render[offset] == "//url-with"
 
 
 def test_scrollable_size():
