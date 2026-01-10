@@ -823,7 +823,7 @@ def render_token(token: parser.Token, y, x, offset):
 
         stdscr.addstr(y + i, x, line, attr)
 
-        if len(token.render) > 1 and i < len(token.render) - 1:
+        if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return
         else:
             x += len(line)  # last/single line -- move caret in line
