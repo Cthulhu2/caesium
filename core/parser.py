@@ -140,11 +140,27 @@ def prerender(tokens, width, height=None):
             value = " " + value
         if token.type == "HR":
             value = "─" * width
+        value = value.replace("\t", "    ")
         # render token
         if w + len(value) <= width:
             w += len(value)
             token.render.append(value)
             continue  # tokens
+        if token.type == "CODE":
+            # do not split leading spaces
+            line = ""
+            chunk = value[0:width - w]
+            value = value[width - w:]
+            while chunk:
+                line += chunk
+                token.render.append(line)
+                line = ""
+                w = 0
+                chunk = value[0:width]
+                value = value[width:]
+            y += len(token.render) - 1
+            continue  # tokens
+
         # to wide, split by words
         words = value.split(" ")
         space = ""

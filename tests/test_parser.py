@@ -230,3 +230,22 @@ def test_scrollable_last_token():
     #
     b_width = max([len(line) for line in body.split("\n")])
     assert b_width == 3
+
+
+def test_render_tabs():
+    tokens = parser.tokenize([
+        "====",
+        "\tpublic {",
+        "\t\tprint;",
+        "\t}",
+        "===="
+    ])
+    b_height = parser.prerender(tokens, width=10, height=1)
+    assert tokens[0].render == ["===="]
+    assert tokens[1].render == ["    publi",
+                                "c {"]
+    assert tokens[2].render == ["        p",
+                                "rint;"]
+    assert tokens[3].render == ["    }"]
+    assert tokens[4].render == ["===="]
+    assert b_height == 7
