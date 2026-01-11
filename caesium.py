@@ -11,12 +11,11 @@ import re
 import subprocess
 import sys
 import time
-import webbrowser
 from datetime import datetime
 from shutil import copyfile
 from typing import List, Dict, Union, Tuple
 
-from core import parser, client
+from core import parser, client, config
 
 # TODO: Add http/https/socks proxy support
 # import socket
@@ -25,7 +24,6 @@ from core import parser, client
 # socket.socket = socks.socksocket
 
 # Theme
-color_theme = "default"
 color_pairs = {
     # "ui-element": [color-pair-NUM, bold-attr]
     # @formatter:off
@@ -67,14 +65,9 @@ counts = []
 counts_rescan = True
 echo_counts = {}
 next_echoarea = False
-twit = []
 nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]]
 node = 0
-editor = ""
-oldquote = False
-db = "ait"
-browser = webbrowser
-keys_scheme = "default"
+cfg = config.Config()
 
 version = "Caesium/0.6 │"
 client.USER_AGENT = "Caesium/0.6"
@@ -91,28 +84,19 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 
 
 def reset_config():
-    global nodes, node, editor, oldquote, db
+    global nodes, node
     nodes = []
     node = 0
-    editor = ""
-    oldquote = False
-    db = "ait"
+    cfg.reset()
 
 
-def check_directories():
+def check_directories(storage_api):
     if not os.path.exists("out"):
         os.mkdir("out")
     for n in nodes:
         if not os.path.exists("out/" + n["nodename"]):
             os.mkdir("out/" + n["nodename"])
-    api.init()
-
-
-def check_config():
-    if not os.path.exists("caesium.cfg"):
-        with open("caesium.def.cfg", "r") as def_cfg:
-            with open("caesium.cfg", "w") as cfg:
-                cfg.write(def_cfg.read())
+    storage_api.init()
 
 
 #
@@ -124,20 +108,19 @@ def separate(fetch_list, step=20):
 
 
 def load_config():
-    global nodes, editor, color_theme, show_splash, oldquote, db, browser, twit
-    global keys_scheme
+    global nodes, cfg
     nodes = []
     first = True
-    browser = webbrowser
     # current node
     cnode = {}  # type: Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]
     echoareas = []  # type: List[Tuple[str, str, bool]]
     archive = []  # type: List[Tuple[str, str, bool]]
     #
     with open("caesium.cfg") as f:
-        config = f.read().splitlines()
+        lines = f.read().splitlines()
     shrink_spaces = re.compile(r"(\s\s+|\t+)")
-    for line in config:
+    cfg.load(lines)
+    for line in lines:
         param = shrink_spaces.sub(" ", line.strip()).split(" ", maxsplit=2)
         if param[0] == "nodename":
             if not first:
@@ -167,23 +150,6 @@ def load_config():
             cnode["to"] = " ".join(param[1:]).split(",")
         elif param[0] == "archive":
             archive.append((param[1], "".join(param[2:]), True))
-        #
-        elif param[0] == "editor":
-            editor = " ".join(param[1:])
-        elif param[0] == "theme":
-            color_theme = param[1]
-        elif param[0] == "nosplash":
-            show_splash = False
-        elif param[0] == "oldquote":
-            oldquote = True
-        elif param[0] == "db":
-            db = param[1]
-        elif param[0] == "browser":
-            browser = webbrowser.GenericBrowser(param[1])
-        elif param[0] == "twit":
-            twit = param[1].split(",")
-        elif param[0] == "keys":
-            keys_scheme = param[1]
 
     if "nodename" not in cnode:
         cnode["nodename"] = "untitled node"
@@ -439,7 +405,6 @@ echo_cursor = 0
 archive_cursor = 0
 width = 0
 height = 0
-show_splash = True
 
 
 def splash_screen():
@@ -608,7 +573,7 @@ def edit_config():
     curses.echo()
     curses.curs_set(True)
     curses.endwin()
-    p = subprocess.Popen(editor + " ./caesium.cfg", shell=True)
+    p = subprocess.Popen(cfg.editor + " ./caesium.cfg", shell=True)
     p.wait()
     reset_config()
     load_config()
@@ -776,7 +741,7 @@ def show_echo_selector_screen():
             edit_config()
             reset_config()
             load_config()
-            load_colors(color_theme)
+            load_colors(cfg.theme)
             get_counts()
             stdscr.clear()
             counts_rescan = True
@@ -864,7 +829,7 @@ def call_editor(out=''):
     curses.curs_set(True)
     curses.endwin()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
-    p = subprocess.Popen(editor + " ./temp", shell=True)
+    p = subprocess.Popen(cfg.editor + " ./temp", shell=True)
     p.wait()
     stdscr = curses.initscr()
     curses.start_color()
@@ -961,7 +926,7 @@ def get_out_msgids(drafts=False):
 
 
 def quote(to):
-    if oldquote:
+    if cfg.oldquote:
         return ""
     else:
         if len(to) == 1:
@@ -1065,7 +1030,7 @@ def show_menu(title, items):
 
 def open_link(link):
     # TODO: Support open ii:// link
-    if not browser.open(link):
+    if not cfg.browser.open(link):
         message_box("Не удалось запустить Интернет-браузер")
 
 
@@ -1101,7 +1066,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             msg, size = read_out_msg(msgids[msgn])
         else:
             msg, size = api.read_msg(msgids[msgn], echo[0])
-            while msg[3] in twit or msg[5] in twit:
+            while msg[3] in cfg.twit or msg[5] in cfg.twit:
                 msgn -= 1
                 if msgn < 0:
                     next_echoarea = True
@@ -1218,7 +1183,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
                 tmp = msgn
-                while msg[3] in twit or msg[5] in twit:
+                while msg[3] in cfg.twit or msg[5] in cfg.twit:
                     msgn -= 1
                     if msgn < 0:
                         msgn = tmp + 1
@@ -1234,7 +1199,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     msg, size = read_out_msg(msgids[msgn])
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo[0])
-                while msg[3] in twit or msg[5] in twit:
+                while msg[3] in cfg.twit or msg[5] in cfg.twit:
                     msgn += 1
                     if msgn >= len(msgids) or len(msgids) == 0:
                         go = False
@@ -1553,28 +1518,28 @@ else:
     loc = locale.getdefaultlocale()
 locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
 
-check_config()
+config.ensure_exists()
 reset_config()
 load_config()
-if db == "txt":
+if cfg.db == "txt":
     import api.txt as api
-elif db == "aio":
+elif cfg.db == "aio":
     import api.aio as api
-elif db == "ait":
+elif cfg.db == "ait":
     import api.ait as api
-elif db == "sqlite":
+elif cfg.db == "sqlite":
     import api.sqlite as api
 else:
-    raise Exception("Unsupported DB API :: " + db)
-check_directories()
-if keys_scheme == "default":
+    raise Exception("Unsupported DB API :: " + cfg.db)
+check_directories(api)
+if cfg.keys == "default":
     import keys.default as keys
-elif keys_scheme == "android":
+elif cfg.keys == "android":
     import keys.android as keys
-elif keys_scheme == "vi":
+elif cfg.keys == "vi":
     import keys.vi as keys
 else:
-    raise Exception("Unknown Keys Scheme :: " + keys_scheme)
+    raise Exception("Unknown Keys Scheme :: " + cfg.keys)
 stdscr = curses.initscr()
 if sys.version_info >= (3, 10):
     can_change_color = (curses.has_extended_color_support()
@@ -1591,16 +1556,16 @@ try:
     stdscr.keypad(True)
     get_term_size()
     try:
-        load_colors(color_theme)
+        load_colors(cfg.theme)
     except ValueError as err:
         load_colors("default")
         stdscr.refresh()
-        message_box("Цветовая схема " + color_theme + " не установлена.\n"
+        message_box("Цветовая схема " + cfg.theme + " не установлена.\n"
                     + str(err) + "\nБудет использована схема по-умолчанию.")
-        color_theme = "default"
+        cfg.theme = "default"
     stdscr.bkgd(" ", get_color("text"))
 
-    if show_splash:
+    if cfg.splash:
         splash_screen()
     draw_message_box("Подождите", False)
     get_counts()
