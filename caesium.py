@@ -13,7 +13,6 @@ import sys
 import time
 from datetime import datetime
 from shutil import copyfile
-from typing import List, Dict, Union, Tuple
 
 from core import parser, client, config
 
@@ -65,7 +64,6 @@ counts = []
 counts_rescan = True
 echo_counts = {}
 next_echoarea = False
-nodes = []  # type: List[Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]]
 node = 0
 cfg = config.Config()
 
@@ -84,8 +82,7 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 
 
 def reset_config():
-    global nodes, node
-    nodes = []
+    global node
     node = 0
     cfg.reset()
 
@@ -93,9 +90,9 @@ def reset_config():
 def check_directories(storage_api):
     if not os.path.exists("out"):
         os.mkdir("out")
-    for n in nodes:
-        if not os.path.exists("out/" + n["nodename"]):
-            os.mkdir("out/" + n["nodename"])
+    for n in cfg.nodes:
+        if not os.path.exists("out/" + n.nodename):
+            os.mkdir("out/" + n.nodename)
     storage_api.init()
 
 
@@ -105,63 +102,6 @@ def check_directories(storage_api):
 def separate(fetch_list, step=20):
     for x in range(0, len(fetch_list), step):
         yield fetch_list[x:x + step]
-
-
-def load_config():
-    global nodes, cfg
-    nodes = []
-    first = True
-    # current node
-    cnode = {}  # type: Dict[str, Union[str, List[Union[str, Tuple[str, str, bool]]]]]
-    echoareas = []  # type: List[Tuple[str, str, bool]]
-    archive = []  # type: List[Tuple[str, str, bool]]
-    #
-    with open("caesium.cfg") as f:
-        lines = f.read().splitlines()
-    shrink_spaces = re.compile(r"(\s\s+|\t+)")
-    cfg.load(lines)
-    for line in lines:
-        param = shrink_spaces.sub(" ", line.strip()).split(" ", maxsplit=2)
-        if param[0] == "nodename":
-            if not first:
-                echoareas.sort()
-                cnode["echoareas"] = echoareas
-                cnode["archive"] = archive
-                if "to" not in cnode:
-                    cnode["to"] = []
-                nodes.append(cnode)
-            else:
-                first = False
-            cnode = {}
-            echoareas = []
-            archive = []
-            cnode["nodename"] = " ".join(param[1:])
-        elif param[0] == "node":
-            cnode["node"] = param[1]
-            if not cnode["node"].endswith("/"):
-                cnode["node"] += "/"
-        elif param[0] == "auth":
-            cnode["auth"] = param[1]
-        elif param[0] == "echo":
-            echoareas.append((param[1], "".join(param[2:]), False))
-        elif param[0] == "stat":
-            echoareas.append((param[1], "".join(param[2:]), True))
-        elif param[0] == "to":
-            cnode["to"] = " ".join(param[1:]).split(",")
-        elif param[0] == "archive":
-            archive.append((param[1], "".join(param[2:]), True))
-
-    if "nodename" not in cnode:
-        cnode["nodename"] = "untitled node"
-    if "to" not in cnode:
-        cnode["to"] = []
-    echoareas.sort()
-    cnode["echoareas"] = echoareas
-    cnode["archive"] = archive
-    nodes.append(cnode)
-    for i in range(0, len(nodes)):
-        nodes[i]["echoareas"].insert(0, ("favorites", "Избранные сообщения", True))
-        nodes[i]["echoareas"].insert(1, ("carbonarea", "Карбонка", True))
 
 
 def init_hex_color(color, cache, idx):
@@ -267,7 +207,7 @@ def resave_out(filename, draft=False):
     if len(new) <= 1:
         os.remove("temp")
     else:
-        out_dir = "out/" + nodes[node]["nodename"] + "/"
+        out_dir = "out/" + cfg.nodes[node].nodename + "/"
         if draft:
             filename = filename.replace(".out", ".draft")
         with codecs.open(out_dir + filename, "w", "utf-8") as f:
@@ -276,14 +216,14 @@ def resave_out(filename, draft=False):
 
 
 def outcount():
-    outpath = "out/" + nodes[node]["nodename"]
+    outpath = "out/" + cfg.nodes[node].nodename
     i = str(len([x for x in os.listdir(outpath)
                  if not x.endswith(".toss")]) + 1)
     return outpath + "/%s" % i.zfill(5)
 
 
 def get_out_length(drafts=False):
-    node_dir = "out/" + nodes[node]["nodename"]
+    node_dir = "out/" + cfg.nodes[node].nodename
     if drafts:
         return len([f for f in sorted(os.listdir(node_dir))
                     if f.endswith(".draft")]) - 1
@@ -293,7 +233,7 @@ def get_out_length(drafts=False):
 
 
 def make_toss():
-    node_dir = "out/" + nodes[node]["nodename"]
+    node_dir = "out/" + cfg.nodes[node].nodename
     lst = [x for x in os.listdir(node_dir)
            if x.endswith(".out")]
     for msg in lst:
@@ -307,18 +247,20 @@ def make_toss():
 
 
 def send_mail():
-    lst = [x for x in sorted(os.listdir("out/" + nodes[node]["nodename"]))
+    lst = [x for x in sorted(os.listdir("out/" + cfg.nodes[node].nodename))
            if x.endswith(".toss")]
     total = str(len(lst))
     try:
-        node_dir = "out/" + nodes[node]["nodename"]
+        node_dir = "out/" + cfg.nodes[node].nodename
         for n, msg in enumerate(lst, start=1):
             print("\rОтправка сообщения: " + str(n) + "/" + total, end="")
             msg_toss = node_dir + "/%s" % msg
             with codecs.open(msg_toss, "r", "utf-8") as f:
                 text = f.read()
             #
-            result = client.send_msg(nodes[node]["node"], nodes[node]["auth"], text)
+            result = client.send_msg(cfg.nodes[node].node,
+                                     cfg.nodes[node].auth,
+                                     text)
             #
             if result.startswith("msg ok"):
                 os.remove(msg_toss)
@@ -336,10 +278,10 @@ def send_mail():
 
 def get_msg_list():
     echoareas = list(map(
-        lambda echo: echo[0],  # echo name
-        filter(lambda echo: not echo[2],  # skip stat, carbonarea, favorites
-               nodes[node]["echoareas"])))
-    return client.get_msg_list(nodes[node]["node"], echoareas)
+        lambda echo: echo.name,  # echo name
+        filter(lambda echo: not echo.noSync,  # skip stat, carbonarea, favorites
+               cfg.nodes[node].echoareas)))
+    return client.get_msg_list(cfg.nodes[node].node, echoareas)
 
 
 def debundle(bundle):
@@ -352,7 +294,7 @@ def debundle(bundle):
                 msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
                 messages.append([msgid, msgbody])
     if messages:
-        api.save_message(messages, node, nodes[node]["to"])
+        api.save_message(messages, node, cfg.nodes[node].to)
 
 
 def echo_filter(ea):
@@ -378,16 +320,16 @@ def get_mail():
         for get_list in separate(fetch_msg_list):
             count += len(get_list)
             print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
-            debundle(client.get_bundle(nodes[node]["node"], "/".join(get_list)))
+            debundle(client.get_bundle(cfg.nodes[node].node, "/".join(get_list)))
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
 
 
 def fetch_mail():
-    print("Работа с " + nodes[node]["node"])
+    print("Работа с " + cfg.nodes[node].node)
     try:
-        if "auth" in nodes[node]:
+        if cfg.nodes[node].auth:
             make_toss()
             send_mail()
         get_mail()
@@ -453,15 +395,15 @@ def current_time():
 # noinspection PyUnusedLocal
 def get_counts(new=False, favorites=False):
     global echo_counts
-    for echoarea in nodes[node]["echoareas"]:
+    for echoarea in cfg.nodes[node].echoareas:
         if not new:
-            if not echoarea[0] in echo_counts:
-                echo_counts[echoarea[0]] = api.get_echo_length(echoarea[0])
+            if echoarea.name not in echo_counts:
+                echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
         else:
-            echo_counts[echoarea[0]] = api.get_echo_length(echoarea[0])
-    for echoarea in nodes[node]["archive"]:
-        if not echoarea[0] in echo_counts:
-            echo_counts[echoarea[0]] = api.get_echo_length(echoarea[0])
+            echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
+    for echoarea in cfg.nodes[node].archive:
+        if echoarea.name not in echo_counts:
+            echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
     echo_counts["carbonarea"] = len(api.get_carbonarea())
     echo_counts["favorites"] = len(api.get_favorites_list())
 
@@ -469,10 +411,10 @@ def get_counts(new=False, favorites=False):
 def rescan_counts(echoareas):
     counts_ = []
     for echo in echoareas:
-        echocount = echo_counts[echo[0]]
-        if echo[0] in lasts:
-            last = echocount - lasts[echo[0]]
-            if echocount == 0 and lasts[echo[0]] == 0:
+        echocount = echo_counts[echo.name]
+        if echo.name in lasts:
+            last = echocount - lasts[echo.name]
+            if echocount == 0 and lasts[echo.name] == 0:
                 last = 1
         else:
             last = echocount + 1
@@ -494,15 +436,15 @@ def draw_echo_selector(start, cursor, archive):
     color = get_color("statusline")
     stdscr.insstr(height - 1, 0, " " * width, color)
     if archive:
-        echoareas = nodes[node]["archive"]
+        echoareas = cfg.nodes[node].archive
         draw_title(0, 0, "Архив")
     else:
-        echoareas = nodes[node]["echoareas"]
+        echoareas = cfg.nodes[node].echoareas
         draw_title(0, 0, "Конференция")
     draw_status(1, version)
-    draw_status(len(version) + 2, nodes[node]["nodename"])
+    draw_status(len(version) + 2, cfg.nodes[node].nodename)
     for echo in echoareas:
-        desc_len = len(echo[1])
+        desc_len = len(echo.desc)
         if desc_len > m:
             m = desc_len
         if m > width - 38:
@@ -536,19 +478,19 @@ def draw_echo_selector(start, cursor, archive):
                     counts = rescan_counts(echoareas)
                     counts_rescan = False
                 echo_length = int(counts[y][0])
-                if echo[0] in lasts:
-                    last = lasts[echo[0]]
+                if echo.name in lasts:
+                    last = lasts[echo.name]
                 else:
                     last = -1
                 if last < echo_length - 1 or last == -1 and echo_length == 1:
                     stdscr.addstr(y + 1 - start, 0, "+")
-                stdscr.addstr(y + 1 - start, 2, echo[0])
+                stdscr.addstr(y + 1 - start, 2, echo.name)
                 if width >= 80:
-                    if width - 38 >= len(echo[1]):
-                        stdscr.addstr(y + 1 - start, width - 1 - dsc_lens[y], echo[1], color)
+                    if width - 38 >= len(echo.desc):
+                        stdscr.addstr(y + 1 - start, width - 1 - dsc_lens[y], echo.desc, color)
                     else:
-                        cut_index = width - 38 - len(echo[1])
-                        stdscr.addstr(y + 1 - start, width - 1 - len(echo[1][:cut_index]), echo[1][:cut_index])
+                        cut_index = width - 38 - len(echo.desc)
+                        stdscr.addstr(y + 1 - start, width - 1 - len(echo.desc[:cut_index]), echo.desc[:cut_index])
                 stdscr.addstr(y + 1 - start, width - 10 - m - len(counts[y][0]), counts[y][0])
                 stdscr.addstr(y + 1 - start, width - 2 - m - len(counts[y][1]), counts[y][1])
         y = y + 1
@@ -576,7 +518,7 @@ def edit_config():
     p = subprocess.Popen(cfg.editor + " ./caesium.cfg", shell=True)
     p.wait()
     reset_config()
-    load_config()
+    cfg.load()
     stdscr = curses.initscr()
     curses.start_color()
     curses.use_default_colors()
@@ -589,7 +531,7 @@ def edit_config():
 def show_echo_selector_screen():
     global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node, stdscr
     archive = False
-    echoareas = nodes[node]["echoareas"]
+    echoareas = cfg.nodes[node].echoareas
     go = True
     start = 0
     if archive:
@@ -661,25 +603,25 @@ def show_echo_selector_screen():
                 start = cursor - height + 3
             if cursor - start <= 0:
                 start = cursor
-        elif key in keys.s_archive and len(nodes[node]["archive"]) > 0:
+        elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             if archive:
                 archive = False
                 archive_cursor = cursor
                 cursor = echo_cursor
-                echoareas = nodes[node]["echoareas"]
+                echoareas = cfg.nodes[node].echoareas
                 stdscr.clear()
                 counts_rescan = True
             else:
                 archive = True
                 echo_cursor = cursor
                 cursor = archive_cursor
-                echoareas = nodes[node]["archive"]
+                echoareas = cfg.nodes[node].archive
                 stdscr.clear()
                 counts_rescan = True
         elif key in keys.s_enter:
             draw_message_box("Подождите", False)
-            if echoareas[cursor][0] in lasts:
-                last = lasts[echoareas[cursor][0]]
+            if echoareas[cursor].name in lasts:
+                last = lasts[echoareas[cursor].name]
             else:
                 last = 0
             if cursor == 0:
@@ -687,14 +629,14 @@ def show_echo_selector_screen():
             elif cursor == 1:
                 echo_length = len(api.get_carbonarea())
             else:
-                echo_length = api.get_echo_length(echoareas[cursor][0])
+                echo_length = api.get_echo_length(echoareas[cursor].name)
             if 0 < last < echo_length:
                 last = last + 1
             if last >= echo_length:
                 last = echo_length
             if cursor == 1:
                 go = not echo_reader(echoareas[cursor], last, archive, True, False, True)
-            elif cursor == 0 or echoareas[cursor][2]:
+            elif cursor == 0 or echoareas[cursor].noSync:
                 go = not echo_reader(echoareas[cursor], last, archive, True, False, False)
             else:
                 go = not echo_reader(echoareas[cursor], last, archive, False, False, False)
@@ -708,17 +650,17 @@ def show_echo_selector_screen():
         elif key in keys.s_out:
             out_length = get_out_length()
             if out_length > -1:
-                go = not echo_reader("out", out_length, archive, False, True, False)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, True, False)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                go = not echo_reader("out", out_length, archive, False, True, False, True)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, True, False, True)
         elif key in keys.s_nnode:
             archive = False
             node = node + 1
-            if node == len(nodes):
+            if node == len(cfg.nodes):
                 node = 0
-            echoareas = nodes[node]["echoareas"]
+            echoareas = cfg.nodes[node].echoareas
             draw_message_box("Подождите", False)
             get_counts()
             stdscr.clear()
@@ -729,8 +671,8 @@ def show_echo_selector_screen():
             archive = False
             node = node - 1
             if node == -1:
-                node = len(nodes) - 1
-            echoareas = nodes[node]["echoareas"]
+                node = len(cfg.nodes) - 1
+            echoareas = cfg.nodes[node].echoareas
             draw_message_box("Подождите", False)
             get_counts()
             stdscr.clear()
@@ -740,14 +682,14 @@ def show_echo_selector_screen():
         elif key in keys.s_config:
             edit_config()
             reset_config()
-            load_config()
+            cfg.load()
             load_colors(cfg.theme)
             get_counts()
             stdscr.clear()
             counts_rescan = True
             node = 0
             archive = False
-            echoareas = nodes[node]["echoareas"]
+            echoareas = cfg.nodes[node].echoareas
             cursor = 0
         elif key in keys.g_quit:
             go = False
@@ -758,7 +700,7 @@ def show_echo_selector_screen():
 
 
 def read_out_msg(msgid):
-    node_dir = "out/" + nodes[node]["nodename"]
+    node_dir = "out/" + cfg.nodes[node].nodename
     with open(node_dir + "/" + msgid, "r") as f:
         temp = f.read().splitlines()
     msg = ["",
@@ -797,7 +739,7 @@ def render_token(token: parser.Token, y, x, offset):
     return y + (len(token.render) - 1) - offset, x
 
 
-def draw_reader(echo, msgid, out):
+def draw_reader(echo: str, msgid, out):
     color = get_color("border")
     stdscr.insstr(0, 0, "─" * width, color)
     stdscr.insstr(4, 0, "─" * width, color)
@@ -848,7 +790,7 @@ def call_editor(out=''):
                 if out.endswith(".out"):
                     # noinspection PyBroadException
                     try:
-                        os.remove("out/" + nodes[node]["nodename"] + "/" + out)
+                        os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
                     except Exception:
                         pass
                 resave_out(out, draft=True)
@@ -859,7 +801,7 @@ def call_editor(out=''):
                 if out.endswith(".draft"):
                     # noinspection PyBroadException
                     try:
-                        os.remove("out/" + nodes[node]["nodename"] + "/" + out)
+                        os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
                     except Exception:
                         pass
                 resave_out(out.replace(".draft", ".out"))
@@ -914,7 +856,7 @@ def save_message_to_file(msgid, echoarea):
 
 def get_out_msgids(drafts=False):
     msgids = []
-    node_dir = "out/" + nodes[node]["nodename"]
+    node_dir = "out/" + cfg.nodes[node].nodename
     if os.path.exists(node_dir):
         if drafts:
             msgids = [f for f in sorted(os.listdir(node_dir))
@@ -963,7 +905,7 @@ def calc_scroll_thumb_size(length, scroll_view):
 
 
 def get_msg(msgid):
-    bundle = client.get_bundle(nodes[node]["node"], [msgid])
+    bundle = client.get_bundle(cfg.nodes[node].node, [msgid])
     for msg in bundle:
         if not msg:
             continue
@@ -971,9 +913,9 @@ def get_msg(msgid):
         msgid = m[0]
         if len(msgid) == 20 and m[1]:
             msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
-            if nodes[node]["to"]:
+            if cfg.nodes[node].to:
                 carbonarea = api.get_carbonarea()
-                if msgbody[5] in nodes[node]["to"] and msgid not in carbonarea:
+                if msgbody[5] in cfg.nodes[node].to and msgid not in carbonarea:
                     pass
                     # add_to_carbonarea(msgid, msgbody)
             # save_message(msgid, msgbody)
@@ -1041,7 +983,8 @@ def get_out(drafts=False):
         return get_out_msgids()
 
 
-def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
+def echo_reader(echo: config.Echo,
+                last, archive, favorites, out, carbonarea, drafts=False):
     global lasts, next_echoarea
     stdscr.clear()
     stdscr.attrset(get_color("border"))
@@ -1056,7 +999,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
     elif carbonarea:
         msgids = api.get_carbonarea()
     else:
-        msgids = api.get_echo_msgids(echo[0])
+        msgids = api.get_echo_msgids(echo.name)
     if msgn > len(msgids) - 1:
         msgn = len(msgids) - 1
     if msgids:
@@ -1065,13 +1008,13 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif out:
             msg, size = read_out_msg(msgids[msgn])
         else:
-            msg, size = api.read_msg(msgids[msgn], echo[0])
+            msg, size = api.read_msg(msgids[msgn], echo.name)
             while msg[3] in cfg.twit or msg[5] in cfg.twit:
                 msgn -= 1
                 if msgn < 0:
                     next_echoarea = True
                     break
-                msg, size = api.read_msg(msgids[msgn], echo[0])
+                msg, size = api.read_msg(msgids[msgn], echo.name)
 
     else:
         msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
@@ -1104,7 +1047,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             elif out:
                 dsc = "Исходящие"
             else:
-                dsc = echo[1]
+                dsc = echo.desc
             if dsc and width >= 80:
                 draw_title(0, width - 2 - len(dsc), dsc)
             color = get_color("text")
@@ -1122,8 +1065,8 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     stdscr.addstr(1, 7, msg[3], color)
                 stdscr.addstr(1, width - len(msgtime) - 1, msgtime, color)
             else:
-                if len(nodes[node]["to"]) > 0:
-                    stdscr.addstr(1, 7, nodes[node]["to"][0], color)
+                if cfg.nodes[node].to:
+                    stdscr.addstr(1, 7, cfg.nodes[node].to[0], color)
             stdscr.addstr(2, 7, msg[5], color)
             stdscr.addstr(3, 7, msg[6][:width - 8], color)
             draw_title(4, 0, size)
@@ -1162,7 +1105,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     if i < height - 1:
                         stdscr.addstr(i, width - 1, "█")
         else:
-            draw_reader(echo[0], "", out)
+            draw_reader(echo.name, "", out)
         stdscr.attrset(get_color("border"))
         stdscr.refresh()
         key = stdscr.getch()
@@ -1181,14 +1124,14 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 tmp = msgn
                 while msg[3] in cfg.twit or msg[5] in cfg.twit:
                     msgn -= 1
                     if msgn < 0:
                         msgn = tmp + 1
                         break
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_next and msgn < len(msgids) - 1:
             y = 0
@@ -1198,29 +1141,29 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 while msg[3] in cfg.twit or msg[5] in cfg.twit:
                     msgn += 1
                     if msgn >= len(msgids) or len(msgids) == 0:
                         go = False
                         next_echoarea = True
                         break
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
-        elif key in keys.r_prep and echo[0] not in ("carbonarea", "favorites") and not out and repto:
+        elif key in keys.r_prep and echo.name not in ("carbonarea", "favorites") and not out and repto:
             if repto in msgids:
                 y = 0
                 stack.append(msgn)
                 msgn = msgids.index(repto)
-                msg, size = api.read_msg(msgids[msgn], echo[0])
+                msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_nrep and not out and len(stack) > 0:
             y = 0
             msgn = stack.pop()
-            msg, size = api.read_msg(msgids[msgn], echo[0])
+            msg, size = api.read_msg(msgids[msgn], echo.name)
             body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_up and y > 0:
             if msgids:
@@ -1251,7 +1194,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     if out:
                         msg, size = read_out_msg(msgids[msgn])
                     else:
-                        msg, size = api.read_msg(msgids[msgn], echo[0])
+                        msg, size = api.read_msg(msgids[msgn], echo.name)
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
                 if msgids and body_height > scroll_view:
@@ -1268,7 +1211,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_end:
             if msgids:
@@ -1278,20 +1221,20 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 if out:
                     msg, size = read_out_msg(msgids[msgn])
                 else:
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_ins and not archive and not out:
             if not favorites:
                 with open("template.txt", "r") as t:
                     with open("temp", "w") as f:
-                        f.write(echo[0] + "\n")
+                        f.write(echo.name + "\n")
                         f.write("All\n")
                         f.write("No subject\n\n")
                         f.write(t.read())
                 call_editor()
                 stdscr.clear()
         elif key in keys.r_save and not out:
-            save_message_to_file(msgids[msgn], echo[0])
+            save_message_to_file(msgids[msgn], echo.name)
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgids[msgn], msg)
             draw_message_box("Подождите", False)
@@ -1336,7 +1279,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
-                copyfile("out/" + nodes[node]["nodename"] + "/" + msgids[msgn], "temp")
+                copyfile("out/" + cfg.nodes[node].nodename + "/" + msgids[msgn], "temp")
                 call_editor(msgids[msgn])
                 msgids = get_out(drafts=drafts)
                 if msgn > len(msgids) - 1:
@@ -1355,11 +1298,11 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 api.remove_from_favorites(msgids[msgn])
                 draw_message_box("Подождите", False)
                 get_counts(False, True)
-                msgids = api.get_echo_msgids(echo[0])
+                msgids = api.get_echo_msgids(echo.name)
                 if msgids:
                     if msgn >= len(msgids):
                         msgn = len(msgids) - 1
-                    msg, size = api.read_msg(msgids[msgn], echo[0])
+                    msg, size = api.read_msg(msgids[msgn], echo.name)
                     #
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 else:
@@ -1371,7 +1314,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 draw_message_box("Подождите", False)
                 get_counts(True, False)
                 stdscr.clear()
-                msg, size = api.read_msg(msgids[msgn], echo[0])
+                msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             except Exception as ex:
                 message_box("Не удалось определить msgid. " + str(ex))
@@ -1388,7 +1331,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                     open_link(links[i - 1])
             stdscr.clear()
         elif key in keys.r_to_out and drafts:
-            node_dir = "out/" + nodes[node]["nodename"]
+            node_dir = "out/" + cfg.nodes[node].nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
             msgids = get_out(drafts=drafts)
@@ -1400,7 +1343,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
             else:
                 go = False
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            node_dir = "out/" + nodes[node]["nodename"]
+            node_dir = "out/" + cfg.nodes[node].nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
             msgids = get_out(drafts=drafts)
@@ -1417,7 +1360,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 y = 0
                 msgn = selected_msgn
                 stack.clear()
-                msg, size = api.read_msg(msgids[msgn], echo[0])
+                msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_quit:
             go = False
@@ -1425,7 +1368,7 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
         elif key in keys.g_quit:
             go = False
             done = True
-    lasts[echo[0]] = msgn
+    lasts[echo.name] = msgn
     with open("lasts.lst", "wb") as f:
         pickle.dump(lasts, f)
     stdscr.clear()
@@ -1443,9 +1386,9 @@ def draw_msg_list(echo, lst, msgn):
         draw_title(0, 0, echo)
 
 
-def show_msg_list_screen(echoarea, msgn):
-    lst = api.get_msg_list_data(echoarea[0])
-    draw_msg_list(echoarea[0], lst, msgn)
+def show_msg_list_screen(echo: config.Echo, msgn):
+    lst = api.get_msg_list_data(echo.name)
+    draw_msg_list(echo.name, lst, msgn)
     echo_length = len(lst)
     if echo_length <= height - 1:
         start = 0
@@ -1520,7 +1463,7 @@ locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
 
 config.ensure_exists()
 reset_config()
-load_config()
+cfg.load()
 if cfg.db == "txt":
     import api.txt as api
 elif cfg.db == "aio":
