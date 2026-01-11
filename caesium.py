@@ -1314,12 +1314,12 @@ def echo_reader(echo, last, archive, favorites, out, carbonarea, drafts=False):
                 else:
                     f.write(msg[6] + "\n")
                 for line in msg[8:]:
-                    if line.startswith("+++") or line.strip():
+                    if line.startswith("+++") or not line.strip():
                         continue  # skip sign and empty lines
                     qq = parser.quote_template.match(line)
                     if qq:
                         quoter = ">"
-                        if not line[qq.span()[1]] == " ":
+                        if line[qq.span()[1]] != " ":
                             quoter += " "
                         f.write("\n" + line[:qq.span()[1]]
                                 + quoter
