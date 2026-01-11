@@ -635,11 +635,11 @@ def show_echo_selector_screen():
             if last >= echo_length:
                 last = echo_length
             if cursor == 1:
-                go = not echo_reader(echoareas[cursor], last, archive, True, False, True)
+                go = not echo_reader(echoareas[cursor], last, archive, True, True)
             elif cursor == 0 or echoareas[cursor].noSync:
-                go = not echo_reader(echoareas[cursor], last, archive, True, False, False)
+                go = not echo_reader(echoareas[cursor], last, archive, True, False)
             else:
-                go = not echo_reader(echoareas[cursor], last, archive, False, False, False)
+                go = not echo_reader(echoareas[cursor], last, archive, False, False)
             counts_rescan = True
             if next_echoarea:
                 counts = rescan_counts(echoareas)
@@ -650,11 +650,11 @@ def show_echo_selector_screen():
         elif key in keys.s_out:
             out_length = get_out_length()
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, True, False)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, True, False, True)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False, True)
         elif key in keys.s_nnode:
             archive = False
             node = node + 1
@@ -984,16 +984,15 @@ def get_out(drafts=False):
 
 
 def echo_reader(echo: config.Echo,
-                last, archive, favorites, out, carbonarea, drafts=False):
+                last, archive, favorites, carbonarea, drafts=False):
     global lasts, next_echoarea
     stdscr.clear()
     stdscr.attrset(get_color("border"))
     y = 0
     msgn = last
-    if drafts:
-        msgids = get_out_msgids(True)
-    elif out:
-        msgids = get_out_msgids()
+    out = (echo == config.ECHO_OUT)
+    if out:
+        msgids = get_out_msgids(drafts)
     elif favorites and not carbonarea:
         msgids = api.get_favorites_list()
     elif carbonarea:
@@ -1003,9 +1002,7 @@ def echo_reader(echo: config.Echo,
     if msgn > len(msgids) - 1:
         msgn = len(msgids) - 1
     if msgids:
-        if drafts:
-            msg, size = read_out_msg(msgids[msgn])
-        elif out:
+        if out:
             msg, size = read_out_msg(msgids[msgn])
         else:
             msg, size = api.read_msg(msgids[msgn], echo.name)
@@ -1044,8 +1041,6 @@ def echo_reader(echo: config.Echo,
             draw_status(len(version) + 2, msg_string)
             if drafts:
                 dsc = "Черновики"
-            elif out:
-                dsc = "Исходящие"
             else:
                 dsc = echo.desc
             if dsc and width >= 80:
