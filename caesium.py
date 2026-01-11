@@ -727,8 +727,17 @@ def render_token(token: parser.Token, y, x, offset):
         if token.type in ("HEADER", "URL", "QUOTE1", "QUOTE2",
                           "COMMENT", "CODE", "ORIGIN"):
             attr = get_color(token.type.lower())
-
-        stdscr.addstr(y + i, x, line, attr)
+        try:
+            if line:
+                stdscr.addstr(y + i, x, line, attr)
+        except curses.error as ex:
+            raise Exception(
+                "(w=" + str(width) + "; h=" + str(height) + ")"
+                + " y=" + str(y) + "+" + str(i) + ";"
+                + " x=" + str(x) + ";"
+                + " token=" + token.type + ";"
+                + " line='" + line + "'"
+            ) from ex
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return

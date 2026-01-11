@@ -256,3 +256,48 @@ def test_quote_url():
     assert tokens[0].render == [" >"]
     assert tokens[1].render == ["http://in-quote"]
     assert b_height == 1
+
+
+class ScrMock:
+    def __init__(self, h, w):
+        self.height = h
+        self.width = w
+
+    def addstr(self, y, x, line):
+        assert y < self.height
+        assert x + len(line) <= self.width
+
+
+# TODO: Make render_token testable
+def _render_token(scr, token: parser.Token, y, x, offset):
+    for i, line in enumerate(token.render[offset:]):
+        scr.addstr(y + i, x, line)
+
+        if len(token.render) > 1 and i + offset < len(token.render) - 1:
+            x = 0  # new line in multiline token -- carriage return
+        else:
+            x += len(line)  # last/single line -- move caret in line
+        if y + i + 1 >= 30 - 1:
+            return y + i, x
+    return y + (len(token.render) - 1) - offset, x
+
+
+def test_render_token():
+    tokens = parser.tokenize([
+        "aaaaaa> aaa-aa aaaaa aaa aaaaaaaaaa https://aaaa.aaaaaaaa.aa/. ",
+        "aaaaaa> aaaaa aaaaaaaa aaaa https://aaaaaa.com/aaaaaaaaaa/aaaaaaaaaaaa-aaa",
+        "",
+    ])
+    b_height = parser.prerender(tokens, width=62, height=30)
+    i = 5
+    x = 0
+    scr = ScrMock(30, 62)
+    line_num = 0
+    for token in tokens:
+        if token.line_num > line_num:
+            line_num = token.line_num
+            i += 1
+            x = 0
+        if i >= 30 - 1:
+            break
+        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0)
