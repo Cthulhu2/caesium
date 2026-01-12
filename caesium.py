@@ -406,20 +406,13 @@ def find_new(cursor):
 
 def edit_config():
     global stdscr
-    curses.echo()
-    curses.curs_set(True)
-    curses.endwin()
-    p = subprocess.Popen(cfg.editor + " ./caesium.cfg", shell=True)
+    terminate_curses()
+    p = subprocess.Popen(cfg.editor + " " + config.CONFIG_FILEPATH, shell=True)
     p.wait()
     reset_config()
     cfg.load()
     stdscr = curses.initscr()
-    curses.start_color()
-    curses.use_default_colors()
-    curses.noecho()
-    curses.curs_set(False)
-    stdscr.keypad(True)
-    get_term_size()
+    initialize_curses()
 
 
 def show_echo_selector_screen():
@@ -476,18 +469,11 @@ def show_echo_selector_screen():
             if len(echoareas) >= height - 2:
                 start = len(echoareas) - height + 2
         elif key in keys.s_get:
-            curses.echo()
-            curses.curs_set(True)
-            curses.endwin()
+            terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
             fetch_mail()
             stdscr = curses.initscr()
-            curses.start_color()
-            curses.use_default_colors()
-            curses.noecho()
-            curses.curs_set(False)
-            stdscr.keypad(True)
-            get_term_size()
+            initialize_curses()
             draw_message_box("Подождите", False)
             get_counts(True)
             stdscr.clear()
@@ -499,19 +485,16 @@ def show_echo_selector_screen():
                 start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             if archive:
-                archive = False
                 archive_cursor = cursor
                 cursor = echo_cursor
                 echoareas = cfg.nodes[node].echoareas
-                stdscr.clear()
-                counts_rescan = True
             else:
-                archive = True
                 echo_cursor = cursor
                 cursor = archive_cursor
                 echoareas = cfg.nodes[node].archive
-                stdscr.clear()
-                counts_rescan = True
+            archive = not archive
+            stdscr.clear()
+            counts_rescan = True
         elif key in keys.s_enter:
             draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -575,8 +558,6 @@ def show_echo_selector_screen():
             start = 0
         elif key in keys.s_config:
             edit_config()
-            reset_config()
-            cfg.load()
             config.load_colors(cfg.theme)
             get_counts()
             stdscr.clear()
@@ -670,19 +651,12 @@ def draw_reader(echo: str, msgid, out):
 
 def call_editor(out=''):
     global stdscr
-    curses.echo()
-    curses.curs_set(True)
-    curses.endwin()
+    terminate_curses()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
     p = subprocess.Popen(cfg.editor + " ./temp", shell=True)
     p.wait()
     stdscr = curses.initscr()
-    curses.start_color()
-    curses.use_default_colors()
-    curses.noecho()
-    curses.curs_set(False)
-    stdscr.keypad(True)
-    get_term_size()
+    initialize_curses()
     if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
         d = show_menu("Куда сохранить?", ["Сохранить в исходящие",
                                           "Сохранить как черновик"])
@@ -1381,15 +1355,30 @@ elif cfg.keys == "vi":
     import keys.vi as keys
 else:
     raise Exception("Unknown Keys Scheme :: " + cfg.keys)
-stdscr = curses.initscr()
-try:
+
+
+def initialize_curses():
     curses.start_color()
     curses.use_default_colors()
     curses.noecho()
     curses.set_escdelay(50)  # ms
-    curses.curs_set(False)
+    curses.curs_set(0)
+    curses.cbreak()
     stdscr.keypad(True)
     get_term_size()
+
+
+def terminate_curses():
+    curses.curs_set(1)
+    stdscr.keypad(False)
+    curses.echo(True)
+    curses.nocbreak()
+    curses.endwin()
+
+
+stdscr = curses.initscr()
+try:
+    initialize_curses()
     try:
         config.load_colors(cfg.theme)
     except ValueError as err:
@@ -1407,7 +1396,4 @@ try:
     stdscr.clear()
     show_echo_selector_screen()
 finally:
-    curses.echo()
-    curses.curs_set(True)
-    stdscr.keypad(False)
-    curses.endwin()
+    terminate_curses()
