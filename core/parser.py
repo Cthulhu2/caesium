@@ -2,9 +2,11 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional
 
-url_template = re.compile(r"((https?|ftp|file|ii)://?[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|])")
+url_template = re.compile(r"((https?|ftp|file|ii)://?"
+                          r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;]+"
+                          r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|])")
 # noinspection RegExpRedundantEscape
-ps_template = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
+ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|\/\/|#)")
 # noinspection RegExpRedundantEscape
 quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")

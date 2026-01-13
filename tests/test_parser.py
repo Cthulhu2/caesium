@@ -1,6 +1,21 @@
 from core import parser
 from core.parser import Token
 
+
+def test_ps_template():
+    assert parser.ps_template.match("PS")
+    assert parser.ps_template.match("ЗЫ")
+    assert not parser.ps_template.match("POST")
+    assert not parser.ps_template.match("ЗЛЫ")
+
+
+def test_url_template():
+    match = parser.url_template.match("https://ru.wikipedia.org/wiki/Вайб-кодинг")
+    assert match.string[match.span()[1] - 1] == "г"
+    match = parser.url_template.match("https://ru.wikipedia.org/wiki/Вайб-кодинг,")
+    assert match.string[match.span()[1] - 1] == "г"
+
+
 BASE_TOKENS = """Test
 == Header
  * List item
@@ -288,7 +303,7 @@ def test_render_token():
         "aaaaaa> aaaaa aaaaaaaa aaaa https://aaaaaa.com/aaaaaaaaaa/aaaaaaaaaaaa-aaa",
         "",
     ])
-    b_height = parser.prerender(tokens, width=62, height=30)
+    parser.prerender(tokens, width=62, height=30)
     i = 5
     x = 0
     scr = ScrMock(30, 62)
