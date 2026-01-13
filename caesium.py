@@ -173,7 +173,7 @@ def send_mail():
 def get_msg_list():
     echoareas = list(map(
         lambda echo: echo.name,  # echo name
-        filter(lambda echo: not echo.noSync,  # skip stat, carbonarea, favorites
+        filter(lambda echo: echo.sync,  # skip stat, carbonarea, favorites
                cfg.nodes[node].echoareas)))
     return client.get_msg_list(cfg.nodes[node].node, echoareas)
 
@@ -513,7 +513,7 @@ def show_echo_selector_screen():
                 last = echo_length
             if cursor == 1:
                 go = not echo_reader(echoareas[cursor], last, archive, True, True)
-            elif cursor == 0 or echoareas[cursor].noSync:
+            elif cursor == 0 or not echoareas[cursor].sync:
                 go = not echo_reader(echoareas[cursor], last, archive, True, False)
             else:
                 go = not echo_reader(echoareas[cursor], last, archive, False, False)
@@ -525,9 +525,9 @@ def show_echo_selector_screen():
                     start = cursor - HEIGHT + 3
                 next_echoarea = False
         elif key in keys.s_out:
-            out_length = get_out_length()
+            out_length = get_out_length(drafts=False)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False, False)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:

@@ -20,7 +20,7 @@ def ensure_exists():
 class Echo:
     name: str
     desc: str
-    noSync: bool
+    sync: bool
 
     def __gt__(self, other):
         if other:
@@ -33,9 +33,9 @@ class Echo:
         return False
 
 
-ECHO_OUT = Echo("out", "Исходящие", False)
-ECHO_FAVORITES = Echo("favorites", "Избранные сообщения", True)
-ECHO_CARBON = Echo("carbonarea", "Карбонка", True)
+ECHO_OUT = Echo("out", "Исходящие", True)
+ECHO_FAVORITES = Echo("favorites", "Избранные сообщения", False)
+ECHO_CARBON = Echo("carbonarea", "Карбонка", False)
 
 
 @dataclasses.dataclass
@@ -89,11 +89,11 @@ class Config:
             elif param[0] == "to":
                 node.to = " ".join(param[1:]).split(",")
             elif param[0] == "echo":
-                node.echoareas.append(Echo(param[1], "".join(param[2:]), False))
-            elif param[0] == "stat":
                 node.echoareas.append(Echo(param[1], "".join(param[2:]), True))
+            elif param[0] == "stat":
+                node.echoareas.append(Echo(param[1], "".join(param[2:]), False))
             elif param[0] == "archive":
-                node.archive.append(Echo(param[1], "".join(param[2:]), True))
+                node.archive.append(Echo(param[1], "".join(param[2:]), False))
             #
             if param[0] == "editor":
                 self.editor = " ".join(param[1:])
