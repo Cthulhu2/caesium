@@ -8,6 +8,7 @@ ps_template = re.compile(r"(^\s*)(PS|P.S|ps|ЗЫ|З.Ы|\/\/|#)")
 # noinspection RegExpRedundantEscape
 quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
+echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
 
 
 @dataclass

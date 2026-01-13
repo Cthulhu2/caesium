@@ -7,7 +7,6 @@ import hashlib
 import locale
 import os
 import pickle
-import re
 import subprocess
 import sys
 import time
@@ -191,12 +190,6 @@ def debundle(bundle):
         api.save_message(messages, node, cfg.nodes[node].to)
 
 
-def echo_filter(ea):
-    rr = re.compile(r'^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$')
-    if rr.match(ea):
-        return True
-
-
 def get_mail():
     fetch_msg_list = []
     print("Получение индекса от ноды...")
@@ -204,7 +197,7 @@ def get_mail():
     print("Построение разностного индекса...")
     local_index = None
     for line in remote_msg_list:
-        if echo_filter(line):
+        if parser.echo_template.match(line):
             local_index = api.get_echo_msgids(line)
         elif len(line) == 20 and line not in local_index and line not in blacklist:
             fetch_msg_list.append(line)
