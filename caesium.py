@@ -1247,67 +1247,52 @@ def draw_msg_list(echo):
 
 
 def show_msg_list_screen(echo: config.Echo, msgn):
-    lst = api.get_msg_list_data(echo.name)
+    data = api.get_msg_list_data(echo.name)
     draw_msg_list(echo.name)
-    echo_length = len(lst)
-    if echo_length <= HEIGHT - 1:
+    echo_len = len(data)
+    if echo_len <= HEIGHT - 1:
         start = 0
-        end = echo_length
-    elif msgn + HEIGHT - 1 < echo_length:
+    elif msgn + HEIGHT - 1 < echo_len:
         start = msgn
-        end = msgn + HEIGHT - 1
     else:
-        start = echo_length - HEIGHT + 1
-        end = start + HEIGHT - 1
+        start = echo_len - HEIGHT + 1
     y = msgn - start
     while True:
-        n = 1
-        for i in range(start, end):
-            if i == y + start:
-                color = get_color("cursor")
-            else:
-                color = get_color("text")
-            draw_cursor(n - 1, color)
-            stdscr.addstr(n, 0, lst[i][1], color)
-            stdscr.addstr(n, 16, lst[i][2][:WIDTH - 26], color)
-            stdscr.insstr(n, WIDTH - 10, lst[i][3], color)
-            n += 1
+        for i in range(1, HEIGHT):
+            color = get_color("cursor" if i - 1 == y else "text")
+            draw_cursor(i - 1, color)
+            if start + i - 1 < echo_len:
+                msg = data[start + i - 1]
+                stdscr.addstr(i, 0, msg[1], color)
+                stdscr.addstr(i, 16, msg[2][:WIDTH - 26], color)
+                stdscr.insstr(i, WIDTH - 10, msg[3], color)
         key = stdscr.getch()
         if key in keys.s_up:
             y = y - 1
-            if start > 0 and y + start < start:
-                start -= 1
-                end -= 1
             if y == -1:
                 y = 0
+                start = max(0, start - 1)
         elif key in keys.s_down:
             y = y + 1
-            if y + start + 1 > end and y + start < echo_length:
-                start += 1
-                end += 1
             if y > HEIGHT - 2:
                 y = HEIGHT - 2
-            y = min(y, echo_length - 1)
+                if y + start + 1 < echo_len:
+                    start += 1
+            y = min(y, echo_len - 1)
         elif key in keys.s_ppage:
             if y == 0:
                 start = max(0, start - HEIGHT + 1)
-                end = min(echo_length, start + HEIGHT - 1)
             y = 0
         elif key in keys.s_npage:
             if y == HEIGHT - 2:
-                start = start + HEIGHT - 1
-                if start > echo_length - HEIGHT + 1:
-                    start = echo_length - HEIGHT + 1
-                end = start + HEIGHT - 1
-            y = min(echo_length - 1, HEIGHT - 2)
+                start = min(start + HEIGHT - 1, echo_len - HEIGHT + 1)
+            y = min(echo_len - 1, HEIGHT - 2)
         elif key in keys.s_home:
             y = 0
             start = 0
-            end = min(echo_length, HEIGHT - 1)
         elif key in keys.s_end:
-            y = min(echo_length - 1, HEIGHT - 2)
-            start = max(0, echo_length - HEIGHT + 1)
-            end = min(echo_length, start + HEIGHT - 1)
+            y = min(echo_len - 1, HEIGHT - 2)
+            start = max(0, echo_len - HEIGHT + 1)
         elif key in keys.s_enter:
             return y + start  #
         elif key in keys.r_quit:
