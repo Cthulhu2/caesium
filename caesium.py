@@ -239,14 +239,14 @@ def fetch_mail():
 #
 echo_cursor = 0
 archive_cursor = 0
-width = 0
-height = 0
+WIDTH = 0
+HEIGHT = 0
 
 
 def splash_screen():
     stdscr.clear()
-    x = int((width - len(splash[1])) / 2) - 1
-    y = int((height - len(splash)) / 2)
+    x = int((WIDTH - len(splash[1])) / 2) - 1
+    y = int((HEIGHT - len(splash)) / 2)
     i = 0
     for line in splash:
         stdscr.addstr(y + i, x, line, get_color("text"))
@@ -257,14 +257,14 @@ def splash_screen():
 
 
 def get_term_size():
-    global width, height
-    height, width = stdscr.getmaxyx()
+    global WIDTH, HEIGHT
+    HEIGHT, WIDTH = stdscr.getmaxyx()
 
 
 def draw_title(y, x, title):
     x = max(0, x)
-    if (x + len(title) + 2) > width:
-        title = title[:width - x - 2 - 3] + '...'
+    if (x + len(title) + 2) > WIDTH:
+        title = title[:WIDTH - x - 2 - 3] + '...'
     #
     color = get_color("border")
     stdscr.addstr(y, x, "[", color)
@@ -275,15 +275,15 @@ def draw_title(y, x, title):
 
 def draw_status(x, title):
     color = get_color("statusline")
-    stdscr.addstr(height - 1, x, title, color)
+    stdscr.addstr(HEIGHT - 1, x, title, color)
 
 
 def draw_cursor(y, color):
-    stdscr.insstr(y + 1, 0, " " * width, color)
+    stdscr.insstr(y + 1, 0, " " * WIDTH, color)
 
 
 def current_time():
-    draw_status(width - 8, "│ " + datetime.now().strftime("%H:%M"))
+    draw_status(WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"))
 
 
 # noinspection PyUnusedLocal
@@ -326,9 +326,9 @@ def draw_echo_selector(start, cursor, archive):
     m = 0
     stdscr.attrset(get_color("border"))
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * width, color)
+    stdscr.insstr(0, 0, "─" * WIDTH, color)
     color = get_color("statusline")
-    stdscr.insstr(height - 1, 0, " " * width, color)
+    stdscr.insstr(HEIGHT - 1, 0, " " * WIDTH, color)
     if archive:
         echoareas = cfg.nodes[node].archive
         draw_title(0, 0, "Архив")
@@ -341,22 +341,22 @@ def draw_echo_selector(start, cursor, archive):
         desc_len = len(echo.desc)
         if desc_len > m:
             m = desc_len
-        if m > width - 38:
-            m = width - 38
+        if m > WIDTH - 38:
+            m = WIDTH - 38
         dsc_lens.append(desc_len)
     y = 0
     count = "Сообщений"
     unread = "Не прочитано"
     description = "Описание"
-    if width < 80 or m == 0:
+    if WIDTH < 80 or m == 0:
         m = len(unread) - 7
         hidedsc = True
-    draw_title(0, width + 2 - m - len(count) - len(unread) - 1, count)
-    draw_title(0, width - 8 - m - 1, unread)
+    draw_title(0, WIDTH + 2 - m - len(count) - len(unread) - 1, count)
+    draw_title(0, WIDTH - 8 - m - 1, unread)
     if not hidedsc:
-        draw_title(0, width - len(description) - 2, description)
+        draw_title(0, WIDTH - len(description) - 2, description)
     for echo in echoareas:
-        if y - start < height - 2:
+        if y - start < HEIGHT - 2:
             if y == cursor:
                 if y >= start:
                     color = get_color("cursor")
@@ -379,14 +379,14 @@ def draw_echo_selector(start, cursor, archive):
                 if last < echo_length - 1 or last == -1 and echo_length == 1:
                     stdscr.addstr(y + 1 - start, 0, "+")
                 stdscr.addstr(y + 1 - start, 2, echo.name)
-                if width >= 80:
-                    if width - 38 >= len(echo.desc):
-                        stdscr.addstr(y + 1 - start, width - 1 - dsc_lens[y], echo.desc, color)
+                if WIDTH >= 80:
+                    if WIDTH - 38 >= len(echo.desc):
+                        stdscr.addstr(y + 1 - start, WIDTH - 1 - dsc_lens[y], echo.desc, color)
                     else:
-                        cut_index = width - 38 - len(echo.desc)
-                        stdscr.addstr(y + 1 - start, width - 1 - len(echo.desc[:cut_index]), echo.desc[:cut_index])
-                stdscr.addstr(y + 1 - start, width - 10 - m - len(counts[y][0]), counts[y][0])
-                stdscr.addstr(y + 1 - start, width - 2 - m - len(counts[y][1]), counts[y][1])
+                        cut_index = WIDTH - 38 - len(echo.desc)
+                        stdscr.addstr(y + 1 - start, WIDTH - 1 - len(echo.desc[:cut_index]), echo.desc[:cut_index])
+                stdscr.addstr(y + 1 - start, WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
+                stdscr.addstr(y + 1 - start, WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
         y = y + 1
     current_time()
     stdscr.refresh()
@@ -430,11 +430,11 @@ def show_echo_selector_screen():
         key = stdscr.getch()
         if key == curses.KEY_RESIZE:
             get_term_size()
-            if cursor >= height - 2:
-                start = cursor - height + 3
+            if cursor >= HEIGHT - 2:
+                start = cursor - HEIGHT + 3
             if cursor - start <= 0:
                 start = cursor
-            if start > 0 and height - 2 > len(echoareas):
+            if start > 0 and HEIGHT - 2 > len(echoareas):
                 start = 0
             stdscr.clear()
         elif key in keys.s_up and cursor > 0:
@@ -443,31 +443,31 @@ def show_echo_selector_screen():
                 start = start - 1
         elif key in keys.s_down and cursor < len(echoareas) - 1:
             cursor = cursor + 1
-            if cursor - start > height - 3 and start < len(echoareas) - height + 2:
+            if cursor - start > HEIGHT - 3 and start < len(echoareas) - HEIGHT + 2:
                 start = start + 1
         elif key in keys.s_ppage:
-            cursor = cursor - height + 2
+            cursor = cursor - HEIGHT + 2
             if cursor < 0:
                 cursor = 0
             if cursor - start < 0 < start:
-                start = start - height + 2
+                start = start - HEIGHT + 2
             if start < 0:
                 start = 0
         elif key in keys.s_npage:
-            cursor = cursor + height - 2
+            cursor = cursor + HEIGHT - 2
             if cursor >= len(echoareas):
                 cursor = len(echoareas) - 1
-            if cursor - start > height - 3:
-                start = start + height - 2
-                if start > len(echoareas) - height + 2:
-                    start = len(echoareas) - height + 2
+            if cursor - start > HEIGHT - 3:
+                start = start + HEIGHT - 2
+                if start > len(echoareas) - HEIGHT + 2:
+                    start = len(echoareas) - HEIGHT + 2
         elif key in keys.s_home:
             cursor = 0
             start = 0
         elif key in keys.s_end:
             cursor = len(echoareas) - 1
-            if len(echoareas) >= height - 2:
-                start = len(echoareas) - height + 2
+            if len(echoareas) >= HEIGHT - 2:
+                start = len(echoareas) - HEIGHT + 2
         elif key in keys.s_get:
             terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -479,8 +479,8 @@ def show_echo_selector_screen():
             stdscr.clear()
             counts = rescan_counts(echoareas)
             cursor = find_new(0)
-            if cursor >= height - 2:
-                start = cursor - height + 3
+            if cursor >= HEIGHT - 2:
+                start = cursor - HEIGHT + 3
             if cursor - start <= 0:
                 start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
@@ -521,8 +521,8 @@ def show_echo_selector_screen():
             if next_echoarea:
                 counts = rescan_counts(echoareas)
                 cursor = find_new(cursor)
-                if cursor - start > height - 3:
-                    start = cursor - height + 3
+                if cursor - start > HEIGHT - 3:
+                    start = cursor - HEIGHT + 3
                 next_echoarea = False
         elif key in keys.s_out:
             out_length = get_out_length()
@@ -607,7 +607,7 @@ def render_token(token: parser.Token, y, x, offset):
                 stdscr.addstr(y + i, x, line, attr)
         except curses.error as ex:
             raise Exception(
-                "(w=" + str(width) + "; h=" + str(height) + ")"
+                "(w=" + str(WIDTH) + "; h=" + str(HEIGHT) + ")"
                 + " y=" + str(y) + "+" + str(i) + ";"
                 + " x=" + str(x) + ";"
                 + " token=" + token.type + ";"
@@ -618,24 +618,24 @@ def render_token(token: parser.Token, y, x, offset):
             x = 0  # new line in multiline token -- carriage return
         else:
             x += len(line)  # last/single line -- move caret in line
-        if y + i + 1 >= height - 1:
+        if y + i + 1 >= HEIGHT - 1:
             return y + i, x
     return y + (len(token.render) - 1) - offset, x
 
 
 def draw_reader(echo: str, msgid, out):
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * width, color)
-    stdscr.insstr(4, 0, "─" * width, color)
+    stdscr.insstr(0, 0, "─" * WIDTH, color)
+    stdscr.insstr(4, 0, "─" * WIDTH, color)
     color = get_color("statusline")
-    stdscr.insstr(height - 1, 0, " " * width, color)
+    stdscr.insstr(HEIGHT - 1, 0, " " * WIDTH, color)
     if out:
         draw_title(0, 0, echo)
         if msgid.endswith(".out"):
             ns = "не отправлено"
-            draw_title(4, width - len(ns) - 2, ns)
+            draw_title(4, WIDTH - len(ns) - 2, ns)
     else:
-        if width >= 80:
+        if WIDTH >= 80:
             draw_title(0, 0, echo + " / " + msgid)
         else:
             draw_title(0, 0, echo)
@@ -693,12 +693,12 @@ def draw_message_box(smsg, wait):
     if wait:
         maxlen = max(len(any_key), maxlen)
         msgwin = curses.newwin(len(msg) + 4, maxlen + 2,
-                               int(height / 2 - 2),
-                               int(width / 2 - maxlen / 2 - 2))
+                               int(HEIGHT / 2 - 2),
+                               int(WIDTH / 2 - maxlen / 2 - 2))
     else:
         msgwin = curses.newwin(len(msg) + 2, maxlen + 2,
-                               int(height / 2 - 2),
-                               int(width / 2 - maxlen / 2 - 2))
+                               int(HEIGHT / 2 - 2),
+                               int(WIDTH / 2 - maxlen / 2 - 2))
     msgwin.bkgd(' ', get_color("text"))
     msgwin.attrset(get_color("border"))
     msgwin.border()
@@ -758,11 +758,11 @@ def quote(to):
 
 
 def show_subject(subject):
-    if len(subject) > width - 8:
+    if len(subject) > WIDTH - 8:
         msg = ""
         line = ""
         for word in subject.split(" "):
-            if len(line + word) <= width - 4:
+            if len(line + word) <= WIDTH - 4:
                 line = line + word + " "
             else:
                 msg = msg + line + "\n"
@@ -801,13 +801,13 @@ def get_msg(msgid):
 
 def show_menu(title, items):
     h = len(items)
-    w = 0 if not items else min(width - 3, max(map(lambda it: len(it), items)))
+    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it), items)))
     e = "Esc - отмена"
     if w < len(title):
         w = len(title) + 2
     menu_win = curses.newwin(h + 2, w + 2,
-                             int(height / 2 - h / 2 - 2),
-                             int(width / 2 - w / 2 - 2))
+                             int(HEIGHT / 2 - h / 2 - 2),
+                             int(WIDTH / 2 - w / 2 - 2))
     menu_win.attrset(get_color("border"))
     menu_win.border()
     color = get_color("border")
@@ -893,11 +893,11 @@ def echo_reader(echo: config.Echo,
     else:
         msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
         size = "0b"
-    scroll_view = height - 5 - 1  # screen height - header - status line
+    scroll_view = HEIGHT - 5 - 1  # screen height - header - status line
 
     def prerender(msgbody):
         tokens = parser.tokenize(msgbody)
-        b_height = parser.prerender(tokens, width, scroll_view)
+        b_height = parser.prerender(tokens, WIDTH, scroll_view)
         thumb_size = calc_scroll_thumb_size(b_height, scroll_view)
         return tokens, b_height, thumb_size
 
@@ -909,7 +909,7 @@ def echo_reader(echo: config.Echo,
     while go:
         if msgids:
             draw_reader(msg[1], msgids[msgn], out)
-            if width >= 80:
+            if WIDTH >= 80:
                 msg_string = ("Сообщение " + str(msgn + 1) + " из " + str(len(msgids))
                               + " (" + str(len(msgids) - msgn - 1) + " осталось)")
             else:
@@ -920,30 +920,30 @@ def echo_reader(echo: config.Echo,
                 dsc = "Черновики"
             else:
                 dsc = echo.desc
-            if dsc and width >= 80:
-                draw_title(0, width - 2 - len(dsc), dsc)
+            if dsc and WIDTH >= 80:
+                draw_title(0, WIDTH - 2 - len(dsc), dsc)
             color = get_color("text")
             if not out:
                 try:
                     fmt = "%d.%m.%y %H:%M"
-                    if width >= 80:
+                    if WIDTH >= 80:
                         fmt = "%d %b %Y %H:%M UTC"
                     msgtime = time.strftime(fmt, time.gmtime(int(msg[2])))
                 except ValueError:
                     msgtime = ""
-                if width >= 80:
+                if WIDTH >= 80:
                     stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
                     stdscr.addstr(1, 7, msg[3], color)
-                stdscr.addstr(1, width - len(msgtime) - 1, msgtime, color)
+                stdscr.addstr(1, WIDTH - len(msgtime) - 1, msgtime, color)
             else:
                 if cfg.nodes[node].to:
                     stdscr.addstr(1, 7, cfg.nodes[node].to[0], color)
             stdscr.addstr(2, 7, msg[5], color)
-            stdscr.addstr(3, 7, msg[6][:width - 8], color)
+            stdscr.addstr(3, 7, msg[6][:WIDTH - 8], color)
             draw_title(4, 0, size)
             tags = msg[0].split("/")
-            if "repto" in tags and 36 + len(size) < width:
+            if "repto" in tags and 36 + len(size) < WIDTH:
                 repto = tags[tags.index("repto") + 1].strip()
                 draw_title(4, len(size) + 3, "Ответ на " + repto)
             else:
@@ -951,8 +951,8 @@ def echo_reader(echo: config.Echo,
             # Render body
             tnum, offset = parser.find_visible_token(body_tokens, y)
             line_num = body_tokens[tnum].line_num
-            for i in range(5, height - 1):
-                stdscr.addstr(i, 0, " " * width, 1)
+            for i in range(5, HEIGHT - 1):
+                stdscr.addstr(i, 0, " " * WIDTH, 1)
             i = 5
             x = 0
             for token in body_tokens[tnum:]:
@@ -960,22 +960,22 @@ def echo_reader(echo: config.Echo,
                     line_num = token.line_num
                     i += 1
                     x = 0
-                if i >= height - 1:
+                if i >= HEIGHT - 1:
                     break
                 i, x = render_token(token, i, x, offset)
                 offset = 0  # required in the first partial multiline token only
             #
             stdscr.attrset(get_color("scrollbar"))
             if body_height > scroll_view:
-                for i in range(5, height - 1):
-                    stdscr.addstr(i, width - 1, "░")
+                for i in range(5, HEIGHT - 1):
+                    stdscr.addstr(i, WIDTH - 1, "░")
                 thumb_y = int((y / (body_height - scroll_view))
                               * (scroll_view - scroll_thumb_size)
                               + 0.49)
                 thumb_y = max(0, min(scroll_view - scroll_thumb_size, thumb_y))
                 for i in range(thumb_y + 5, thumb_y + 5 + scroll_thumb_size):
-                    if i < height - 1:
-                        stdscr.addstr(i, width - 1, "█")
+                    if i < HEIGHT - 1:
+                        stdscr.addstr(i, WIDTH - 1, "█")
         else:
             draw_reader(echo.name, "", out)
         stdscr.attrset(get_color("border"))
@@ -984,7 +984,7 @@ def echo_reader(echo: config.Echo,
         if key == curses.KEY_RESIZE:
             y = 0
             get_term_size()
-            scroll_view = height - 5 - 1
+            scroll_view = HEIGHT - 5 - 1
             if msgids:
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             stdscr.clear()
@@ -1055,7 +1055,7 @@ def echo_reader(echo: config.Echo,
             if msgids and body_height > scroll_view:
                 y = body_height - scroll_view
         elif key in keys.r_ukeys:
-            if len(msgids) == 0 or y >= body_height - height + 5:
+            if len(msgids) == 0 or y >= body_height - HEIGHT + 5:
                 y = 0
                 if msgn == len(msgids) - 1 or len(msgids) == 0:
                     next_echoarea = True
@@ -1147,7 +1147,7 @@ def echo_reader(echo: config.Echo,
                 call_editor()
         elif key in keys.r_subj:
             show_subject(msg[6])
-        elif key in keys.r_info and not out and width < 80:
+        elif key in keys.r_info and not out and WIDTH < 80:
             message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
@@ -1247,12 +1247,11 @@ def echo_reader(echo: config.Echo,
     return done
 
 
-# noinspection PyUnusedLocal
-def draw_msg_list(echo, lst, msgn):
+def draw_msg_list(echo):
     stdscr.clear()
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * width, color)
-    if width >= 80:
+    stdscr.insstr(0, 0, "─" * WIDTH, color)
+    if WIDTH >= 80:
         draw_title(0, 0, "Список сообщений в конференции " + echo)
     else:
         draw_title(0, 0, echo)
@@ -1260,17 +1259,17 @@ def draw_msg_list(echo, lst, msgn):
 
 def show_msg_list_screen(echo: config.Echo, msgn):
     lst = api.get_msg_list_data(echo.name)
-    draw_msg_list(echo.name, lst, msgn)
+    draw_msg_list(echo.name)
     echo_length = len(lst)
-    if echo_length <= height - 1:
+    if echo_length <= HEIGHT - 1:
         start = 0
         end = echo_length
-    elif msgn + height - 1 < echo_length:
+    elif msgn + HEIGHT - 1 < echo_length:
         start = msgn
-        end = msgn + height - 1
+        end = msgn + HEIGHT - 1
     else:
-        start = echo_length - height + 1
-        end = start + height - 1
+        start = echo_length - HEIGHT + 1
+        end = start + HEIGHT - 1
     y = msgn - start
     while True:
         n = 1
@@ -1281,8 +1280,8 @@ def show_msg_list_screen(echo: config.Echo, msgn):
                 color = get_color("text")
             draw_cursor(n - 1, color)
             stdscr.addstr(n, 0, lst[i][1], color)
-            stdscr.addstr(n, 16, lst[i][2][:width - 26], color)
-            stdscr.insstr(n, width - 10, lst[i][3], color)
+            stdscr.addstr(n, 16, lst[i][2][:WIDTH - 26], color)
+            stdscr.insstr(n, WIDTH - 10, lst[i][3], color)
             n += 1
         key = stdscr.getch()
         if key in keys.s_up:
@@ -1297,29 +1296,29 @@ def show_msg_list_screen(echo: config.Echo, msgn):
             if y + start + 1 > end and y + start < echo_length:
                 start += 1
                 end += 1
-            if y > height - 2:
-                y = height - 2
+            if y > HEIGHT - 2:
+                y = HEIGHT - 2
             y = min(y, echo_length - 1)
         elif key in keys.s_ppage:
             if y == 0:
-                start = max(0, start - height + 1)
-                end = min(echo_length, start + height - 1)
+                start = max(0, start - HEIGHT + 1)
+                end = min(echo_length, start + HEIGHT - 1)
             y = 0
         elif key in keys.s_npage:
-            if y == height - 2:
-                start = start + height - 1
-                if start > echo_length - height + 1:
-                    start = echo_length - height + 1
-                end = start + height - 1
-            y = min(echo_length - 1, height - 2)
+            if y == HEIGHT - 2:
+                start = start + HEIGHT - 1
+                if start > echo_length - HEIGHT + 1:
+                    start = echo_length - HEIGHT + 1
+                end = start + HEIGHT - 1
+            y = min(echo_length - 1, HEIGHT - 2)
         elif key in keys.s_home:
             y = 0
             start = 0
-            end = min(echo_length, height - 1)
+            end = min(echo_length, HEIGHT - 1)
         elif key in keys.s_end:
-            y = min(echo_length - 1, height - 2)
-            start = max(0, echo_length - height + 1)
-            end = min(echo_length, start + height - 1)
+            y = min(echo_length - 1, HEIGHT - 2)
+            start = max(0, echo_length - HEIGHT + 1)
+            end = min(echo_length, start + HEIGHT - 1)
         elif key in keys.s_enter:
             return y + start  #
         elif key in keys.r_quit:
