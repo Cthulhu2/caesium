@@ -82,7 +82,9 @@ def get_favorites_list():
 
 
 def remove_from_favorites(msgid):
-    favorites = filter(lambda i: not i.startswith(msgid), get_favorites_list())
+    with codecs.open(storage + "favorites.aio", "r", "utf-8") as f:
+        favorites = list(filter(lambda it: it and not it.startswith(msgid + ":"),
+                                f.read().split("\n")))
     with codecs.open(storage + "favorites.aio", "w", "utf-8") as f:
         f.write("\n".join(favorites))
 

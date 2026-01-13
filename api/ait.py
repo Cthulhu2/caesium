@@ -84,11 +84,12 @@ def get_favorites_list():
 
 
 def remove_from_favorites(msgid):
-    favorites_list = get_favorites_list()
+    with codecs.open(storage + "favorites.mat", "r", "utf-8") as f:
+        favorites_list = f.read().split("\n")
     favorites = []
     favorites_index = []
     for item in favorites_list:
-        if not item.startswith(msgid):
+        if not item.startswith(msgid + ":"):
             favorites.append(item)
             favorites_index.append(item.split(":")[0])
     with codecs.open(storage + "favorites.iat", "w", "utf-8") as f:

@@ -150,6 +150,23 @@ def test_save_favorites(api):
 
 # noinspection PyTestParametrized
 @pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_remove_from_favorites(api):
+    msg1 = ["ii/ok", "test.local", "0", "admin", "node,1", "All", "Subj", "", "Msg1", "Row2"]
+    msg2 = ["ii/ok", "test.local", "0", "admin", "node,1", "user", "Subj", "", "Msg2", "Row2"]
+    api.save_message([("1" * 20, msg1), ("2" * 20, msg2)], "node", ["user"])
+    api.save_to_favorites("1" * 20, msg1)
+    api.save_to_favorites("2" * 20, msg2)
+    #
+    api.remove_from_favorites("1" * 20)
+    #
+    favorites = api.get_favorites_list()
+    assert favorites == ["2" * 20]
+    msg, size = api.read_msg("2" * 20, "favorites")
+    assert msg == msg2
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
 def test_non_printable(api):
     msgid = "nFaF9Z8R81USSRIE7YUF"
     msgbody = ("aWkvb2sKaWRlYy50YWxrcwoxNzI5NjA0OTcyCnJldm9sdGVj"
