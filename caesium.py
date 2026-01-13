@@ -853,13 +853,6 @@ def open_link(link):
         message_box("Не удалось запустить Интернет-браузер")
 
 
-def get_out(drafts=False):
-    if drafts:
-        return get_out_msgids(True)
-    else:
-        return get_out_msgids()
-
-
 def echo_reader(echo: config.Echo,
                 last, archive, favorites, carbonarea, drafts=False):
     global lasts, next_echoarea
@@ -1153,7 +1146,7 @@ def echo_reader(echo: config.Echo,
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + cfg.nodes[node].nodename + "/" + msgids[msgn], "temp")
                 call_editor(msgids[msgn])
-                msgids = get_out(drafts=drafts)
+                msgids = get_out_msgids(drafts)
                 if msgn > len(msgids) - 1:
                     msgn = len(msgids) - 1
                 if msgids:
@@ -1206,7 +1199,7 @@ def echo_reader(echo: config.Echo,
             node_dir = "out/" + cfg.nodes[node].nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
-            msgids = get_out(drafts=drafts)
+            msgids = get_out_msgids(drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if msgids:
@@ -1218,7 +1211,7 @@ def echo_reader(echo: config.Echo,
             node_dir = "out/" + cfg.nodes[node].nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
-            msgids = get_out(drafts=drafts)
+            msgids = get_out_msgids(drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if msgids:

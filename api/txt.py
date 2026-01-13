@@ -119,7 +119,6 @@ def remove_echoarea(echoarea):
         os.remove(f_echo)
 
 
-# noinspection PyUnusedLocal
 def get_msg_list_data(echoarea):
     msgids = get_echo_msgids(echoarea)
     lst = []
