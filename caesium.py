@@ -511,12 +511,7 @@ def show_echo_selector_screen():
                 last = last + 1
             if last >= echo_length:
                 last = echo_length
-            if cursor == 1:
-                go = not echo_reader(echoareas[cursor], last, archive, True, True)
-            elif cursor == 0 or not echoareas[cursor].sync:
-                go = not echo_reader(echoareas[cursor], last, archive, True, False)
-            else:
-                go = not echo_reader(echoareas[cursor], last, archive, False, False)
+            go = not echo_reader(echoareas[cursor], last, archive)
             counts_rescan = True
             if next_echoarea:
                 counts = rescan_counts(echoareas)
@@ -527,11 +522,11 @@ def show_echo_selector_screen():
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False, False)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, False)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False, False, True)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive, True)
         elif key in keys.s_nnode:
             archive = False
             node = node + 1
@@ -853,17 +848,18 @@ def open_link(link):
         message_box("Не удалось запустить Интернет-браузер")
 
 
-def echo_reader(echo: config.Echo,
-                last, archive, favorites, carbonarea, drafts=False):
+def echo_reader(echo: config.Echo, last, archive, drafts=False):
     global lasts, next_echoarea
     stdscr.clear()
     stdscr.attrset(get_color("border"))
     y = 0
     msgn = last
     out = (echo == config.ECHO_OUT)
+    favorites = (echo == config.ECHO_FAVORITES)
+    carbonarea = (echo == config.ECHO_CARBON)
     if out:
         msgids = get_out_msgids(drafts)
-    elif favorites and not carbonarea:
+    elif favorites:
         msgids = api.get_favorites_list()
     elif carbonarea:
         msgids = api.get_carbonarea()
@@ -1089,7 +1085,7 @@ def echo_reader(echo: config.Echo,
                     msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_ins and not archive and not out:
-            if not favorites:
+            if not favorites and not carbonarea:
                 with open("template.txt", "r") as t:
                     with open("temp", "w") as f:
                         f.write(echo.name + "\n")
@@ -1158,7 +1154,7 @@ def echo_reader(echo: config.Echo,
             else:
                 message_box("Сообщение уже отправлено")
                 stdscr.clear()
-        elif key in keys.f_delete and favorites and not carbonarea:
+        elif key in keys.f_delete and favorites:
             if msgids:
                 api.remove_from_favorites(msgids[msgn])
                 draw_message_box("Подождите", False)
