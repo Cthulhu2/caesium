@@ -586,6 +586,8 @@ def read_out_msg(msgid):
 
 def render_token(token: parser.Token, y, x, offset):
     for i, line in enumerate(token.render[offset:]):
+        if y + i >= HEIGHT - 1:
+            return y + i, x
         attr = get_color("text")
         if token.type in ("HEADER", "URL", "QUOTE1", "QUOTE2",
                           "COMMENT", "CODE", "ORIGIN"):
@@ -606,8 +608,6 @@ def render_token(token: parser.Token, y, x, offset):
             x = 0  # new line in multiline token -- carriage return
         else:
             x += len(line)  # last/single line -- move caret in line
-        if y + i + 1 >= HEIGHT - 1:
-            return y + i, x
     return y + (len(token.render) - 1) - offset, x
 
 

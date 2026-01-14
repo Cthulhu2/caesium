@@ -277,27 +277,36 @@ class ScrMock:
     def __init__(self, h, w):
         self.height = h
         self.width = w
+        self.text = [["" for _ in range(w)]
+                     for _ in range(h)]
+
+    def to_str(self):
+        return list(map(lambda line: "".join(line), self.text))
 
     def addstr(self, y, x, line):
         assert y < self.height
+        assert x < self.width
         assert x + len(line) <= self.width
+        for i, ch in enumerate(line):
+            self.text[y][x + i] = ch
 
 
 # TODO: Make render_token testable
-def _render_token(scr, token: parser.Token, y, x, offset):
+def _render_token(scr, token: parser.Token, y, x, offset, height):
     for i, line in enumerate(token.render[offset:]):
-        scr.addstr(y + i, x, line)
+        if y + i >= height - 1:
+            return y + i, x
+        if line:
+            scr.addstr(y + i, x, line)
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return
         else:
             x += len(line)  # last/single line -- move caret in line
-        if y + i + 1 >= 30 - 1:
-            return y + i, x
     return y + (len(token.render) - 1) - offset, x
 
 
-def test_render_token():
+def test_render_token_right_border_new_line():
     tokens = parser.tokenize([
         "aaaaaa> aaa-aa aaaaa aaa aaaaaaaaaa https://aaaa.aaaaaaaa.aa/. ",
         "aaaaaa> aaaaa aaaaaaaa aaaa https://aaaaaa.com/aaaaaaaaaa/aaaaaaaaaaaa-aaa",
@@ -306,13 +315,42 @@ def test_render_token():
     parser.prerender(tokens, width=62, height=30)
     i = 5
     x = 0
-    scr = ScrMock(30, 62)
+    height = 30
+    scr = ScrMock(height, 62)
     line_num = 0
     for token in tokens:
         if token.line_num > line_num:
             line_num = token.line_num
             i += 1
             x = 0
-        if i >= 30 - 1:
+        if i >= height - 1:
             break
-        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0)
+        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
+                             height=height)
+    text = scr.to_str()
+    assert text[6] == ". "
+
+
+def test_render_token_bottom_inline_overlapped():
+    tokens = parser.tokenize([
+        "1234567890 234 678 http://a.",
+    ])
+    parser.prerender(tokens, width=10, height=30)
+    i = 5
+    x = 0
+    height = 8  # 5 header + 2 body + 1 status line
+    scr = ScrMock(height, 10)
+    line_num = 0
+    for token in tokens:
+        if token.line_num > line_num:
+            line_num = token.line_num
+            i += 1
+            x = 0
+        if i >= height - 1:
+            break
+        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
+                             height=height)
+    text = scr.to_str()
+    assert text[5] == "1234567890"
+    assert text[6] == "234 678 "
+    assert text[7] == ""  # status line
