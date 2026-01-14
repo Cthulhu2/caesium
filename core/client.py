@@ -26,7 +26,7 @@ def _do_request(request):
 def get_bundle(url, msgids):
     req = urllib.request.Request(url + "u/m/" + msgids)
     data = _do_request(req).split("\n")
-    return list(filter(lambda it: it, data))
+    return list(filter(None, data))
 
 
 def get_msg_list(url, echoareas):  # type: (str, List[str]) -> List[str]
@@ -36,7 +36,7 @@ def get_msg_list(url, echoareas):  # type: (str, List[str]) -> List[str]
     req = urllib.request.Request(url + "u/e/" + echoareas, method="GET")
     data = _do_request(req)
     data = data.split("\n")
-    return list(filter(lambda it: it, data))
+    return list(filter(None, data))
 
 
 def send_msg(url, auth, msg_b64):  # type: (str, str, str) -> str
@@ -52,7 +52,8 @@ def get_echo_count(url, echoareas):  # type: (str, List[str]) -> dict[str, int]
     req = urllib.request.Request(url + "x/c/" + echoareas, method="GET")
     data = _do_request(req).split("\n")
     echo_counts = {it[0]: int(it[1])
-                   for it in filter(lambda it: it, data)}
+                   for it in map(lambda it: it.split(":"),
+                                 filter(None, data))}
     return echo_counts
 
 
@@ -63,5 +64,6 @@ def get_echo_hash(url, echoareas):  # type: (str, List[str]) -> dict[str, str]
     req = urllib.request.Request(url + "x/h/" + echoareas, method="GET")
     data = _do_request(req).split("\n")
     echo_hash = {it[0]: it[1]
-                 for it in filter(lambda it: it, data)}
+                 for it in map(lambda it: it.split(":"),
+                               filter(None, data))}
     return echo_hash
