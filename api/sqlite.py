@@ -149,12 +149,7 @@ def read_msg(msgid, echoarea):
                     (msgid,)).fetchone()
     msg = "\n".join((row[0], row[1], str(row[2]), row[3],
                      row[4], row[5], row[6], row[7]))
+    size = 0
     if msg:
         size = len(msg.encode("utf-8"))
-    else:
-        size = 0
-    if size < 1024:
-        size = str(size) + " B"
-    else:
-        size = str(format(size / 1024, ".2f")) + " KB"
     return msg.split("\n"), size

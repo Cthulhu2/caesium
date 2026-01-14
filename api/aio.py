@@ -117,14 +117,9 @@ def read_msg(msgid, echoarea):
         index = list(filter(lambda i: i.startswith(msgid),
                             f.read().split("\n")))
     msg = None
+    size = 0
     if index:
         msg = ":".join(index[-1].split(":")[1:]).split(chr(15))
     if msg:
         size = len("\n".join(msg).encode("utf-8"))
-    else:
-        size = 0
-    if size < 1024:
-        size = str(size) + " B"
-    else:
-        size = str(format(size / 1024, ".2f")) + " KB"
     return msg, size

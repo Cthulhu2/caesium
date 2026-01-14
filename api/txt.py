@@ -151,8 +151,4 @@ def read_msg(msgid, echoarea):
     with open(storage + "msg/" + msgid, "r") as f:
         msg = f.read().split("\n")
     size = os.stat(storage + "msg/" + msgid).st_size
-    if size < 1024:
-        size = str(size) + " B"
-    else:
-        size = str(format(size / 1024, ".2f")) + " KB"
     return msg, size

@@ -28,10 +28,16 @@ def msgn_status(msgids, msgn, width):  # type: (List[str], int, int) -> str
     return "%d/%d [%d]" % (msgn + 1, total, remains)
 
 
-def msg_strftime(mtime, width):  # type: (str, int) -> str
-    if not str.isdigit(mtime):
+def msg_strftime(msg_time_sec, width):  # type: (str, int) -> str
+    if not str.isdigit(msg_time_sec):
         return ""
-    mtime = time.gmtime(int(mtime))
+    msg_time_sec = time.gmtime(int(msg_time_sec))
     if width >= 80:
-        return time.strftime("%d %b %Y %H:%M UTC", mtime)
-    return time.strftime("%d.%m.%y %H:%M", mtime)
+        return time.strftime("%d %b %Y %H:%M UTC", msg_time_sec)
+    return time.strftime("%d.%m.%y %H:%M", msg_time_sec)
+
+
+def msg_strfsize(size_bytes):  # type: (int) -> str
+    if size_bytes < 1024:
+        return str(size_bytes) + " B"
+    return str(format(size_bytes / 1024, ".2f")) + " KiB"

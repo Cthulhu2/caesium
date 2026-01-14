@@ -11,6 +11,7 @@ import subprocess
 import sys
 from datetime import datetime
 from shutil import copyfile
+from typing import List
 
 from core import parser, client, config, utils
 from core.config import get_color
@@ -550,8 +551,8 @@ def show_echo_selector_screen():
         echo_cursor = cursor
 
 
-def read_out_msg(msgid):
-    node_dir = "out/" + cfg.nodes[node].nodename
+def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
+    node_dir = "out/" + node_.nodename
     with open(node_dir + "/" + msgid, "r") as f:
         temp = f.read().splitlines()
     msg = ["",
@@ -565,10 +566,6 @@ def read_out_msg(msgid):
         if not (line.startswith("@repto:")):
             msg.append(line)
     size = os.stat(node_dir + "/" + msgid).st_size
-    if size < 1024:
-        size = str(size) + " B"
-    else:
-        size = str(int(size / 1024 * 10) / 10) + " KB"
     return msg, size
 
 
@@ -787,12 +784,8 @@ def show_menu(title, items):
     while True:
         for i, item in enumerate(items, start=1):
             color = get_color("cursor" if i == y else "text")
-            for x in range(1, w + 1):
-                menu_win.addstr(i, x, " ", color)
-            if len(item) < w - 2:
-                menu_win.addstr(i, 1, item, color)
-            else:
-                menu_win.addstr(i, 1, item[:w], color)
+            menu_win.addstr(i, 1, " " * w, color)
+            menu_win.addstr(i, 1, item[:w], color)
         menu_win.refresh()
         key = stdscr.getch()
         if key in keys.r_up:
@@ -836,9 +829,10 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
         msgids = api.get_echo_msgids(echo.name)
     if msgn > len(msgids) - 1:
         msgn = len(msgids) - 1
+    cur_node = cfg.nodes[node]  # type: config.Node
     if msgids:
         if out:
-            msg, size = read_out_msg(msgids[msgn])
+            msg, size = read_out_msg(msgids[msgn], cur_node)
         else:
             msg, size = api.read_msg(msgids[msgn], echo.name)
             while msg[3] in cfg.twit or msg[5] in cfg.twit:
@@ -850,7 +844,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
 
     else:
         msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
-        size = "0b"
+        size = 0
     scroll_view = HEIGHT - 5 - 1  # screen height - header - status line
 
     def prerender(msgbody):
@@ -883,15 +877,16 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 msgtime = utils.msg_strftime(msg[2], WIDTH)
                 stdscr.addstr(1, WIDTH - len(msgtime) - 1, msgtime, color)
             else:
-                if cfg.nodes[node].to:
-                    stdscr.addstr(1, 7, cfg.nodes[node].to[0], color)
+                if cur_node.to:
+                    stdscr.addstr(1, 7, cur_node.to[0], color)
             stdscr.addstr(2, 7, msg[5], color)
             stdscr.addstr(3, 7, msg[6][:WIDTH - 8], color)
-            draw_title(4, 0, size)
+            s_size = utils.msg_strfsize(size)
+            draw_title(4, 0, s_size)
             tags = msg[0].split("/")
-            if "repto" in tags and 36 + len(size) < WIDTH:
+            if "repto" in tags and 36 + len(s_size) < WIDTH:
                 repto = tags[tags.index("repto") + 1].strip()
-                draw_title(4, len(size) + 3, "Ответ на " + repto)
+                draw_title(4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
             # Render body
@@ -938,7 +933,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 msgn = msgn - 1
                 stack.clear()
                 if out:
-                    msg, size = read_out_msg(msgids[msgn])
+                    msg, size = read_out_msg(msgids[msgn], cur_node)
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo.name)
                 tmp = msgn
@@ -955,7 +950,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 msgn = msgn + 1
                 stack.clear()
                 if out:
-                    msg, size = read_out_msg(msgids[msgn])
+                    msg, size = read_out_msg(msgids[msgn], cur_node)
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo.name)
                 while msg[3] in cfg.twit or msg[5] in cfg.twit:
@@ -1008,7 +1003,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                     msgn = msgn + 1
                     stack.clear()
                     if out:
-                        msg, size = read_out_msg(msgids[msgn])
+                        msg, size = read_out_msg(msgids[msgn], cur_node)
                     else:
                         msg, size = api.read_msg(msgids[msgn], echo.name)
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1025,7 +1020,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 msgn = 0
                 stack.clear()
                 if out:
-                    msg, size = read_out_msg(msgids[msgn])
+                    msg, size = read_out_msg(msgids[msgn], cur_node)
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1035,7 +1030,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 msgn = len(msgids) - 1
                 stack.clear()
                 if out:
-                    msg, size = read_out_msg(msgids[msgn])
+                    msg, size = read_out_msg(msgids[msgn], cur_node)
                 else:
                     msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1095,13 +1090,13 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
             message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
-                copyfile("out/" + cfg.nodes[node].nodename + "/" + msgids[msgn], "temp")
+                copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
                 call_editor(msgids[msgn])
                 msgids = get_out_msgids(drafts)
                 if msgn > len(msgids) - 1:
                     msgn = len(msgids) - 1
                 if msgids:
-                    msg, size = read_out_msg(msgids[msgn])
+                    msg, size = read_out_msg(msgids[msgn], cur_node)
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 else:
                     go = False
@@ -1124,7 +1119,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 else:
                     body_tokens, body_height, scroll_thumb_size = prerender([""])
                 stdscr.clear()
-        elif key in keys.r_getmsg and size == "0b":
+        elif key in keys.r_getmsg and size == 0:
             try:
                 get_msg(msgids[msgn])
                 draw_message_box("Подождите", False)
@@ -1147,26 +1142,26 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                     open_link(links[i - 1])
             stdscr.clear()
         elif key in keys.r_to_out and drafts:
-            node_dir = "out/" + cfg.nodes[node].nodename
+            node_dir = "out/" + cur_node.nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
             msgids = get_out_msgids(drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if msgids:
-                msg, size = read_out_msg(msgids[msgn])
+                msg, size = read_out_msg(msgids[msgn], cur_node)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
                 go = False
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            node_dir = "out/" + cfg.nodes[node].nodename
+            node_dir = "out/" + cur_node.nodename
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
             msgids = get_out_msgids(drafts)
             if msgn > len(msgids) - 1:
                 msgn = len(msgids) - 1
             if msgids:
-                msg, size = read_out_msg(msgids[msgn])
+                msg, size = read_out_msg(msgids[msgn], cur_node)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             else:
                 go = False
