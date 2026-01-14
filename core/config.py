@@ -42,7 +42,7 @@ ECHO_CARBON = Echo("carbonarea", "Карбонка", False)
 class Node:
     nodename: str = "untitled node"
     echoareas: List[Echo] = dataclasses.field(default_factory=list)
-    node: str = ""
+    node: str = ""  # base url
     auth: str = ""
     to: List[str] = dataclasses.field(default_factory=list)
     archive: List[Echo] = dataclasses.field(default_factory=list)

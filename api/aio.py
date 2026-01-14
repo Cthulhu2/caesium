@@ -78,7 +78,7 @@ def get_favorites_list():
         return []
     with codecs.open(storage + "favorites.aio", "r", "utf-8") as f:
         return list(map(lambda msg: msg.split(":")[0],
-                        filter(lambda it: it, f.read().split("\n"))))
+                        filter(None, f.read().split("\n"))))
 
 
 def remove_from_favorites(msgid):
@@ -98,7 +98,7 @@ def get_msg_list_data(echoarea):
     with codecs.open(storage + "%s.aio" % echoarea, "r", "utf-8") as f:
         lines = f.read().split("\n")
     lst = []
-    for msg in filter(lambda line: line, lines):
+    for msg in filter(None, lines):
         rawmsg = msg.split(chr(15))
         lst.append([
             rawmsg[0].split(":")[0],

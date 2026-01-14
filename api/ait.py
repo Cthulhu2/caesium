@@ -42,14 +42,14 @@ def save_to_favorites(msgid, msg):
 def get_echo_msgids(echo):
     if os.path.exists(storage + echo + ".iat"):
         with codecs.open(storage + echo + ".iat", "r", "utf-8") as f:
-            return list(filter(lambda line: line, f.read().splitlines()))
+            return list(filter(None, f.read().splitlines()))
     return []
 
 
 def get_carbonarea():
     if os.path.exists(storage + "carbonarea.iat"):
         with open(storage + "carbonarea.iat", "r") as f:
-            return list(filter(lambda line: line, f.read().splitlines()))
+            return list(filter(None, f.read().splitlines()))
     return []
 
 
@@ -108,7 +108,7 @@ def remove_echoarea(echoarea):
 def get_msg_list_data(echoarea):
     lst = []
     with codecs.open(storage + "%s.mat" % echoarea, "r", "utf-8") as f:
-        for msg in filter(lambda line: line, f.read().split("\n")):
+        for msg in filter(None, f.read().split("\n")):
             rawmsg = msg.split(chr(15))
             lst.append([
                 rawmsg[0].split(":")[0],

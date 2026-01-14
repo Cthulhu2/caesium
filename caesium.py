@@ -9,11 +9,10 @@ import os
 import pickle
 import subprocess
 import sys
-import time
 from datetime import datetime
 from shutil import copyfile
 
-from core import parser, client, config
+from core import parser, client, config, utils
 from core.config import get_color
 
 # TODO: Add http/https/socks proxy support
@@ -29,8 +28,8 @@ if os.path.exists("lasts.lst"):
 blacklist = []
 if os.path.exists("blacklist.txt"):
     with open("blacklist.txt", "r") as bl:
-        blacklist = list(filter(lambda it: it,
-                                map(lambda it: it.strip(), bl.readlines())))
+        blacklist = list(filter(None, map(lambda it: it.strip(),
+                                          bl.readlines())))
 counts = []
 counts_rescan = True
 echo_counts = {}
@@ -70,11 +69,6 @@ def check_directories(storage_api):
 #
 # Взаимодействие с нодой
 #
-def separate(fetch_list, step=20):
-    for x in range(0, len(fetch_list), step):
-        yield fetch_list[x:x + step]
-
-
 def save_out(draft=False):
     with codecs.open("temp", "r", "utf-8") as f:
         new = f.read().strip().replace("\r", "").split("\n")
@@ -169,23 +163,14 @@ def send_mail():
         print("\nОшибка: не удаётся связаться с нодой. " + str(ex))
 
 
-def get_msg_list():
-    echoareas = list(map(
-        lambda echo: echo.name,  # echo name
-        filter(lambda echo: echo.sync,  # skip stat, carbonarea, favorites
-               cfg.nodes[node].echoareas)))
-    return client.get_msg_list(cfg.nodes[node].node, echoareas)
-
-
 def debundle(bundle):
     messages = []
-    for msg in bundle:
-        if msg:
-            m = msg.split(":")
-            msgid = m[0]
-            if len(msgid) == 20 and m[1]:
-                msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
-                messages.append([msgid, msgbody])
+    for msg in filter(None, bundle):
+        m = msg.split(":")
+        msgid = m[0]
+        if len(msgid) == 20 and m[1]:
+            msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
+            messages.append([msgid, msgbody])
     if messages:
         api.save_message(messages, node, cfg.nodes[node].to)
 
@@ -193,7 +178,10 @@ def debundle(bundle):
 def get_mail():
     fetch_msg_list = []
     print("Получение индекса от ноды...")
-    remote_msg_list = get_msg_list()
+    cur_node = cfg.nodes[node]
+    echoareas = list(map(lambda e: e.name, filter(lambda e: e.sync,
+                                                  cur_node.echoareas)))
+    remote_msg_list = client.get_msg_list(cur_node.node, echoareas)
     print("Построение разностного индекса...")
     local_index = None
     for line in remote_msg_list:
@@ -204,10 +192,10 @@ def get_mail():
     if fetch_msg_list:
         total = str(len(fetch_msg_list))
         count = 0
-        for get_list in separate(fetch_msg_list):
+        for get_list in utils.separate(fetch_msg_list):
             count += len(get_list)
             print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
-            debundle(client.get_bundle(cfg.nodes[node].node, "/".join(get_list)))
+            debundle(client.get_bundle(cur_node.node, "/".join(get_list)))
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
@@ -759,21 +747,9 @@ def show_subject(subject):
         message_box(msg)
 
 
-def calc_scroll_thumb_size(length, scroll_view):
-    if length > 0:
-        thumb_size = int(scroll_view * scroll_view / length + 0.49)
-        if thumb_size < 1:
-            thumb_size = 1
-    else:
-        thumb_size = 1
-    return thumb_size
-
-
 def get_msg(msgid):
     bundle = client.get_bundle(cfg.nodes[node].node, [msgid])
-    for msg in bundle:
-        if not msg:
-            continue
+    for msg in filter(None, bundle):
         m = msg.split(":")
         msgid = m[0]
         if len(msgid) == 20 and m[1]:
@@ -880,7 +856,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
     def prerender(msgbody):
         tokens = parser.tokenize(msgbody)
         b_height = parser.prerender(tokens, WIDTH, scroll_view)
-        thumb_size = calc_scroll_thumb_size(b_height, scroll_view)
+        thumb_size = utils.scroll_thumb_size(b_height, scroll_view)
         return tokens, b_height, thumb_size
 
     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -891,13 +867,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
     while go:
         if msgids:
             draw_reader(msg[1], msgids[msgn], out)
-            if WIDTH >= 80:
-                msg_string = ("Сообщение " + str(msgn + 1) + " из " + str(len(msgids))
-                              + " (" + str(len(msgids) - msgn - 1) + " осталось)")
-            else:
-                msg_string = (str(msgn + 1) + "/" + str(len(msgids))
-                              + " [" + str(len(msgids) - msgn - 1) + "]")
-            draw_status(len(version) + 2, msg_string)
+            draw_status(len(version) + 2, utils.msgn_status(msgids, msgn, WIDTH))
             if drafts:
                 dsc = "Черновики"
             else:
@@ -906,17 +876,11 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                 draw_title(0, WIDTH - 2 - len(dsc), dsc)
             color = get_color("text")
             if not out:
-                try:
-                    fmt = "%d.%m.%y %H:%M"
-                    if WIDTH >= 80:
-                        fmt = "%d %b %Y %H:%M UTC"
-                    msgtime = time.strftime(fmt, time.gmtime(int(msg[2])))
-                except ValueError:
-                    msgtime = ""
                 if WIDTH >= 80:
                     stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
                     stdscr.addstr(1, 7, msg[3], color)
+                msgtime = utils.msg_strftime(msg[2], WIDTH)
                 stdscr.addstr(1, WIDTH - len(msgtime) - 1, msgtime, color)
             else:
                 if cfg.nodes[node].to:
@@ -951,10 +915,8 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
             if body_height > scroll_view:
                 for i in range(5, HEIGHT - 1):
                     stdscr.addstr(i, WIDTH - 1, "░")
-                thumb_y = int((y / (body_height - scroll_view))
-                              * (scroll_view - scroll_thumb_size)
-                              + 0.49)
-                thumb_y = max(0, min(scroll_view - scroll_thumb_size, thumb_y))
+                thumb_y = utils.scroll_thumb_pos(body_height, y, scroll_view,
+                                                 scroll_thumb_size)
                 for i in range(thumb_y + 5, thumb_y + 5 + scroll_thumb_size):
                     if i < HEIGHT - 1:
                         stdscr.addstr(i, WIDTH - 1, "█")
