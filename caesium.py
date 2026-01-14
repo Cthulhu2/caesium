@@ -268,20 +268,18 @@ def current_time():
     draw_status(WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"))
 
 
-# noinspection PyUnusedLocal
-def get_counts(new=False, favorites=False):
-    global echo_counts
-    for echoarea in cfg.nodes[node].echoareas:
+def get_counts(new=False):
+    for echo in cfg.nodes[node].echoareas:  # type: config.Echo
         if not new:
-            if echoarea.name not in echo_counts:
-                echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
+            if echo.name not in echo_counts:
+                echo_counts[echo.name] = api.get_echo_length(echo.name)
         else:
-            echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
-    for echoarea in cfg.nodes[node].archive:
-        if echoarea.name not in echo_counts:
-            echo_counts[echoarea.name] = api.get_echo_length(echoarea.name)
-    echo_counts["carbonarea"] = len(api.get_carbonarea())
-    echo_counts["favorites"] = len(api.get_favorites_list())
+            echo_counts[echo.name] = api.get_echo_length(echo.name)
+    for echo in cfg.nodes[node].archive:  # type: config.Echo
+        if echo.name not in echo_counts:
+            echo_counts[echo.name] = api.get_echo_length(echo.name)
+    echo_counts[config.ECHO_CARBON.name] = len(api.get_carbonarea())
+    echo_counts[config.ECHO_FAVORITES.name] = len(api.get_favorites_list())
 
 
 def rescan_counts(echoareas):
@@ -810,12 +808,11 @@ def open_link(link):
         message_box("Не удалось запустить Интернет-браузер")
 
 
-def echo_reader(echo: config.Echo, last, archive, drafts=False):
-    global lasts, next_echoarea
+def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
+    global next_echoarea
     stdscr.clear()
     stdscr.attrset(get_color("border"))
     y = 0
-    msgn = last
     out = (echo == config.ECHO_OUT)
     favorites = (echo == config.ECHO_FAVORITES)
     carbonarea = (echo == config.ECHO_CARBON)
@@ -1049,7 +1046,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgids[msgn], msg)
             draw_message_box("Подождите", False)
-            get_counts(False, True)
+            get_counts(False)
             if saved:
                 message_box("Сообщение добавлено в избранные")
             else:
@@ -1100,15 +1097,14 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 else:
                     go = False
-                stdscr.clear()
             else:
                 message_box("Сообщение уже отправлено")
-                stdscr.clear()
+            stdscr.clear()
         elif key in keys.f_delete and favorites:
             if msgids:
                 api.remove_from_favorites(msgids[msgn])
                 draw_message_box("Подождите", False)
-                get_counts(False, True)
+                get_counts(False)
                 msgids = api.get_echo_msgids(echo.name)
                 if msgids:
                     if msgn >= len(msgids):
@@ -1123,7 +1119,7 @@ def echo_reader(echo: config.Echo, last, archive, drafts=False):
             try:
                 get_msg(msgids[msgn])
                 draw_message_box("Подождите", False)
-                get_counts(True, False)
+                get_counts(True)
                 stdscr.clear()
                 msg, size = api.read_msg(msgids[msgn], echo.name)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
