@@ -567,31 +567,38 @@ def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
     return msg, size
 
 
-def render_token(token: parser.Token, y, x, offset):
+def render_body(scr, tokens, scroll):
+    tnum, offset = parser.find_visible_token(tokens, scroll)
+    line_num = tokens[tnum].line_num
+    for y in range(5, HEIGHT - 1):
+        scr.addstr(y, 0, " " * WIDTH, 1)
+    y, x = (5, 0)
+    for token in tokens[tnum:]:
+        if token.line_num > line_num:
+            line_num = token.line_num
+            y, x = (y + 1, 0)
+        if y >= HEIGHT - 1:
+            break  # tokens
+        y, x = render_token(scr, token, y, x, offset)
+        offset = 0  # required in the first partial multiline token only
+
+
+def render_token(scr, token: parser.Token, y, x, offset):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= HEIGHT - 1:
-            return y + i, x
+            return y + i, x  #
         attr = get_color("text")
         if token.type in ("HEADER", "URL", "QUOTE1", "QUOTE2",
                           "COMMENT", "CODE", "ORIGIN"):
             attr = get_color(token.type.lower())
-        try:
-            if line:
-                stdscr.addstr(y + i, x, line, attr)
-        except curses.error as ex:
-            raise Exception(
-                "(w=" + str(WIDTH) + "; h=" + str(HEIGHT) + ")"
-                + " y=" + str(y) + "+" + str(i) + ";"
-                + " x=" + str(x) + ";"
-                + " token=" + token.type + ";"
-                + " line='" + line + "'"
-            ) from ex
+        if line:
+            scr.addstr(y + i, x, line, attr)
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return
         else:
             x += len(line)  # last/single line -- move caret in line
-    return y + (len(token.render) - 1) - offset, x
+    return y + (len(token.render) - 1) - offset, x  #
 
 
 def draw_reader(echo: str, msgid, out):
@@ -618,6 +625,16 @@ def draw_reader(echo: str, msgid, out):
     stdscr.addstr(1, 1, "От:   ", color)
     stdscr.addstr(2, 1, "Кому: ", color)
     stdscr.addstr(3, 1, "Тема: ", color)
+
+
+def draw_scrollbar(scr, body_height, thumb_size, scroll_view, y):
+    scr.attrset(get_color("scrollbar"))
+    for i in range(5, HEIGHT - 1):
+        scr.addstr(i, WIDTH - 1, "░")
+    thumb_y = utils.scroll_thumb_pos(body_height, y, scroll_view, thumb_size)
+    for i in range(thumb_y + 5, thumb_y + 5 + thumb_size):
+        if i < HEIGHT - 1:
+            scr.addstr(i, WIDTH - 1, "█")
 
 
 def call_editor(out=''):
@@ -886,32 +903,10 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
                 draw_title(4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            # Render body
-            tnum, offset = parser.find_visible_token(body_tokens, y)
-            line_num = body_tokens[tnum].line_num
-            for i in range(5, HEIGHT - 1):
-                stdscr.addstr(i, 0, " " * WIDTH, 1)
-            i = 5
-            x = 0
-            for token in body_tokens[tnum:]:
-                if token.line_num > line_num:
-                    line_num = token.line_num
-                    i += 1
-                    x = 0
-                if i >= HEIGHT - 1:
-                    break
-                i, x = render_token(token, i, x, offset)
-                offset = 0  # required in the first partial multiline token only
-            #
-            stdscr.attrset(get_color("scrollbar"))
+            render_body(stdscr, body_tokens, y)
             if body_height > scroll_view:
-                for i in range(5, HEIGHT - 1):
-                    stdscr.addstr(i, WIDTH - 1, "░")
-                thumb_y = utils.scroll_thumb_pos(body_height, y, scroll_view,
-                                                 scroll_thumb_size)
-                for i in range(thumb_y + 5, thumb_y + 5 + scroll_thumb_size):
-                    if i < HEIGHT - 1:
-                        stdscr.addstr(i, WIDTH - 1, "█")
+                draw_scrollbar(stdscr, body_height,
+                               scroll_thumb_size, scroll_view, y)
         else:
             draw_reader(echo.name, "", out)
         stdscr.attrset(get_color("border"))
