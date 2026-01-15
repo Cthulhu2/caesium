@@ -861,8 +861,7 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
         msgids = api.get_carbonarea()
     else:
         msgids = api.get_echo_msgids(echo.name)
-    if msgn > len(msgids) - 1:
-        msgn = len(msgids) - 1
+    msgn = min(msgn, len(msgids) - 1)
     cur_node = cfg.nodes[node]  # type: config.Node
 
     def read_cur_msg():  # type: () -> (List[str], int)
@@ -944,34 +943,32 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             if msgids:
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             stdscr.clear()
-        elif key in keys.r_prev and msgn > 0:
+        elif key in keys.r_prev and msgn > 0 and msgids:
             y = 0
-            if msgids:
-                msgn = msgn - 1
-                stack.clear()
-                msg, size = read_cur_msg()
-                tmp = msgn
-                while msg[3] in cfg.twit or msg[5] in cfg.twit:
-                    msgn -= 1
-                    if msgn < 0:
-                        msgn = tmp + 1
-                        break
-                    msg, size = api.read_msg(msgids[msgn], echo.name)
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-        elif key in keys.r_next and msgn < len(msgids) - 1:
+            msgn = msgn - 1
+            stack.clear()
+            msg, size = read_cur_msg()
+            tmp = msgn
+            while msg[3] in cfg.twit or msg[5] in cfg.twit:
+                msgn -= 1
+                if msgn < 0:
+                    msgn = tmp + 1
+                    break
+                msg, size = api.read_msg(msgids[msgn], echo.name)
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+        elif key in keys.r_next and msgn < len(msgids) - 1 and msgids:
             y = 0
-            if msgids:
-                msgn = msgn + 1
-                stack.clear()
-                msg, size = read_cur_msg()
-                while msg[3] in cfg.twit or msg[5] in cfg.twit:
-                    msgn += 1
-                    if msgn >= len(msgids) or len(msgids) == 0:
-                        go = False
-                        next_echoarea = True
-                        break
-                    msg, size = api.read_msg(msgids[msgn], echo.name)
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            msgn = msgn + 1
+            stack.clear()
+            msg, size = read_cur_msg()
+            while msg[3] in cfg.twit or msg[5] in cfg.twit:
+                msgn += 1
+                if msgn >= len(msgids) or len(msgids) == 0:
+                    go = False
+                    next_echoarea = True
+                    break
+                msg, size = api.read_msg(msgids[msgn], echo.name)
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
@@ -987,23 +984,16 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             msgn = stack.pop()
             msg, size = read_cur_msg()
             body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-        elif key in keys.r_up and y > 0:
-            if msgids:
-                y = y - 1
-        elif key in keys.r_ppage:
-            if msgids:
-                y = y - scroll_view
-                if y < 0:
-                    y = 0
-        elif key in keys.r_npage:
-            if msgids and y + scroll_view < body_height:
-                y = min(body_height - scroll_view, y + scroll_view)
-        elif key in keys.r_home:
-            if msgids:
-                y = 0
-        elif key in keys.r_mend:
-            if msgids and body_height > scroll_view:
-                y = body_height - scroll_view
+        elif key in keys.r_up and msgids:
+            y = max(0, y - 1)
+        elif key in keys.r_ppage and msgids:
+            y = max(0, y - scroll_view)
+        elif key in keys.r_npage and msgids:
+            y = min(body_height - scroll_view, y + scroll_view)
+        elif key in keys.r_home and msgids:
+            y = 0
+        elif key in keys.r_mend and msgids:
+            y = max(0, body_height - scroll_view)
         elif key in keys.r_ukeys:
             if len(msgids) == 0 or y >= body_height - HEIGHT + 5:
                 y = 0
@@ -1018,34 +1008,29 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             else:
                 if msgids and body_height > scroll_view:
                     y = min(body_height - scroll_view, y + scroll_view)
-        elif key in keys.r_down:
-            if msgids:
-                if y + scroll_view < body_height:
-                    y = y + 1
-        elif key in keys.r_begin:
-            if msgids:
-                y = 0
-                msgn = 0
-                stack.clear()
-                msg, size = read_cur_msg()
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-        elif key in keys.r_end:
-            if msgids:
-                y = 0
-                msgn = len(msgids) - 1
-                stack.clear()
-                msg, size = read_cur_msg()
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-        elif key in keys.r_ins and not archive and not out:
-            if not favorites and not carbonarea:
-                with open("template.txt", "r") as t:
-                    with open("temp", "w") as f:
-                        f.write(echo.name + "\n")
-                        f.write("All\n")
-                        f.write("No subject\n\n")
-                        f.write(t.read())
-                call_editor()
-                stdscr.clear()
+        elif key in keys.r_down and msgids:
+            y = min(body_height - scroll_view, y + 1)
+        elif key in keys.r_begin and msgids:
+            y = 0
+            msgn = 0
+            stack.clear()
+            msg, size = read_cur_msg()
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+        elif key in keys.r_end and msgids:
+            y = 0
+            msgn = len(msgids) - 1
+            stack.clear()
+            msg, size = read_cur_msg()
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+        elif key in keys.r_ins and not any((archive, out, favorites, carbonarea)):
+            with open("template.txt", "r") as t:
+                with open("temp", "w") as f:
+                    f.write(echo.name + "\n")
+                    f.write("All\n")
+                    f.write("No subject\n\n")
+                    f.write(t.read())
+            call_editor()
+            stdscr.clear()
         elif key in keys.r_save and not out:
             save_message_to_file(msgids[msgn], echo.name)
         elif key in keys.r_favorites and not out:
@@ -1056,10 +1041,9 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
                 message_box("Сообщение добавлено в избранные")
             else:
                 message_box("Сообщение уже есть в избранных")
-        elif key in keys.r_quote and not archive and not out:
-            if msgids:
-                quote_msg(msgids[msgn], msg)
-                call_editor()
+        elif key in keys.r_quote and not any((archive, out)) and msgids:
+            quote_msg(msgids[msgn], msg)
+            call_editor()
         elif key in keys.r_subj:
             show_subject(msg[6])
         elif key in keys.r_info and not out and WIDTH < 80:
@@ -1069,8 +1053,7 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
                 copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
                 call_editor(msgids[msgn])
                 msgids = get_out_msgids(drafts)
-                if msgn > len(msgids) - 1:
-                    msgn = len(msgids) - 1
+                msgn = min(msgn, len(msgids) - 1)
                 if msgids:
                     msg, size = read_cur_msg()
                     body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1079,20 +1062,18 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             else:
                 message_box("Сообщение уже отправлено")
             stdscr.clear()
-        elif key in keys.f_delete and favorites:
+        elif key in keys.f_delete and favorites and msgids:
+            draw_message_box("Подождите", False)
+            api.remove_from_favorites(msgids[msgn])
+            get_counts(False)
+            msgids = api.get_echo_msgids(echo.name)
             if msgids:
-                api.remove_from_favorites(msgids[msgn])
-                draw_message_box("Подождите", False)
-                get_counts(False)
-                msgids = api.get_echo_msgids(echo.name)
-                if msgids:
-                    if msgn >= len(msgids):
-                        msgn = len(msgids) - 1
-                    msg, size = read_cur_msg()
-                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-                else:
-                    body_tokens, body_height, scroll_thumb_size = prerender([""])
-                stdscr.clear()
+                msgn = min(msgn, len(msgids) - 1)
+                msg, size = read_cur_msg()
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            else:
+                body_tokens, body_height, scroll_thumb_size = prerender([""])
+            stdscr.clear()
         elif key in keys.r_getmsg and size == 0:
             try:
                 get_msg(msgids[msgn])
@@ -1120,8 +1101,7 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
             msgids = get_out_msgids(drafts)
-            if msgn > len(msgids) - 1:
-                msgn = len(msgids) - 1
+            msgn = min(msgn, len(msgids) - 1)
             if msgids:
                 msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
@@ -1132,8 +1112,7 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
             os.rename(node_dir + "/" + msgids[msgn],
                       node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
             msgids = get_out_msgids(drafts)
-            if msgn > len(msgids) - 1:
-                msgn = len(msgids) - 1
+            msgn = min(msgn, len(msgids) - 1)
             if msgids:
                 msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
