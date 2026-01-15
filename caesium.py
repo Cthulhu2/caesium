@@ -732,17 +732,37 @@ def get_out_msgids(drafts=False):
     return msgids
 
 
-def quote(to):
-    if cfg.oldquote:
-        return ""
-    else:
-        if len(to) == 1:
-            q = to[0]
-        else:
-            q = ""
-            for word in to:
-                q = q + word[0]
-        return q
+def quote_msg(msgid, msg):
+    with open("template.txt", "r") as t:
+        with open("temp", "w") as f:
+            f.write(msgid + "\n")
+            f.write(msg[1] + "\n")
+            f.write(msg[3] + "\n")
+            subj = msg[6]
+            if not msg[6].startswith("Re:"):
+                subj = "Re: " + subj
+            f.write(subj + "\n")
+            #
+            if cfg.oldquote:
+                author = ""
+            elif " " not in msg[3]:
+                author = msg[3]
+            else:
+                author = "".join(map(lambda word: word[0], msg[3].split(" ")))
+            for line in msg[8:]:
+                if line.startswith("+++") or not line.strip():
+                    continue  # skip sign and empty lines
+                qq = parser.quote_template.match(line)
+                if qq:
+                    quoter = ">"
+                    if line[qq.span()[1]] != " ":
+                        quoter += " "
+                    f.write("\n" + line[:qq.span()[1]]
+                            + quoter
+                            + line[qq.span()[1]:])
+                else:
+                    f.write("\n" + author + "> " + line)
+            f.write(t.read())
 
 
 def show_subject(subject):
@@ -1048,33 +1068,7 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
                 message_box("Сообщение уже есть в избранных")
         elif key in keys.r_quote and not archive and not out:
             if msgids:
-                t = open("template.txt", "r")
-                f = open("temp", "w")
-                f.write(msgids[msgn] + "\n")
-                f.write(msg[1] + "\n")
-                f.write(msg[3] + "\n")
-                to = msg[3].split(" ")
-                q = quote(to)
-                if not msg[6].startswith("Re:"):
-                    f.write("Re: " + msg[6] + "\n")
-                else:
-                    f.write(msg[6] + "\n")
-                for line in msg[8:]:
-                    if line.startswith("+++") or not line.strip():
-                        continue  # skip sign and empty lines
-                    qq = parser.quote_template.match(line)
-                    if qq:
-                        quoter = ">"
-                        if line[qq.span()[1]] != " ":
-                            quoter += " "
-                        f.write("\n" + line[:qq.span()[1]]
-                                + quoter
-                                + line[qq.span()[1]:])
-                    else:
-                        f.write("\n" + q + "> " + line)
-                f.write(t.read())
-                f.close()
-                t.close()
+                quote_msg(msgids[msgn], msg)
                 call_editor()
         elif key in keys.r_subj:
             show_subject(msg[6])
