@@ -159,11 +159,13 @@ def prerender(tokens, width, height=None):
             y += len(token.render) - 1
             continue  # tokens
 
-        # to wide, split by words
+        # too wide, split by words
         words = value.split(" ")
         space = ""
         line = ""
+        empty_new_line = False
         for word in words:
+            empty_new_line = False
             word = space + word
             space = " "
             # insert word
@@ -185,12 +187,13 @@ def prerender(tokens, width, height=None):
                 line = word
                 x = len(word)
                 space = " "
+                empty_new_line = (x == 0)
                 continue  # words
 
             # len(word) > width
             x = render_chunks(token, "", 0, width, word)
             line = token.render.pop(len(token.render) - 1)
-        if line:
+        if line or empty_new_line:
             token.render.append(line)
         y += len(token.render) - 1
     if height and y + 1 > height:

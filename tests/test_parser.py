@@ -296,7 +296,7 @@ def _render_token(scr, token: parser.Token, y, x, offset, height):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= height - 1:
             return y + i, x
-        if line:
+        if line.strip():
             scr.addstr(y + i, x, line)
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
@@ -354,3 +354,29 @@ def test_render_token_bottom_inline_overlapped():
     assert text[5] == "1234567890"
     assert text[6] == "234 678 "
     assert text[7] == ""  # status line
+
+
+def test_render_token_new_line_at_last_space():
+    tokens = parser.tokenize([
+        "aaaa.aa aaaaaaaa aaaaaa aaaaa. aaaaaaaa aaa aaaaaaaaaaa a aaa: "
+        "https://aaaaaa\r"])
+
+    parser.prerender(tokens, width=62, height=30)
+    i = 5
+    x = 0
+    height = 30
+    scr = ScrMock(height, 62)
+    line_num = 0
+    for token in tokens:
+        if token.line_num > line_num:
+            line_num = token.line_num
+            i += 1
+            x = 0
+        if i >= height - 1:
+            break
+        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
+                             height=height)
+    text = scr.to_str()
+    assert text[5] == "aaaa.aa aaaaaaaa aaaaaa aaaaa. aaaaaaaa aaa aaaaaaaaaaa a aaa:"
+    assert text[6] == "https://aaaaaa"
+    assert text[7] == ""
