@@ -146,9 +146,22 @@ def get_msg_list_data(echoarea):
 # noinspection PyUnusedLocal
 def read_msg(msgid, echoarea):
     if not os.path.exists(storage + "msg/" + msgid) or not msgid:
-        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], "0b"
+        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
 
     with open(storage + "msg/" + msgid, "r") as f:
         msg = f.read().split("\n")
     size = os.stat(storage + "msg/" + msgid).st_size
     return msg, size
+
+
+def find_msg(msgid):
+    for echo in os.listdir(storage + "echo/"):
+        if echo in ("carbonarea", "favorites"):
+            continue  # not echo
+
+        with codecs.open(storage + "echo/" + echo, "r", "utf-8") as f:
+            exists = next(filter(lambda it: it.strip() == msgid,
+                                 f.read().split("\n")), None)
+            if exists:
+                return read_msg(msgid, echo)
+    return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0

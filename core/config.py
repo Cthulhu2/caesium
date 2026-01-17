@@ -32,6 +32,11 @@ class Echo:
             return self.name < other.name
         return False
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.name == other
+        return super().__eq__(other)
+
 
 ECHO_OUT = Echo("out", "Исходящие", False)
 ECHO_DRAFTS = Echo("out", "Черновики", False)

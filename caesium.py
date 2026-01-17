@@ -405,6 +405,22 @@ def show_echo_selector_screen():
         cursor = echo_cursor
     else:
         cursor = archive_cursor
+
+    def toggle_archive():
+        global echo_cursor, archive_cursor, counts_rescan
+        nonlocal cursor, echoareas, archive
+        archive = not archive
+        if not archive:
+            archive_cursor = cursor
+            cursor = echo_cursor
+            echoareas = cfg.nodes[node].echoareas
+        else:
+            echo_cursor = cursor
+            cursor = archive_cursor
+            echoareas = cfg.nodes[node].archive
+        stdscr.clear()
+        counts_rescan = True
+
     while go:
         draw_echo_selector(start, cursor, archive)
         key = stdscr.getch()
@@ -464,17 +480,7 @@ def show_echo_selector_screen():
             if cursor - start <= 0:
                 start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
-            if archive:
-                archive_cursor = cursor
-                cursor = echo_cursor
-                echoareas = cfg.nodes[node].echoareas
-            else:
-                echo_cursor = cursor
-                cursor = archive_cursor
-                echoareas = cfg.nodes[node].archive
-            archive = not archive
-            stdscr.clear()
-            counts_rescan = True
+            toggle_archive()
         elif key in keys.s_enter:
             draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -493,12 +499,24 @@ def show_echo_selector_screen():
                 last = echo_length
             go = not echo_reader(echoareas[cursor], last, archive)
             counts_rescan = True
-            if next_echoarea:
+            if next_echoarea and isinstance(next_echoarea, bool):
                 counts = rescan_counts(echoareas)
                 cursor = find_new(cursor)
                 if cursor - start > HEIGHT - 3:
                     start = cursor - HEIGHT + 3
                 next_echoarea = False
+            elif next_echoarea and isinstance(next_echoarea, str):
+                cur_node = cfg.nodes[node]
+                if ((not archive and next_echoarea in cur_node.archive)
+                        or (archive and (next_echoarea in cur_node.echoareas
+                                         or next_echoarea in cur_node.stat))):
+                    toggle_archive()
+                # noinspection PyTypeChecker
+                cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
+                if cursor - start > HEIGHT - 3:
+                    start = cursor - HEIGHT + 3
+                next_echoarea = False
+
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
@@ -780,19 +798,18 @@ def show_subject(subject):
 
 
 def get_msg(msgid):
-    bundle = client.get_bundle(cfg.nodes[node].node, [msgid])
+    node_ = cfg.nodes[node]
+    bundle = client.get_bundle(node_.node, msgid)
     for msg in filter(None, bundle):
         m = msg.split(":")
         msgid = m[0]
         if len(msgid) == 20 and m[1]:
             msgbody = base64.b64decode(m[1].encode("ascii")).decode("utf8").split("\n")
-            if cfg.nodes[node].to:
+            if node_.to:
                 carbonarea = api.get_carbonarea()
-                if msgbody[5] in cfg.nodes[node].to and msgid not in carbonarea:
-                    pass
-                    # add_to_carbonarea(msgid, msgbody)
-            # save_message(msgid, msgbody)
-    # TODO: Restore message body only w/o duplicates in echo index
+                if msgbody[5] in node_.to and msgid not in carbonarea:
+                    api.add_to_carbonarea(msgid, msgbody)
+            api.save_message([msgbody], node_, node_.to)
 
 
 def show_menu(title, items):
@@ -839,12 +856,6 @@ def show_menu(title, items):
             return False  #
 
 
-def open_link(link):
-    # TODO: Support open ii:// link
-    if not cfg.browser.open(link):
-        message_box("Не удалось запустить Интернет-браузер")
-
-
 def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
     stdscr.clear()
@@ -871,6 +882,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     done = False
     repto = False
     stack = []
+    msgid = None
 
     def read_cur_msg():  # type: () -> (List[str], int)
         if out:
@@ -880,7 +892,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
     def read_msg_skip_twit(increment):
         nonlocal msg, msgn, size
-        global next_echoarea
         msg, size = read_cur_msg()
         while msg[3] in cfg.twit or msg[5] in cfg.twit:
             msgn += increment
@@ -902,6 +913,35 @@ def echo_reader(echo: config.Echo, msgn, archive):
             body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         else:
             go = False
+
+    def open_link(link):  # type: (str) -> None
+        nonlocal msgid, msgn, msg, size, go
+        nonlocal body_tokens, body_height, scroll_thumb_size
+        global next_echoarea
+        if not link.startswith("ii://"):
+            if not cfg.browser.open(link):
+                message_box("Не удалось запустить Интернет-браузер")
+        elif parser.echo_template.match(link[5:]):  # echoarea
+            if echo.name == link[5:]:
+                message_box("Конференция уже открыта")
+            elif (link[5:] in cur_node.echoareas
+                  or link[5:] in cur_node.archive
+                  or link[5:] in cur_node.stat):
+                next_echoarea = link[5:]
+                go = False
+            else:
+                message_box("Конференция отсутствует в БД ноды")
+        elif link[5:] in msgids:  # msgid in same echoarea
+            if not stack or stack[-1] != msgn:
+                stack.append(msgn)
+            msgn = msgids.index(link[5:])
+            prerender_msg_or_quit()
+        else:
+            msg, size = api.find_msg(link[5:])
+            msgid = link[5:]
+            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            if not stack or stack[-1] != msgn:
+                stack.append(msgn)
 
     if msgids:
         read_msg_skip_twit(-1)
@@ -1064,19 +1104,18 @@ def echo_reader(echo: config.Echo, msgn, archive):
             get_counts(False)
             msgids = api.get_echo_msgids(echo.name)
             prerender_msg_or_quit()
-        elif key in keys.r_getmsg and size == 0:
+        elif key in keys.r_getmsg and size == 0 and msgid:
             try:
-                get_msg(msgids[msgn])
                 draw_message_box("Подождите", False)
+                get_msg(msgid)
                 get_counts(True)
                 stdscr.clear()
-                msg, size = read_cur_msg()
+                msg, size = api.find_msg(msgid)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             except Exception as ex:
-                message_box("Не удалось определить msgid. " + str(ex))
+                message_box("Не удалось определить msgid.\n" + str(ex))
                 stdscr.clear()
         elif key in keys.r_links:
-            # TODO: Find and open ii:// links
             results = parser.url_template.findall("\n".join(msg[8:]))
             links = [it[0] for it in results]
             if len(links) == 1:

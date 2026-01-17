@@ -147,9 +147,14 @@ def read_msg(msgid, echoarea):
     row = c.execute("SELECT tags, echoarea, time, fr, addr, t, subject, body"
                     " FROM msg WHERE msgid = ?;",
                     (msgid,)).fetchone()
+    if not row:
+        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
     msg = "\n".join((row[0], row[1], str(row[2]), row[3],
                      row[4], row[5], row[6], row[7]))
-    size = 0
-    if msg:
-        size = len(msg.encode("utf-8"))
+
+    size = len(msg.encode("utf-8"))
     return msg.split("\n"), size
+
+
+def find_msg(msgid):
+    return read_msg(msgid, None)

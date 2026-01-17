@@ -111,7 +111,7 @@ def get_msg_list_data(echoarea):
 
 def read_msg(msgid, echoarea):
     if not os.path.exists(storage + echoarea + ".aio") or not msgid:
-        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], "0b"
+        return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
 
     with codecs.open(storage + echoarea + ".aio", "r", "utf-8") as f:
         index = list(filter(lambda i: i.startswith(msgid),
@@ -123,3 +123,18 @@ def read_msg(msgid, echoarea):
     if msg:
         size = len("\n".join(msg).encode("utf-8"))
     return msg, size
+
+
+def find_msg(msgid):
+    for echo in os.listdir(storage):
+        if echo in ("carbonarea.aio", "favorites.aio") or not echo.endswith(".aio"):
+            continue  # not echo
+
+        with codecs.open(storage + echo, "r", "utf-8") as f:
+            index = list(filter(lambda it: it.startswith(msgid + ":"),
+                                f.read().split("\n")))
+        if index:
+            msg = ":".join(index[-1].split(":")[1:]).split(chr(15))
+            size = len("\n".join(msg).encode("utf-8"))
+            return msg, size
+    return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0

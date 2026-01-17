@@ -188,3 +188,15 @@ def test_non_printable(api):
 
     data = api.get_msg_list_data("idec.talks")
     assert data == [[msgid, "revoltech", "First test", "2024.10.22"]]
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_find_msg(api):
+    msg, size = api.find_msg("unknonwnmsgid")
+    assert msg == ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
+    assert size == 0
+
+    msg, size = api.find_msg("25Ll1pZMnIbdWB8Ring2")
+    assert msg[1] == "ring2.global"
+    assert size == 81
