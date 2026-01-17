@@ -12,8 +12,13 @@ def test_ps_template():
 def test_url_template():
     match = parser.url_template.match("https://ru.wikipedia.org/wiki/Вайб-кодинг")
     assert match.string[match.span()[1] - 1] == "г"
+
     match = parser.url_template.match("https://ru.wikipedia.org/wiki/Вайб-кодинг,")
     assert match.string[match.span()[1] - 1] == "г"
+
+    match = parser.url_template.match(
+        "https://wiki.archlinux.org/index.php/Ppp_(%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9)")
+    assert match.string[match.span()[1] - 1] == ")"
 
 
 BASE_TOKENS = """Test
