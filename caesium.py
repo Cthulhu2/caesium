@@ -421,6 +421,13 @@ def show_echo_selector_screen():
         stdscr.clear()
         counts_rescan = True
 
+    def ensure_cursor_visible():
+        nonlocal start
+        if cursor - start > HEIGHT - 3:
+            start = cursor - HEIGHT + 3
+        elif cursor - start < 0:
+            start = cursor
+
     while go:
         draw_echo_selector(start, cursor, archive)
         key = stdscr.getch()
@@ -481,6 +488,7 @@ def show_echo_selector_screen():
                 start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             toggle_archive()
+            ensure_cursor_visible()
         elif key in keys.s_enter:
             draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -502,8 +510,7 @@ def show_echo_selector_screen():
             if next_echoarea and isinstance(next_echoarea, bool):
                 counts = rescan_counts(echoareas)
                 cursor = find_new(cursor)
-                if cursor - start > HEIGHT - 3:
-                    start = cursor - HEIGHT + 3
+                ensure_cursor_visible()
                 next_echoarea = False
             elif next_echoarea and isinstance(next_echoarea, str):
                 cur_node = cfg.nodes[node]
@@ -513,8 +520,7 @@ def show_echo_selector_screen():
                     toggle_archive()
                 # noinspection PyTypeChecker
                 cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
-                if cursor - start > HEIGHT - 3:
-                    start = cursor - HEIGHT + 3
+                ensure_cursor_visible()
                 next_echoarea = False
 
         elif key in keys.s_out:
