@@ -816,7 +816,7 @@ def show_menu(title, items):
     h = len(items)
     w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it), items)))
     e = "Esc - отмена"
-    if w < len(title):
+    if w < len(title) + 2:
         w = len(title) + 2
     menu_win = curses.newwin(h + 2, w + 2,
                              int(HEIGHT / 2 - h / 2 - 2),
