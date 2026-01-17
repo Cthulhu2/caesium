@@ -502,11 +502,11 @@ def show_echo_selector_screen():
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, False)
+                go = not echo_reader(config.ECHO_OUT, out_length, archive)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive, True)
+                go = not echo_reader(config.ECHO_DRAFTS, out_length, archive)
         elif key in keys.s_nnode:
             archive = False
             node = node + 1
@@ -845,12 +845,13 @@ def open_link(link):
         message_box("Не удалось запустить Интернет-браузер")
 
 
-def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
+def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
     stdscr.clear()
     stdscr.attrset(get_color("border"))
     y = 0
-    out = (echo == config.ECHO_OUT)
+    out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
+    drafts = (echo == config.ECHO_DRAFTS)
     favorites = (echo == config.ECHO_FAVORITES)
     carbonarea = (echo == config.ECHO_CARBON)
     if out:
@@ -912,12 +913,8 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
         if msgids:
             draw_reader(msg[1], msgids[msgn], out)
             draw_status(len(version) + 2, utils.msgn_status(msgids, msgn, WIDTH))
-            if drafts:
-                dsc = "Черновики"
-            else:
-                dsc = echo.desc
-            if dsc and WIDTH >= 80:
-                draw_title(0, WIDTH - 2 - len(dsc), dsc)
+            if echo.desc and WIDTH >= 80:
+                draw_title(0, WIDTH - 2 - len(echo.desc), echo.desc)
             color = get_color("text")
             if not out:
                 if WIDTH >= 80:
@@ -976,14 +973,14 @@ def echo_reader(echo: config.Echo, msgn, archive, drafts=False):
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
-        elif key in keys.r_prep and echo.name not in ("carbonarea", "favorites") and not out and repto:
+        elif key in keys.r_prep and not any((favorites, carbonarea, out)) and repto:
             if repto in msgids:
                 y = 0
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-        elif key in keys.r_nrep and not out and len(stack) > 0:
+        elif key in keys.r_nrep and len(stack) > 0:
             y = 0
             msgn = stack.pop()
             msg, size = read_cur_msg()

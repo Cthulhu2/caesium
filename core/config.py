@@ -33,7 +33,8 @@ class Echo:
         return False
 
 
-ECHO_OUT = Echo("out", "Исходящие", True)
+ECHO_OUT = Echo("out", "Исходящие", False)
+ECHO_DRAFTS = Echo("out", "Черновики", False)
 ECHO_FAVORITES = Echo("favorites", "Избранные сообщения", False)
 ECHO_CARBON = Echo("carbonarea", "Карбонка", False)
 
