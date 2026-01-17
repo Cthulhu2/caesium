@@ -809,7 +809,7 @@ def get_msg(msgid):
                 carbonarea = api.get_carbonarea()
                 if msgbody[5] in node_.to and msgid not in carbonarea:
                     api.add_to_carbonarea(msgid, msgbody)
-            api.save_message([msgbody], node_, node_.to)
+            api.save_message([(msgid, msgbody)], node_, node_.to)
 
 
 def show_menu(title, items):
