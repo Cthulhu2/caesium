@@ -609,9 +609,10 @@ def render_token(scr, token: parser.Token, y, x, offset):
         if y + i >= HEIGHT - 1:
             return y + i, x  #
         attr = get_color("text")
-        if token.type in ("HEADER", "URL", "QUOTE1", "QUOTE2",
-                          "COMMENT", "CODE", "ORIGIN"):
-            attr = get_color(token.type.lower())
+        if token.type in (parser.TT.CODE, parser.TT.COMMENT, parser.TT.HEADER,
+                          parser.TT.ORIGIN, parser.TT.QUOTE1, parser.TT.QUOTE2,
+                          parser.TT.URL):
+            attr = get_color(token.type.name.lower())
         if line:
             scr.addstr(y + i, x, line, attr)
 

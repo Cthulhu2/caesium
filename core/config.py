@@ -132,18 +132,19 @@ color_pairs = {
     # "ui-element": [color-pair-NUM, bold-attr]
     # @formatter:off
     "border":     [1,  0],
-    "titles":     [2,  0],
-    "cursor":     [3,  0],
-    "text":       [4,  0],
-    "quote1":     [5,  0],
-    "quote2":     [6,  0],
+    "cursor":     [2,  0],
+    "scrollbar":  [3,  0],
+    "statusline": [4,  0],
+    "titles":     [5,  0],
+    # tokens
+    "code":       [6,  0],
     "comment":    [7,  0],
-    "url":        [8,  0],
-    "statusline": [9,  0],
-    "header":     [10, 0],
-    "scrollbar":  [11, 0],
-    "origin":     [12, 0],
-    "code":       [13, 0],
+    "header":     [8,  0],
+    "origin":     [9,  0],
+    "quote1":     [10, 0],
+    "quote2":     [11, 0],
+    "text":       [12, 0],
+    "url":        [13, 0],
     # @formatter:on
 }
 

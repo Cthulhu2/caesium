@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import List, Optional
 
 url_template = re.compile(r"((https?|ftp|file|ii)://?"
@@ -13,12 +14,32 @@ origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
 
 
+class TT(Enum):
+    CODE = auto()
+    COMMENT = auto()
+    HEADER = auto()
+    HR = auto()
+    ORIGIN = auto()
+    QUOTE1 = auto()
+    QUOTE2 = auto()
+    TEXT = auto()
+    URL = auto()
+
+
 @dataclass
 class Token:
-    type: str  # HEADER, URL, TEXT, QUOTE1, QUOTE2, HR, ORIGIN
+    type: TT
     value: str
     line_num: int  # номер строки (начиная с 0)
     render: List[str] = None  # строки с мягкими переносами
+
+
+def is_code_block(line):
+    return line.rstrip() == "===="
+
+
+def is_code_block2(line):
+    return line.startswith("```")
 
 
 def tokenize(lines: List[str], start_line=0) -> List[Token]:
@@ -28,79 +49,72 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
         line = lines[line_num]
         #
         if line.startswith('== '):
-            tokens.extend(_tokenize_inline(
-                text=line[3:],
-                line_num=line_num + start_line,
-                token=Token("HEADER", "== ", line_num + start_line)))
+            tokens.extend(_inline(line[3:], line_num + start_line,
+                                  Token(TT.HEADER, "== ",
+                                        line_num + start_line)))
             line_num += 1
             continue  #
         #
-        comment = ps_template.search(line)
-        if comment:
-            tokens.extend(_tokenize_inline(
-                text=line[comment.end():],
-                line_num=line_num + start_line,
-                token=Token("COMMENT", line[0:comment.end()], line_num + start_line)
-            ))
+        if comment := ps_template.search(line):
+            tokens.extend(_inline(line[comment.end():], line_num + start_line,
+                                  Token(TT.COMMENT, line[0:comment.end()],
+                                        line_num + start_line)))
             line_num += 1
             continue  #
         #
-        quote = quote_template.match(line)
-        if quote:
+        if quote := quote_template.match(line):
             count = line[0:quote.span()[1]].count(">")
-            kind = "QUOTE" + str(((count + 1) % 2) + 1)
-            tokens.extend(_tokenize_inline(
-                text=line[quote.end():],
-                line_num=line_num + start_line,
-                token=Token(kind, line[0:quote.end()], line_num + start_line)
-            ))
+            kind = (TT.QUOTE1, TT.QUOTE2)[(count + 1) % 2]
+            tokens.extend(_inline(line[quote.end():], line_num + start_line,
+                                  Token(kind, line[0:quote.end()],
+                                        line_num + start_line)))
             line_num += 1
             continue  #
         #
-        origin = origin_template.search(line)
-        if origin:
-            tokens.extend(_tokenize_inline(
-                text=line[origin.end():],
-                line_num=line_num + start_line,
-                token=Token("ORIGIN", line[0:origin.end()], line_num + start_line)
-            ))
+        if origin := origin_template.search(line):
+            tokens.extend(_inline(line[origin.end():], line_num + start_line,
+                                  Token(TT.ORIGIN, line[0:origin.end()],
+                                        line_num + start_line)))
             line_num += 1
             continue  #
         #
         if line.rstrip() == "----":
-            tokens.append(Token("HR", line, line_num + start_line))
+            tokens.append(Token(TT.HR, line, line_num + start_line))
             line_num += 1
             continue  #
         #
-        if line.rstrip() == "====":
+        if is_code_block(line):
+            check_code_block = is_code_block
+        elif is_code_block2(line):
+            check_code_block = is_code_block2
+        else:
+            check_code_block = None
+        if check_code_block:
             next_lines = lines[line_num + 1:]
-            if any(filter(lambda s: s.rstrip() == "====", next_lines)):
-                tokens.append(Token("CODE", line, line_num + start_line))
+            if any(filter(lambda s: check_code_block(s), next_lines)):
+                tokens.append(Token(TT.CODE, line, line_num + start_line))
                 line_num += 1
                 for nline in next_lines:
-                    tokens.extend(_tokenize_inline(
-                        nline,
-                        line_num,
-                        Token("CODE", "", line_num + start_line)))
+                    tokens.extend(_inline(nline, line_num,
+                                          Token(TT.CODE, "", line_num + start_line)))
                     line_num += 1
-                    if nline.rstrip() == "====":
-                        break  #
-                continue  #
+                    if check_code_block(nline):
+                        break  # next_lines
+                continue  # lines
+
         #
-        tokens.extend(_tokenize_inline(
-            line,
-            line_num + start_line,
-            token=Token("TEXT", "", line_num + start_line)))
+        tokens.extend(_inline(line, line_num + start_line,
+                              Token(TT.TEXT, "", line_num + start_line)))
         line_num += 1
 
     return tokens
 
 
-def _tokenize_inline(text: str, line_num: int, token: Token) -> List[Token]:
+def _inline(text: str, line_num: int, token: Token) -> List[Token]:
     tokens = []
     pos = 0
     while pos < len(text):
-        match = url_template.search(text, pos)
+        match = url_template.search(text, pos)  # type: re.Match
         if match and match.start() == pos:
             url = match.group()
             if token.value:
@@ -110,7 +124,7 @@ def _tokenize_inline(text: str, line_num: int, token: Token) -> List[Token]:
             if url.endswith(")") and "(" not in url:
                 url = url[0:-1]
                 pos -= 1
-            tokens.append(Token("URL", url, line_num))
+            tokens.append(Token(TT.URL, url, line_num))
         else:
             url_start = match.start() if match else len(text)
             raw_text = text[pos:url_start]
@@ -145,9 +159,9 @@ def prerender(tokens, width, height=None):
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
         value = token.value
-        if value and token.type in ("QUOTE1", "QUOTE2") and value[0] != " ":
+        if value and token.type in (TT.QUOTE1, TT.QUOTE2) and value[0] != " ":
             value = " " + value
-        if token.type == "HR":
+        if token.type == TT.HR:
             value = "─" * width
         value = value.replace("\t", "    ")
 
@@ -156,7 +170,7 @@ def prerender(tokens, width, height=None):
             x += len(value)
             token.render.append(value)
             continue  # tokens
-        if token.type == "CODE":
+        if token.type == TT.CODE:
             # do not split leading spaces
             x = render_chunks(token, "", x, width, value)
             y += len(token.render) - 1
