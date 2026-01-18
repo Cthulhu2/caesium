@@ -143,6 +143,7 @@ color_pairs = {
     "header":     [10, 0],
     "scrollbar":  [11, 0],
     "origin":     [12, 0],
+    "code":       [13, 0],
     # @formatter:on
 }
 
