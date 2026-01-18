@@ -6,6 +6,8 @@ import sys
 import webbrowser
 from typing import List, Optional
 
+from core import parser
+
 CONFIG_FILEPATH = "caesium.cfg"
 
 
@@ -117,6 +119,8 @@ class Config:
                 self.twit = param[1].split(",")
             elif param[0] == "keys":
                 self.keys = param[1]
+            elif param[0] == "inlinestyle":
+                parser.INLINE_STYLE_ENABLED = True
 
         node.echoareas.sort()
         self.nodes.append(node)

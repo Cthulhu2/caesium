@@ -1,7 +1,9 @@
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+INLINE_STYLE_ENABLED = False
 
 url_template = re.compile(r"((https?|ftp|file|ii)://?"
                           r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
@@ -12,17 +14,27 @@ ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|\/\/|#)")
 quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
+code_inline_template = re.compile(r"`[^`]+`")
+# TODO: Fix bold_inline_template regex w negative double __/**
+bold_inline_template = re.compile(r"(__[^_]+__)|(\*\*[^*]+\*\*)")
+italic_inline_template = re.compile(r"(_[^_]+_)|(\*[^*]+\*)")
 
 
 class TT(Enum):
+    BOLD_BEGIN = auto()
+    BOLD_END = auto()
     CODE = auto()
     COMMENT = auto()
     HEADER = auto()
     HR = auto()
+    ITALIC_BEGIN = auto()
+    ITALIC_END = auto()
     ORIGIN = auto()
     QUOTE1 = auto()
     QUOTE2 = auto()
     TEXT = auto()
+    UNDERLINE_BEGIN = auto()
+    UNDERLINE_END = auto()
     URL = auto()
 
 
@@ -95,8 +107,9 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 tokens.append(Token(TT.CODE, line, line_num + start_line))
                 line_num += 1
                 for nline in next_lines:
-                    tokens.extend(_inline(nline, line_num,
-                                          Token(TT.CODE, "", line_num + start_line)))
+                    tokens.extend(_simple_inline(
+                        nline, line_num,
+                        Token(TT.CODE, "", line_num + start_line)))
                     line_num += 1
                     if check_code_block(nline):
                         break  # next_lines
@@ -111,6 +124,65 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
 
 
 def _inline(text: str, line_num: int, token: Token) -> List[Token]:
+    if not INLINE_STYLE_ENABLED:
+        return _simple_inline(text, line_num, token)
+
+    tokens = []
+    pos = 0
+    while pos < len(text):
+        match_url = url_template.search(text, pos)  # type: re.Match
+        match_code = code_inline_template.search(text, pos)
+        match_bold = bold_inline_template.search(text, pos)
+        match_italic = italic_inline_template.search(text, pos)
+        match = list(filter(lambda t: t[0],
+                            ((match_code, TT.CODE),
+                             (match_italic, TT.ITALIC_BEGIN),
+                             (match_bold, TT.BOLD_BEGIN),  # after italic
+                             (match_url, TT.URL))))  # type: List[Tuple[re.Match, TT]]
+        if match:
+            match = min(match, key=lambda t: t[0].start())  # type: Tuple[re.Match, TT]
+        if match and match[0].start() == pos:
+            sub_str = match[0].group()
+            if token.value:
+                tokens.append(token)
+                token = Token(token.type, "", line_num)
+            #
+            if match[1] == TT.URL:
+                pos = match[0].end()
+                if sub_str.endswith(")") and "(" not in sub_str:
+                    sub_str = sub_str[0:-1]
+                    pos -= 1
+                tokens.append(Token(TT.URL, sub_str, line_num))
+            elif match[1] == TT.CODE:
+                tokens.extend(_inline(sub_str[1:-1], line_num,  # `
+                                      Token(TT.CODE, "", line_num)))
+                pos = match[0].end()
+            elif match[1] == TT.ITALIC_BEGIN:
+                tokens.append(Token(TT.ITALIC_BEGIN, "", line_num))
+                tokens.extend(_inline(sub_str[1:-1], line_num,  # */_
+                                      Token(token.type, "", line_num)))
+                tokens.append(Token(TT.ITALIC_END, "", line_num))
+                pos = match[0].end()
+            elif match[1] == TT.BOLD_BEGIN:
+                tokens.append(Token(TT.BOLD_BEGIN, "", line_num))
+                tokens.extend(_inline(sub_str[2:-2], line_num,  # **/__
+                                      Token(token.type, "", line_num)))
+                tokens.append(Token(TT.BOLD_END, "", line_num))
+                pos = match[0].end()
+        else:
+            url_start = match[0].start() if match else len(text)
+            raw_text = text[pos:url_start]
+            token.value += raw_text
+            tokens.append(token)
+            pos = url_start
+            token = Token(token.type, "", line_num)
+    if not text:
+        tokens.append(token)
+    return tokens
+
+
+def _simple_inline(text: str, line_num: int, token: Token) -> List[Token]:
+    # with URL only
     tokens = []
     pos = 0
     while pos < len(text):
@@ -145,11 +217,13 @@ def prerender(tokens, width, height=None):
     line_num = tokens[0].line_num
     x = 0
     y = 0
+    in_quote = False
     for token in tokens:
         if token.line_num > line_num:
             y += 1
             x = 0
             line_num = token.line_num
+            in_quote = False
         if token.render is None:
             token.render = []
         else:
@@ -159,8 +233,10 @@ def prerender(tokens, width, height=None):
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
         value = token.value
-        if value and token.type in (TT.QUOTE1, TT.QUOTE2) and value[0] != " ":
+        if value and token.type in (TT.QUOTE1, TT.QUOTE2) and value[0] != " " and not in_quote:
             value = " " + value
+        if token.type in (TT.QUOTE1, TT.QUOTE2):
+            in_quote = True
         if token.type == TT.HR:
             value = "─" * width
         value = value.replace("\t", "    ")

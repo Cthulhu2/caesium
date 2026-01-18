@@ -594,17 +594,29 @@ def render_body(scr, tokens, scroll):
     for y in range(5, HEIGHT - 1):
         scr.addstr(y, 0, " " * WIDTH, 1)
     y, x = (5, 0)
+    text_attr = 0
     for token in tokens[tnum:]:
         if token.line_num > line_num:
             line_num = token.line_num
             y, x = (y + 1, 0)
         if y >= HEIGHT - 1:
             break  # tokens
-        y, x = render_token(scr, token, y, x, offset)
+        #
+        if token.type == parser.TT.ITALIC_BEGIN:
+            text_attr |= curses.A_ITALIC
+        elif token.type == parser.TT.ITALIC_END:
+            text_attr &= ~curses.A_ITALIC
+
+        elif token.type == parser.TT.BOLD_BEGIN:
+            text_attr |= curses.A_BOLD
+        elif token.type == parser.TT.BOLD_END:
+            text_attr &= ~curses.A_BOLD
+        #
+        y, x = render_token(scr, token, y, x, offset, text_attr)
         offset = 0  # required in the first partial multiline token only
 
 
-def render_token(scr, token: parser.Token, y, x, offset):
+def render_token(scr, token: parser.Token, y, x, offset, text_attr):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= HEIGHT - 1:
             return y + i, x  #
@@ -614,7 +626,7 @@ def render_token(scr, token: parser.Token, y, x, offset):
                           parser.TT.URL):
             attr = get_color(token.type.name.lower())
         if line:
-            scr.addstr(y + i, x, line, attr)
+            scr.addstr(y + i, x, line, attr | text_attr)
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return

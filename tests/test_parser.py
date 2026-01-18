@@ -303,6 +303,87 @@ def test_code_block2():
     assert tokens[2].render[0] == "    a code"
 
 
+def test_disable_inline_styles():
+    parser.INLINE_STYLE_ENABLED = False
+    tokens = parser.tokenize(["_italic_ **bold** `code`"])
+    assert tokens[0] == Token(TT.TEXT, "_italic_ **bold** `code`", 0)
+
+
+def test_code_block_wo_italic():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(["```",
+                              "a code _not italic_",
+                              "and **not bold**",
+                              "```"])
+    assert tokens[0] == Token(TT.CODE, "```", 0)
+    assert tokens[1] == Token(TT.CODE, "a code _not italic_", 1)
+    assert tokens[2] == Token(TT.CODE, "and **not bold**", 2)
+    assert tokens[3] == Token(TT.CODE, "```", 3)
+
+
+def test_inline_code_block():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(["Text `a code`, and `a code with http://url`."])
+    assert tokens[0] == Token(TT.TEXT, "Text ", 0)
+    assert tokens[1] == Token(TT.CODE, "a code", 0)
+    assert tokens[2] == Token(TT.TEXT, ", and ", 0)
+    assert tokens[3] == Token(TT.CODE, "a code with ", 0)
+    assert tokens[4] == Token(TT.URL, "http://url", 0)
+    assert tokens[5] == Token(TT.TEXT, ".", 0)
+
+
+def test_inline_italic():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(["Text _`an italic code`_."])
+    assert tokens[0] == Token(TT.TEXT, "Text ", 0)
+    assert tokens[1] == Token(TT.ITALIC_BEGIN, "", 0)
+    assert tokens[2] == Token(TT.CODE, "an italic code", 0)
+    assert tokens[3] == Token(TT.ITALIC_END, "", 0)
+    assert tokens[4] == Token(TT.TEXT, ".", 0)
+
+
+def test_inline_bold():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(["And some _**`bold italic code http://url`**_."])
+    assert tokens[0] == Token(TT.TEXT, "And some ", 0)
+    assert tokens[1] == Token(TT.ITALIC_BEGIN, "", 0)
+    assert tokens[2] == Token(TT.BOLD_BEGIN, "", 0)
+    assert tokens[3] == Token(TT.CODE, "bold italic code ", 0)
+    assert tokens[4] == Token(TT.URL, "http://url", 0)
+    assert tokens[5] == Token(TT.BOLD_END, "", 0)
+    assert tokens[6] == Token(TT.ITALIC_END, "", 0)
+    assert tokens[7] == Token(TT.TEXT, ".", 0)
+
+
+def test_inline_italic_quote():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(["> Quote w **bold** and _italic_ and `code`."])
+    assert tokens[0] == Token(TT.QUOTE1, "> Quote w ", 0)
+    assert tokens[1] == Token(TT.BOLD_BEGIN, "", 0)
+    assert tokens[2] == Token(TT.QUOTE1, "bold", 0)
+    assert tokens[3] == Token(TT.BOLD_END, "", 0)
+    assert tokens[4] == Token(TT.QUOTE1, " and ", 0)
+    assert tokens[5] == Token(TT.ITALIC_BEGIN, "", 0)
+    assert tokens[6] == Token(TT.QUOTE1, "italic", 0)
+    assert tokens[7] == Token(TT.ITALIC_END, "", 0)
+    assert tokens[8] == Token(TT.QUOTE1, " and ", 0)
+    assert tokens[9] == Token(TT.CODE, "code", 0)
+    assert tokens[10] == Token(TT.QUOTE1, ".", 0)
+    #
+    parser.prerender(tokens, width=100)
+    assert tokens[0].render == [" > Quote w "]  # w extra space
+    assert tokens[1].render == [""]
+    assert tokens[2].render == ["bold"]  # no extra space
+    assert tokens[3].render == [""]
+    assert tokens[4].render == [" and "]
+    assert tokens[5].render == [""]
+    assert tokens[6].render == ["italic"]
+    assert tokens[7].render == [""]
+    assert tokens[8].render == [" and "]
+    assert tokens[9].render == ["code"]
+    assert tokens[10].render == ["."]
+
+
 class ScrMock:
     def __init__(self, h, w):
         self.height = h
