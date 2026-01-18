@@ -588,6 +588,7 @@ def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
     return msg, size
 
 
+# region Render Body
 def render_body(scr, tokens, scroll):
     tnum, offset = parser.find_visible_token(tokens, scroll)
     line_num = tokens[tnum].line_num
@@ -595,6 +596,14 @@ def render_body(scr, tokens, scroll):
         scr.addstr(y, 0, " " * WIDTH, 1)
     y, x = (5, 0)
     text_attr = 0
+    if parser.INLINE_STYLE_ENABLED:
+        # Rewind tokens from the begin of line to apply inline text attributes
+        first_token = tnum
+        while tokens[first_token].line_num == line_num and first_token > 0:
+            first_token -= 1
+        for token in tokens[first_token:tnum]:
+            text_attr = apply_attribute(token, text_attr)
+
     for token in tokens[tnum:]:
         if token.line_num > line_num:
             line_num = token.line_num
@@ -602,18 +611,23 @@ def render_body(scr, tokens, scroll):
         if y >= HEIGHT - 1:
             break  # tokens
         #
-        if token.type == parser.TT.ITALIC_BEGIN:
-            text_attr |= curses.A_ITALIC
-        elif token.type == parser.TT.ITALIC_END:
-            text_attr &= ~curses.A_ITALIC
-
-        elif token.type == parser.TT.BOLD_BEGIN:
-            text_attr |= curses.A_BOLD
-        elif token.type == parser.TT.BOLD_END:
-            text_attr &= ~curses.A_BOLD
+        text_attr = apply_attribute(token, text_attr)
         #
         y, x = render_token(scr, token, y, x, offset, text_attr)
         offset = 0  # required in the first partial multiline token only
+
+
+def apply_attribute(token, text_attr):
+    if token.type == parser.TT.ITALIC_BEGIN:
+        text_attr |= curses.A_ITALIC
+    elif token.type == parser.TT.ITALIC_END:
+        text_attr &= ~curses.A_ITALIC
+
+    elif token.type == parser.TT.BOLD_BEGIN:
+        text_attr |= curses.A_BOLD
+    elif token.type == parser.TT.BOLD_END:
+        text_attr &= ~curses.A_BOLD
+    return text_attr
 
 
 def render_token(scr, token: parser.Token, y, x, offset, text_attr):
@@ -633,6 +647,7 @@ def render_token(scr, token: parser.Token, y, x, offset, text_attr):
         else:
             x += len(line)  # last/single line -- move caret in line
     return y + (len(token.render) - 1) - offset, x  #
+# endregion Render Body
 
 
 def draw_reader(echo: str, msgid, out):
