@@ -1124,6 +1124,9 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_links:
             results = parser.url_template.findall("\n".join(msg[8:]))
             links = [it[0] for it in results]
+            links = list(map(
+                lambda it: it[0:-1] if it.endswith(")") and "(" not in it else it,
+                links))
             if len(links) == 1:
                 open_link(links[0])
             elif links:

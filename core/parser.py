@@ -106,8 +106,11 @@ def _tokenize_inline(text: str, line_num: int, token: Token) -> List[Token]:
             if token.value:
                 tokens.append(token)
                 token = Token(token.type, "", line_num)
-            tokens.append(Token("URL", url, line_num))
             pos = match.end()
+            if url.endswith(")") and "(" not in url:
+                url = url[0:-1]
+                pos -= 1
+            tokens.append(Token("URL", url, line_num))
         else:
             url_start = match.start() if match else len(text)
             raw_text = text[pos:url_start]

@@ -278,6 +278,16 @@ def test_quote_url():
     assert b_height == 1
 
 
+def test_url_parenthesis():
+    tokens = parser.tokenize(["(http://url)"])
+    assert tokens[0] == Token("TEXT", "(", 0)
+    assert tokens[1] == Token("URL", "http://url", 0)
+    assert tokens[2] == Token("TEXT", ")", 0)
+    #
+    tokens = parser.tokenize(["http://url/with_(parenthesis)"])
+    assert tokens[0] == Token("URL", "http://url/with_(parenthesis)", 0)
+
+
 class ScrMock:
     def __init__(self, h, w):
         self.height = h
