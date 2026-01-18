@@ -18,7 +18,7 @@ echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
 code_inline_template = re.compile(r"`[^`]+`")
 # TODO: Fix bold_inline_template regex w negative double __/**
 bold_inline_template = re.compile(r"(__[^_]+__)|(\*\*[^*]+\*\*)")
-italic_inline_template = re.compile(r"(_[^_]+_)|(\*[^*]+\*)")
+italic_inline_template = re.compile(r"(_[^\s_][^_]+[^\s_]_)|(\*[^\s*][^*]+[^\s*]\*)")
 
 
 class TT(Enum):

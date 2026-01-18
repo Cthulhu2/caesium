@@ -351,12 +351,14 @@ def test_inline_code_block():
 
 def test_inline_italic():
     parser.INLINE_STYLE_ENABLED = True
-    tokens = parser.tokenize(["Text _`an italic code`_."])
+    tokens = parser.tokenize(["Text _`an italic code`_.",
+                              "/* XPM */"])
     assert tokens[0] == Token(TT.TEXT, "Text ", 0)
     assert tokens[1] == Token(TT.ITALIC_BEGIN, "", 0)
     assert tokens[2] == Token(TT.CODE, "an italic code", 0)
     assert tokens[3] == Token(TT.ITALIC_END, "", 0)
     assert tokens[4] == Token(TT.TEXT, ".", 0)
+    assert tokens[5] == Token(TT.TEXT, "/* XPM */", 1)
 
 
 def test_inline_bold():
