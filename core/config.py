@@ -48,7 +48,7 @@ ECHO_CARBON = Echo("carbonarea", "Карбонка", False)
 class Node:
     nodename: str = "untitled node"
     echoareas: List[Echo] = dataclasses.field(default_factory=list)
-    node: str = ""  # base url
+    url: str = ""
     auth: str = ""
     to: List[str] = dataclasses.field(default_factory=list)
     archive: List[Echo] = dataclasses.field(default_factory=list)
@@ -87,9 +87,9 @@ class Config:
                     self.nodes.append(node)
                 node = Node(nodename=" ".join(param[1:]))
             elif param[0] == "node":
-                node.node = param[1]
-                if not node.node.endswith("/"):
-                    node.node += "/"
+                node.url = param[1]
+                if not node.url.endswith("/"):
+                    node.url += "/"
             elif param[0] == "auth":
                 node.auth = param[1]
             elif param[0] == "to":

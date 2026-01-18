@@ -120,8 +120,8 @@ def get_out_length(drafts=False):
                     if f.endswith(".out") or f.endswith(".outmsg")]) - 1
 
 
-def make_toss():
-    node_dir = "out/" + cfg.nodes[node].nodename
+def make_toss(node_):  # type: (config.Node) -> None
+    node_dir = "out/" + node_.nodename
     lst = [x for x in os.listdir(node_dir)
            if x.endswith(".out")]
     for msg in lst:
@@ -134,21 +134,19 @@ def make_toss():
                   node_dir + "/%s%s" % (msg, "msg"))
 
 
-def send_mail():
-    lst = [x for x in sorted(os.listdir("out/" + cfg.nodes[node].nodename))
+def send_mail(node_):  # type: (config.Node) -> None
+    lst = [x for x in sorted(os.listdir("out/" + node_.nodename))
            if x.endswith(".toss")]
     total = str(len(lst))
     try:
-        node_dir = "out/" + cfg.nodes[node].nodename
+        node_dir = "out/" + node_.nodename
         for n, msg in enumerate(lst, start=1):
             print("\rОтправка сообщения: " + str(n) + "/" + total, end="")
             msg_toss = node_dir + "/%s" % msg
             with codecs.open(msg_toss, "r", "utf-8") as f:
                 text = f.read()
             #
-            result = client.send_msg(cfg.nodes[node].node,
-                                     cfg.nodes[node].auth,
-                                     text)
+            result = client.send_msg(node_.url, node_.auth, text)
             #
             if result.startswith("msg ok"):
                 os.remove(msg_toss)
@@ -176,13 +174,12 @@ def debundle(bundle):
         api.save_message(messages, node, cfg.nodes[node].to)
 
 
-def get_mail():
+def get_mail(node_):  # type: (config.Node) -> None
     fetch_msg_list = []
     print("Получение индекса от ноды...")
-    cur_node = cfg.nodes[node]
     echoareas = list(map(lambda e: e.name, filter(lambda e: e.sync,
-                                                  cur_node.echoareas)))
-    remote_msg_list = client.get_msg_list(cur_node.node, echoareas)
+                                                  node_.echoareas)))
+    remote_msg_list = client.get_msg_list(node_.url, echoareas)
     print("Построение разностного индекса...")
     local_index = None
     for line in remote_msg_list:
@@ -196,19 +193,19 @@ def get_mail():
         for get_list in utils.separate(fetch_msg_list):
             count += len(get_list)
             print("\rПолучение сообщений: " + str(count) + "/" + total, end="")
-            debundle(client.get_bundle(cur_node.node, "/".join(get_list)))
+            debundle(client.get_bundle(node_.url, "/".join(get_list)))
     else:
         print("Новых сообщений не обнаружено.", end="")
     print()
 
 
-def fetch_mail():
-    print("Работа с " + cfg.nodes[node].node)
+def fetch_mail(node_):  # type: (config.Node) -> None
+    print("Работа с " + node_.url)
     try:
-        if cfg.nodes[node].auth:
-            make_toss()
-            send_mail()
-        get_mail()
+        if node_.auth:
+            make_toss(node_)
+            send_mail(node_)
+        get_mail(node_)
     except KeyboardInterrupt:
         print("\nПрервано пользователем")
     except Exception as ex:
@@ -474,7 +471,7 @@ def show_echo_selector_screen():
         elif key in keys.s_get:
             terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
-            fetch_mail()
+            fetch_mail(cfg.nodes[node])
             stdscr = curses.initscr()
             initialize_curses()
             draw_message_box("Подождите", False)
@@ -805,7 +802,7 @@ def show_subject(subject):
 
 def get_msg(msgid):
     node_ = cfg.nodes[node]
-    bundle = client.get_bundle(node_.node, msgid)
+    bundle = client.get_bundle(node_.url, msgid)
     for msg in filter(None, bundle):
         m = msg.split(":")
         msgid = m[0]
