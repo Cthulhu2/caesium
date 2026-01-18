@@ -1164,6 +1164,10 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 stack.clear()
                 msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+        elif key in keys.r_inlines:
+            parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
+            if msg:
+                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
