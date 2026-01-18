@@ -8,6 +8,7 @@ INLINE_STYLE_ENABLED = False
 url_template = re.compile(r"((https?|ftp|file|ii)://?"
                           r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
                           r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
+header_template = re.compile(r"^(={1,3}\s)|(#{1,3}\s)")
 # noinspection RegExpRedundantEscape
 ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|\/\/|#)")
 # noinspection RegExpRedundantEscape
@@ -60,9 +61,9 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
     while line_num < len(lines):
         line = lines[line_num]
         #
-        if line.startswith('== '):
-            tokens.extend(_inline(line[3:], line_num + start_line,
-                                  Token(TT.HEADER, "== ",
+        if header := header_template.match(line):
+            tokens.extend(_inline(line[header.end():], line_num + start_line,
+                                  Token(TT.HEADER, line[0:header.end()],
                                         line_num + start_line)))
             line_num += 1
             continue  #
@@ -140,6 +141,7 @@ def _inline(text: str, line_num: int, token: Token) -> List[Token]:
                              (match_bold, TT.BOLD_BEGIN),  # after italic
                              (match_url, TT.URL))))  # type: List[Tuple[re.Match, TT]]
         if match:
+            # find nearest matched candidate
             match = min(match, key=lambda t: t[0].start())  # type: Tuple[re.Match, TT]
         if match and match[0].start() == pos:
             sub_str = match[0].group()

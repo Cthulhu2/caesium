@@ -269,6 +269,23 @@ def test_render_tabs():
     assert b_height == 7
 
 
+def test_headers():
+    tokens = parser.tokenize(["= Header1",
+                              "== Header2",
+                              "=== Header3",
+                              "# Header1",
+                              "## Header2",
+                              "### Header3",
+                              "#Just comment"])
+    assert tokens[0] == Token(TT.HEADER, "= Header1", 0)
+    assert tokens[1] == Token(TT.HEADER, "== Header2", 1)
+    assert tokens[2] == Token(TT.HEADER, "=== Header3", 2)
+    assert tokens[3] == Token(TT.HEADER, "# Header1", 3)
+    assert tokens[4] == Token(TT.HEADER, "## Header2", 4)
+    assert tokens[5] == Token(TT.HEADER, "### Header3", 5)
+    assert tokens[6] == Token(TT.COMMENT, "#Just comment", 6)
+
+
 def test_quote_url():
     tokens = parser.tokenize([">http://in-quote"])
     b_height = parser.prerender(tokens, width=20)
