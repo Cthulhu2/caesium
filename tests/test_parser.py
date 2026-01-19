@@ -368,6 +368,9 @@ def test_inline_italic():
     tokens = parser.tokenize(["Text filename_with_underscore.log."])
     assert tokens[0] == Token(TT.TEXT, "Text filename_with_underscore.log.", 0)
 
+    tokens = parser.tokenize(["*aaaaaa."])
+    assert tokens[0] == Token(TT.TEXT, "*aaaaaa.", 0)
+
 
 def test_inline_bold():
     parser.INLINE_STYLE_ENABLED = True
