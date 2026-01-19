@@ -38,8 +38,8 @@ next_echoarea = False
 node = 0
 cfg = config.Config()
 
-version = "Caesium/0.6 │"
-client.USER_AGENT = "Caesium/0.6"
+version = "Caesium/0.7 │"
+client.USER_AGENT = "Caesium/0.7"
 
 splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
@@ -48,8 +48,9 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "███      ███  ███ ███           ███ ███ ███  ███ ███ ██ ███",
           "████████ ████████ ████████ ████████ ███ ████████ ███ ██ ███",
           "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
-          "           ncurses ii/idec client        v0.6",
-          "           Andrew Lobanov             04.01.2026"]
+          "           ncurses ii/idec client        v0.7",
+          "           Andrew Lobanov             20.01.2026",
+          "           Cthulhu Fhtagn"]
 
 
 def reset_config():
