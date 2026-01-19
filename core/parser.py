@@ -62,7 +62,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
     tokens = []
     line_num = 0
     while line_num < len(lines):
-        line = lines[line_num]
+        line = lines[line_num].rstrip("\r")
         #
         if header := header_template.match(line):
             tokens.extend(_inline(line[header.end():], line_num + start_line,
