@@ -107,9 +107,12 @@ def resave_out(filename, draft=False):
 
 def outcount():
     outpath = "out/" + cfg.nodes[node].nodename
-    i = str(len([x for x in os.listdir(outpath)
-                 if not x.endswith(".toss")]) + 1)
-    return outpath + "/%s" % i.zfill(5)
+    num = 0
+    for x in os.listdir(outpath):
+        s_num = x.split(".", maxsplit=1)[0]
+        if s_num.isdigit():
+            num = max(num, int(s_num))
+    return outpath + "/%s" % str(num + 1).zfill(5)
 
 
 def get_out_length(drafts=False):
@@ -963,7 +966,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     attachment.write(token.filedata)
                 draw_message_box("Файл сохранён '%s'" % filepath, True)
                 stdscr.getch()
-                if show_menu("Открыть '%s'?" % filepath, ["Нет", "Да"]) == 2:
+                if show_menu("Открыть '%s'?" % token.filename,
+                             ["Нет", "Да"]) == 2:
                     utils.open_file(filepath)
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
@@ -1151,6 +1155,12 @@ def echo_reader(echo: config.Echo, msgn, archive):
             get_counts(False)
             msgids = api.get_echo_msgids(echo.name)
             prerender_msg_or_quit()
+        elif key in keys.f_delete and drafts and msgids:
+            if show_menu("Удалить черновик '%s'?" % msgids[msgn],
+                         ["Нет", "Да"]) == 2:
+                os.remove("out/" + cur_node.nodename + "/" + msgids[msgn])
+                msgids = get_out_msgids(drafts)
+                prerender_msg_or_quit()
         elif key in keys.r_getmsg and size == 0 and msgid:
             try:
                 draw_message_box("Подождите", False)
