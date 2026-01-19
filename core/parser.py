@@ -16,9 +16,12 @@ quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
 code_inline_template = re.compile(r"`[^`]+`")
-# TODO: Fix bold_inline_template regex w negative double __/**
-bold_inline_template = re.compile(r"(__[^_]+__)|(\*\*[^*]+\*\*)")
-italic_inline_template = re.compile(r"(_[^\s_][^_]+[^\s_]_)|(\*[^\s*][^*]+[^\s*]\*)")
+bold_inline_template = re.compile(
+    r"(((?<=\s)|(?<=^))__[^\s_][^_]+[^\s_]__(?=$|\s|\.))"
+    r"|(((?<=\s)|(?<=^))\*\*[^\s*][^*]+[^\s*]\*\*(?=$|\s|\.))")
+italic_inline_template = re.compile(
+    r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|\s|\.))"
+    r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]*(?=$|\s|\.))")
 
 
 class TT(Enum):

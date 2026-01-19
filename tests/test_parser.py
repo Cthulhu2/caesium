@@ -360,6 +360,9 @@ def test_inline_italic():
     assert tokens[4] == Token(TT.TEXT, ".", 0)
     assert tokens[5] == Token(TT.TEXT, "/* XPM */", 1)
 
+    tokens = parser.tokenize(["Text filename_with_underscore.log."])
+    assert tokens[0] == Token(TT.TEXT, "Text filename_with_underscore.log.", 0)
+
 
 def test_inline_bold():
     parser.INLINE_STYLE_ENABLED = True
@@ -372,6 +375,15 @@ def test_inline_bold():
     assert tokens[5] == Token(TT.BOLD_END, "", 0)
     assert tokens[6] == Token(TT.ITALIC_END, "", 0)
     assert tokens[7] == Token(TT.TEXT, ".", 0)
+
+    tokens = parser.tokenize(["Not**bold**."])
+    assert tokens[0] == Token(TT.TEXT, "Not**bold**.", 0)
+
+    tokens = parser.tokenize(["**bold**. without period."])
+    assert tokens[0] == Token(TT.BOLD_BEGIN, "", 0)
+    assert tokens[1] == Token(TT.TEXT, "bold", 0)
+    assert tokens[2] == Token(TT.BOLD_END, "", 0)
+    assert tokens[3] == Token(TT.TEXT, ". without period.", 0)
 
 
 def test_inline_italic_quote():
