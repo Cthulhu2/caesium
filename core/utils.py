@@ -1,3 +1,6 @@
+import os
+import platform
+import subprocess
 import time
 from typing import List
 
@@ -41,3 +44,14 @@ def msg_strfsize(size_bytes):  # type: (int) -> str
     if size_bytes < 1024:
         return str(size_bytes) + " B"
     return str(format(size_bytes / 1024, ".2f")) + " KiB"
+
+
+def open_file(filepath):
+    if platform.system() == "Darwin":  # macOS
+        subprocess.call(("open", filepath))
+    elif platform.system() == "Windows":  # windows
+        os.startfile(filepath)
+    elif os.getenv("TERMUX_VERSION", ""):  # android probably
+        subprocess.call(("termux-open", filepath))
+    else:  # linux variants
+        subprocess.call(("xdg-open", filepath))

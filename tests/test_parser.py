@@ -434,11 +434,11 @@ def test_inline_italic_quote():
 def test_attachments_xpm():
     parser.INLINE_STYLE_ENABLED = True
     xpm = ["/* XPM */",
-           "static char * file_xpm[] = {",
+           "static char *file_xpm[] = {",
            "};"]
     tokens = parser.tokenize([*xpm,
                               "Non-XPM"])
-    assert tokens[0] == Token(TT.URL, "file:///file.xpm (xpm, 41 B)", 0)
+    assert tokens[0] == Token(TT.URL, "file:///file.xpm (xpm, 40 B)", 0)
     assert tokens[1] == Token(TT.TEXT, "Non-XPM", 3)
     assert hasattr(tokens[0], "filedata")
     # noinspection PyUnresolvedReferences

@@ -59,6 +59,8 @@ def reset_config():
 
 
 def check_directories(storage_api):
+    if not os.path.exists("downloads"):
+        os.mkdir("downloads")
     if not os.path.exists("out"):
         os.mkdir("out")
     for n in cfg.nodes:
@@ -761,13 +763,14 @@ def message_box(smsg):
 
 def save_message_to_file(msgid, echoarea):
     msg, size = api.read_msg(msgid, echoarea)
-    with open(msgid + ".txt", "w") as f:
-        f.write("== " + msg[1] + " ==================== " + str(msgid) + "\n")
+    filepath = "downloads/" + msgid + ".txt"
+    with open(filepath, "w") as f:
+        f.write("== " + msg[1] + " ==================== " + msgid + "\n")
         f.write("От:   " + msg[3] + " (" + msg[4] + ")\n")
         f.write("Кому: " + msg[5] + "\n")
         f.write("Тема: " + msg[6] + "\n")
         f.write("\n".join(msg[7:]))
-    message_box("Сообщение сохранено в файл\n" + str(msgid) + ".txt")
+    message_box("Сообщение сохранено в файл\n" + filepath)
 
 
 def get_out_msgids(drafts=False):
@@ -846,11 +849,11 @@ def get_msg(msgid):
 
 
 def show_menu(title, items):
-    h = len(items)
-    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it), items)))
     e = "Esc - отмена"
-    if w < len(title) + 2:
-        w = len(title) + 2
+    h = len(items)
+    test_width = items + [e + "[]", title]
+    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it),
+                                                   test_width)))
     menu_win = curses.newwin(h + 2, w + 2,
                              int(HEIGHT / 2 - h / 2 - 2),
                              int(WIDTH / 2 - w / 2 - 2))
@@ -947,11 +950,21 @@ def echo_reader(echo: config.Echo, msgn, archive):
         else:
             go = False
 
-    def open_link(link):  # type: (str) -> None
+    def open_link(token):  # type: (parser.Token) -> None
+        link = token.value
         nonlocal msgid, msgn, msg, size, go
         nonlocal body_tokens, body_height, scroll_thumb_size
         global next_echoarea
-        if not link.startswith("ii://"):
+        if hasattr(token, "filename"):
+            if hasattr(token, "filedata"):
+                filepath = "downloads/" + token.filename
+                with open(filepath, "wb") as attachment:
+                    attachment.write(token.filedata)
+                draw_message_box("Файл сохранён '%s'" % filepath, True)
+                stdscr.getch()
+                if show_menu("Открыть '%s'?" % filepath, ["Нет", "Да"]) == 2:
+                    utils.open_file(filepath)
+        elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
                 message_box("Не удалось запустить Интернет-браузер")
         elif parser.echo_template.match(link[5:]):  # echoarea
@@ -1149,15 +1162,13 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 message_box("Не удалось определить msgid.\n" + str(ex))
                 stdscr.clear()
         elif key in keys.r_links:
-            results = parser.url_template.findall("\n".join(msg[8:]))
-            links = [it[0] for it in results]
-            links = list(map(
-                lambda it: it[0:-1] if it.endswith(")") and "(" not in it else it,
-                links))
+            links = list(filter(lambda it: it.type == parser.TT.URL,
+                                body_tokens))
             if len(links) == 1:
                 open_link(links[0])
             elif links:
-                i = show_menu("Выберите ссылку", links)
+                i = show_menu("Выберите ссылку", list(map(lambda it: it.value,
+                                                          links)))
                 if i:
                     open_link(links[i - 1])
             stdscr.clear()
