@@ -849,9 +849,10 @@ def get_msg(msgid):
 
 
 def show_menu(title, items):
+    # TODO: Fix show_menu crash w fit a large title/items to screen width
     e = "Esc - отмена"
     h = len(items)
-    test_width = items + [e + "[]", title]
+    test_width = items + [e + "[]", title + "[]"]
     w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it),
                                                    test_width)))
     menu_win = curses.newwin(h + 2, w + 2,
