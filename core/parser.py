@@ -1,7 +1,10 @@
+import base64
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Optional, Tuple
+
+from core import utils
 
 INLINE_STYLE_ENABLED = False
 
@@ -22,6 +25,8 @@ bold_inline_template = re.compile(
 italic_inline_template = re.compile(
     r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|\s|\.))"
     r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]\*(?=$|\s|\.))")
+filename_sanitize = re.compile(r"\.{2}|^[ .]|[/<>:\"\\|?*]+|[ .]$")
+simple_b64 = re.compile(r"^[-A-Za-z0-9+/]*={0,3}$")
 
 
 class TT(Enum):
@@ -60,42 +65,42 @@ def is_code_block2(line):
 
 def tokenize(lines: List[str], start_line=0) -> List[Token]:
     tokens = []
-    line_num = 0
+    line_num = start_line
     while line_num < len(lines):
-        line = lines[line_num].rstrip("\r")
+        line = lines[line_num - start_line].rstrip("\r")
         #
         if header := header_template.match(line):
-            tokens.extend(_inline(line[header.end():], line_num + start_line,
+            tokens.extend(_inline(line[header.end():], line_num,
                                   Token(TT.HEADER, line[0:header.end()],
-                                        line_num + start_line)))
+                                        line_num)))
             line_num += 1
             continue  #
         #
         if comment := ps_template.search(line):
-            tokens.extend(_inline(line[comment.end():], line_num + start_line,
+            tokens.extend(_inline(line[comment.end():], line_num,
                                   Token(TT.COMMENT, line[0:comment.end()],
-                                        line_num + start_line)))
+                                        line_num)))
             line_num += 1
             continue  #
         #
         if quote := quote_template.match(line):
             count = line[0:quote.span()[1]].count(">")
             kind = (TT.QUOTE1, TT.QUOTE2)[(count + 1) % 2]
-            tokens.extend(_inline(line[quote.end():], line_num + start_line,
+            tokens.extend(_inline(line[quote.end():], line_num,
                                   Token(kind, line[0:quote.end()],
-                                        line_num + start_line)))
+                                        line_num)))
             line_num += 1
             continue  #
         #
         if origin := origin_template.search(line):
-            tokens.extend(_inline(line[origin.end():], line_num + start_line,
+            tokens.extend(_inline(line[origin.end():], line_num,
                                   Token(TT.ORIGIN, line[0:origin.end()],
-                                        line_num + start_line)))
+                                        line_num)))
             line_num += 1
             continue  #
         #
         if line.rstrip() == "----":
-            tokens.append(Token(TT.HR, line, line_num + start_line))
+            tokens.append(Token(TT.HR, line, line_num))
             line_num += 1
             continue  #
         #
@@ -108,20 +113,33 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
         if check_code_block:
             next_lines = lines[line_num + 1:]
             if any(filter(lambda s: check_code_block(s), next_lines)):
-                tokens.append(Token(TT.CODE, line, line_num + start_line))
+                tokens.append(Token(TT.CODE, line, line_num))
                 line_num += 1
                 for nline in next_lines:
-                    tokens.extend(_simple_inline(
-                        nline, line_num,
-                        Token(TT.CODE, "", line_num + start_line)))
+                    tokens.extend(_simple_inline(nline, line_num,
+                                                 Token(TT.CODE, "", line_num)))
                     line_num += 1
                     if check_code_block(nline):
                         break  # next_lines
                 continue  # lines
-
         #
-        tokens.extend(_inline(line, line_num + start_line,
-                              Token(TT.TEXT, "", line_num + start_line)))
+        if INLINE_STYLE_ENABLED and line.rstrip() == "/* XPM */":
+            next_lines = lines[line_num:]
+            xpm_tokens, xpm_lines_count = _tokenize_xpm(next_lines, line_num)
+            if xpm_tokens:
+                tokens.extend(xpm_tokens)
+                line_num += xpm_lines_count
+                continue  # lines
+        #
+        if INLINE_STYLE_ENABLED and line.rstrip().startswith("@base64:"):
+            next_lines = lines[line_num:]
+            b64_tokens, b64_lines_count = _tokenize_base64(next_lines, line_num)
+            if b64_tokens:
+                tokens.extend(b64_tokens)
+                line_num += b64_lines_count
+                continue  # lines
+        #
+        tokens.extend(_inline(line, line_num, Token(TT.TEXT, "", line_num)))
         line_num += 1
 
     return tokens
@@ -212,6 +230,78 @@ def _simple_inline(text: str, line_num: int, token: Token) -> List[Token]:
     if not text:
         tokens.append(token)
     return tokens
+
+
+def _tokenize_xpm(lines, line_num):  # type: (List[str], int) -> (List[Token], int)
+    if len(lines) < 2 or not lines[0].startswith("/* XPM */"):
+        return [], 0  #
+
+    # filename
+    fname = re.search(r"\w+\[]", lines[1])
+    if not fname:
+        return [], 0  #
+    fname = fname.group().rstrip("[]")
+    if fname.endswith("_xpm"):
+        fname = fname[0:-4] + ".xpm"
+    else:
+        fname = fname + ".xpm"
+    fname = filename_sanitize.sub("_", fname)
+
+    # filedata
+    value = ""
+    ok = False
+    xpm_lines_count = 0
+    for i, line in enumerate(lines):
+        value += line
+        if line.rstrip().endswith("};"):
+            ok = True
+            xpm_lines_count = i + 1
+            break
+        value += "\n"
+    if not ok:
+        return [], 0  #
+
+    value = value.encode("utf-8")
+    size = utils.msg_strfsize(len(value))
+
+    token = Token(TT.URL, "file:///%s (xpm, %s)" % (fname, size), line_num)
+    token.filename = fname
+    token.filedata = value
+    return [token], xpm_lines_count
+
+
+def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token], int)
+    if len(lines) < 2 or not lines[0].startswith("@base64:"):
+        return [], 0  #
+
+    # filename
+    fname = lines[0].split(":", maxsplit=1)[1].strip()
+    if not fname:
+        return [], 0  #
+    fname = filename_sanitize.sub("_", fname)
+
+    # filedata
+    value = ""
+    b64_lines_count = 1
+    for line in lines[1:]:
+        line = line.strip()
+        if line and simple_b64.match(line):
+            value += line + "\n"
+            b64_lines_count += 1
+        else:
+            break  #
+    if not value:
+        return [], 0  #
+    try:
+        value = base64.b64decode(value)
+    except (TypeError, ValueError):
+        return [], 0  #
+    size = utils.msg_strfsize(len(value))
+
+    token = Token(TT.URL, "file:///%s (b64, %s)" % (fname, size), line_num)
+    token.filename = fname
+    token.filedata = value
+    return [token], b64_lines_count
 
 
 def prerender(tokens, width, height=None):

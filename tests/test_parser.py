@@ -1,3 +1,6 @@
+import base64
+import textwrap
+
 from core import parser
 from core.parser import Token, TT
 
@@ -19,6 +22,11 @@ def test_url_template():
     match = parser.url_template.match(
         "https://wiki.archlinux.org/index.php/Ppp_(%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9)")
     assert match.string[match.span()[1] - 1] == ")"
+
+
+def test_filename_sanitize():
+    assert parser.filename_sanitize.sub("_", "/etc/passwd") == "_etc_passwd"
+    assert parser.filename_sanitize.sub("_", "../.htaccess") == "__.htaccess"
 
 
 BASE_TOKENS = """Test
@@ -421,6 +429,46 @@ def test_inline_italic_quote():
     assert tokens[8].render == [" and "]
     assert tokens[9].render == ["code"]
     assert tokens[10].render == ["."]
+
+
+def test_attachments_xpm():
+    parser.INLINE_STYLE_ENABLED = True
+    xpm = ["/* XPM */",
+           "static char * file_xpm[] = {",
+           "};"]
+    tokens = parser.tokenize([*xpm,
+                              "Non-XPM"])
+    assert tokens[0] == Token(TT.URL, "file:///file.xpm (xpm, 41 B)", 0)
+    assert tokens[1] == Token(TT.TEXT, "Non-XPM", 3)
+    assert hasattr(tokens[0], "filedata")
+    # noinspection PyUnresolvedReferences
+    assert str(tokens[0].filedata, "utf-8").split("\n") == xpm
+    assert len(tokens) == 2
+
+
+def test_attachments_base64():
+    parser.INLINE_STYLE_ENABLED = True
+    text = textwrap.fill(base64.b64encode("test data".encode("utf-8"))
+                         .decode("utf-8"), 5).split("\n")
+    tokens = parser.tokenize(["@base64: file.png",
+                              *text,  # 3 lines
+                              "String w Non base64 chars ...."])
+    assert tokens[0] == Token(TT.URL, "file:///file.png (b64, 9 B)", 0)
+    assert tokens[1] == Token(TT.TEXT, "String w Non base64 chars ....", 4)
+    assert hasattr(tokens[0], "filedata")
+    # noinspection PyUnresolvedReferences
+    assert str(tokens[0].filedata, "utf-8") == "test data"
+    assert len(tokens) == 2
+
+
+def test_attachments_base64_filename():
+    parser.INLINE_STYLE_ENABLED = True
+    text = textwrap.fill(base64.b64encode("test data".encode("utf-8"))
+                         .decode("utf-8"), 5).split("\n")
+    tokens = parser.tokenize(["@base64: /etc/passwd",
+                              *text,  # 3 lines
+                              "String w Non base64 chars ...."])
+    assert tokens[0] == Token(TT.URL, "file:///_etc_passwd (b64, 9 B)", 0)
 
 
 class ScrMock:

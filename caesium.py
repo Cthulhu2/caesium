@@ -668,6 +668,8 @@ def draw_reader(echo: str, msgid, out):
             draw_title(0, 0, echo)
     draw_status(1, version)
     current_time()
+    if parser.INLINE_STYLE_ENABLED:
+        draw_status(WIDTH - 10, "~")
     for i in range(0, 3):
         draw_cursor(i, 1)
     color = get_color("titles")
@@ -1183,6 +1185,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
             if msg:
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                y = max(0, min(y, body_height - scroll_view))
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
