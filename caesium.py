@@ -497,9 +497,9 @@ def show_echo_selector_screen():
                 last = lasts[echoareas[cursor].name]
             else:
                 last = 0
-            if cursor == 0:
+            if echoareas[cursor] == config.ECHO_FAVORITES:
                 echo_length = len(api.get_favorites_list())
-            elif cursor == 1:
+            elif echoareas[cursor] == config.ECHO_CARBON:
                 echo_length = len(api.get_carbonarea())
             else:
                 echo_length = api.get_echo_length(echoareas[cursor].name)
