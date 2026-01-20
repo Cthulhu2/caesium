@@ -680,8 +680,8 @@ def call_editor(out=''):
     p.wait()
     ui.initialize_curses()
     if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
-        d = show_menu("Куда сохранить?", ["Сохранить в исходящие",
-                                          "Сохранить как черновик"])
+        d = ui.show_menu("Куда сохранить?", ["Сохранить в исходящие",
+                                             "Сохранить как черновик"])
         if d == 2:
             if not out:
                 save_out(True)
@@ -795,51 +795,6 @@ def get_msg(msgid):
             api.save_message([(msgid, msgbody)], node_, node_.to)
 
 
-def show_menu(title, items):
-    # TODO: Fix show_menu crash w fit a large title/items to screen ui.WIDTH
-    e = "Esc - отмена"
-    h = len(items)
-    test_width = items + [e + "[]", title + "[]"]
-    w = 0 if not items else min(ui.WIDTH - 3, max(map(lambda it: len(it),
-                                                      test_width)))
-    menu_win = curses.newwin(h + 2, w + 2,
-                             int(ui.HEIGHT / 2 - h / 2 - 2),
-                             int(ui.WIDTH / 2 - w / 2 - 2))
-    menu_win.attrset(get_color("border"))
-    menu_win.border()
-    color = get_color("border")
-    menu_win.addstr(0, 1, "[", color)
-    menu_win.addstr(0, 2 + len(title), "]", color)
-    menu_win.addstr(h + 1, 1, "[", color)
-    menu_win.addstr(h + 1, 2 + len(e), "]", color)
-
-    color = get_color("titles")
-    menu_win.addstr(0, 2, title, color)
-    menu_win.addstr(h + 1, 2, e, color)
-    y = 1
-    while True:
-        for i, item in enumerate(items, start=1):
-            color = get_color("cursor" if i == y else "text")
-            menu_win.addstr(i, 1, " " * w, color)
-            menu_win.addstr(i, 1, item[:w], color)
-        menu_win.refresh()
-        key = ui.stdscr.getch()
-        if key in keys.r_up:
-            if y > 1:
-                y -= 1
-            else:
-                y = h
-        elif key in keys.r_down:
-            if y < h:
-                y += 1
-            else:
-                y = 1
-        elif key in keys.s_enter:
-            return y  #
-        elif key in keys.r_quit:
-            return False  #
-
-
 def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
     ui.stdscr.clear()
@@ -910,8 +865,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     attachment.write(token.filedata)
                 ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
                 ui.stdscr.getch()
-                if show_menu("Открыть '%s'?" % token.filename,
-                             ["Нет", "Да"]) == 2:
+                if ui.show_menu("Открыть '%s'?" % token.filename,
+                                ["Нет", "Да"]) == 2:
                     utils.open_file(filepath)
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
@@ -1100,8 +1055,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
             msgids = api.get_echo_msgids(echo.name)
             prerender_msg_or_quit()
         elif key in keys.f_delete and drafts and msgids:
-            if show_menu("Удалить черновик '%s'?" % msgids[msgn],
-                         ["Нет", "Да"]) == 2:
+            if ui.show_menu("Удалить черновик '%s'?" % msgids[msgn],
+                            ["Нет", "Да"]) == 2:
                 os.remove("out/" + cur_node.nodename + "/" + msgids[msgn])
                 msgids = get_out_msgids(drafts)
                 prerender_msg_or_quit()
@@ -1122,9 +1077,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
             if len(links) == 1:
                 open_link(links[0])
             elif links:
-                i = show_menu("Выберите ссылку", list(map(lambda it: it.value,
-                                                          links)))
-                if i:
+                if i := ui.show_menu("Выберите ссылку",
+                                     list(map(lambda it: it.value, links))):
                     open_link(links[i - 1])
             ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:
@@ -1257,6 +1211,7 @@ elif cfg.keys == "vi":
     import keys.vi as keys
 else:
     raise Exception("Unknown Keys Scheme :: " + cfg.keys)
+ui.keys = keys
 
 try:
     ui.initialize_curses()

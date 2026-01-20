@@ -1,6 +1,7 @@
 import curses
 from typing import Optional, List
 
+import keys.default as keys
 from core import config
 
 HEIGHT = 0
@@ -80,3 +81,43 @@ def show_message_box(smsg):
     draw_message_box(smsg, True)
     stdscr.getch()
     stdscr.clear()
+
+
+def show_menu(title, items):
+    # type: (str, List[str]) -> int
+    # TODO: Fix show_menu crash w fit a large title/items to screen ui.WIDTH
+    e = "Esc - отмена"
+    h = len(items)
+    test_width = items + [e + "[]", title + "[]"]
+    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it),
+                                                   test_width)))
+    win = curses.newwin(h + 2, w + 2,
+                        int(HEIGHT / 2 - h / 2 - 2),
+                        int(WIDTH / 2 - w / 2 - 2))
+    win.attrset(config.get_color("border"))
+    win.border()
+    color = config.get_color("border")
+    win.addstr(0, 1, "[", color)
+    win.addstr(0, 2 + len(title), "]", color)
+    win.addstr(h + 1, 1, "[", color)
+    win.addstr(h + 1, 2 + len(e), "]", color)
+
+    color = config.get_color("titles")
+    win.addstr(0, 2, title, color)
+    win.addstr(h + 1, 2, e, color)
+    y = 1
+    while True:
+        for i, item in enumerate(items, start=1):
+            color = config.get_color("cursor" if i == y else "text")
+            win.addstr(i, 1, " " * w, color)
+            win.addstr(i, 1, item[:w], color)
+        win.refresh()
+        key = stdscr.getch()
+        if key in keys.r_up:
+            y = y - 1 if y > 1 else h
+        elif key in keys.r_down:
+            y = y + 1 if y < h else 1
+        elif key in keys.s_enter:
+            return y  #
+        elif key in keys.r_quit:
+            return False  #
