@@ -226,19 +226,6 @@ echo_cursor = 0
 archive_cursor = 0
 
 
-def splash_screen():
-    ui.stdscr.clear()
-    x = int((ui.WIDTH - len(splash[1])) / 2) - 1
-    y = int((ui.HEIGHT - len(splash)) / 2)
-    i = 0
-    for line in splash:
-        ui.stdscr.addstr(y + i, x, line, get_color("text"))
-        i = i + 1
-    ui.stdscr.refresh()
-    curses.napms(2000)
-    ui.stdscr.clear()
-
-
 def draw_title(y, x, title):
     x = max(0, x)
     if (x + len(title) + 2) > ui.WIDTH:
@@ -472,7 +459,7 @@ def show_echo_selector_screen():
             os.system('cls' if os.name == 'nt' else 'clear')
             fetch_mail(cfg.nodes[node])
             ui.initialize_curses()
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             get_counts(True)
             ui.stdscr.clear()
             counts = rescan_counts(echoareas)
@@ -485,7 +472,7 @@ def show_echo_selector_screen():
             toggle_archive()
             ensure_cursor_visible()
         elif key in keys.s_enter:
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
                 last = lasts[echoareas[cursor].name]
             else:
@@ -532,7 +519,7 @@ def show_echo_selector_screen():
             if node == len(cfg.nodes):
                 node = 0
             echoareas = cfg.nodes[node].echoareas
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             get_counts()
             ui.stdscr.clear()
             counts_rescan = True
@@ -544,7 +531,7 @@ def show_echo_selector_screen():
             if node == -1:
                 node = len(cfg.nodes) - 1
             echoareas = cfg.nodes[node].echoareas
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             get_counts()
             ui.stdscr.clear()
             counts_rescan = True
@@ -721,40 +708,6 @@ def call_editor(out=''):
         os.remove("temp")
 
 
-def draw_message_box(smsg, wait):
-    msg = smsg.split("\n")
-    maxlen = max(map(lambda x: len(x), msg))
-    any_key = "Нажмите любую клавишу"
-    if wait:
-        maxlen = max(len(any_key), maxlen)
-        msgwin = curses.newwin(len(msg) + 4, maxlen + 2,
-                               int(ui.HEIGHT / 2 - 2),
-                               int(ui.WIDTH / 2 - maxlen / 2 - 2))
-    else:
-        msgwin = curses.newwin(len(msg) + 2, maxlen + 2,
-                               int(ui.HEIGHT / 2 - 2),
-                               int(ui.WIDTH / 2 - maxlen / 2 - 2))
-    msgwin.bkgd(' ', get_color("text"))
-    msgwin.attrset(get_color("border"))
-    msgwin.border()
-
-    i = 1
-    color = get_color("text")
-    for line in msg:
-        msgwin.addstr(i, 1, line, color)
-        i = i + 1
-    color = get_color("titles")
-    if wait:
-        msgwin.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), any_key, color)
-    msgwin.refresh()
-
-
-def message_box(smsg):
-    draw_message_box(smsg, True)
-    ui.stdscr.getch()
-    ui.stdscr.clear()
-
-
 def save_message_to_file(msgid, echoarea):
     msg, size = api.read_msg(msgid, echoarea)
     filepath = "downloads/" + msgid + ".txt"
@@ -764,7 +717,7 @@ def save_message_to_file(msgid, echoarea):
         f.write("Кому: " + msg[5] + "\n")
         f.write("Тема: " + msg[6] + "\n")
         f.write("\n".join(msg[7:]))
-    message_box("Сообщение сохранено в файл\n" + filepath)
+    ui.show_message_box("Сообщение сохранено в файл\n" + filepath)
 
 
 def get_out_msgids(drafts=False):
@@ -824,7 +777,7 @@ def show_subject(subject):
                 msg = msg + line + "\n"
                 line = word + " "
         msg = msg + line
-        message_box(msg)
+        ui.show_message_box(msg)
 
 
 def get_msg(msgid):
@@ -955,24 +908,24 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 filepath = "downloads/" + token.filename
                 with open(filepath, "wb") as attachment:
                     attachment.write(token.filedata)
-                draw_message_box("Файл сохранён '%s'" % filepath, True)
+                ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
                 ui.stdscr.getch()
                 if show_menu("Открыть '%s'?" % token.filename,
                              ["Нет", "Да"]) == 2:
                     utils.open_file(filepath)
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
-                message_box("Не удалось запустить Интернет-браузер")
+                ui.show_message_box("Не удалось запустить Интернет-браузер")
         elif parser.echo_template.match(link[5:]):  # echoarea
             if echo.name == link[5:]:
-                message_box("Конференция уже открыта")
+                ui.show_message_box("Конференция уже открыта")
             elif (link[5:] in cur_node.echoareas
                   or link[5:] in cur_node.archive
                   or link[5:] in cur_node.stat):
                 next_echoarea = link[5:]
                 go = False
             else:
-                message_box("Конференция отсутствует в БД ноды")
+                ui.show_message_box("Конференция отсутствует в БД ноды")
         elif link[5:] in msgids:  # msgid in same echoarea
             if not stack or stack[-1] != msgn:
                 stack.append(msgn)
@@ -1118,19 +1071,19 @@ def echo_reader(echo: config.Echo, msgn, archive):
             save_message_to_file(msgids[msgn], echo.name)
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgids[msgn], msg)
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             get_counts(False)
             if saved:
-                message_box("Сообщение добавлено в избранные")
+                ui.show_message_box("Сообщение добавлено в избранные")
             else:
-                message_box("Сообщение уже есть в избранных")
+                ui.show_message_box("Сообщение уже есть в избранных")
         elif key in keys.r_quote and not any((archive, out)) and msgids:
             quote_msg(msgids[msgn], msg)
             call_editor()
         elif key in keys.r_subj:
             show_subject(msg[6])
         elif key in keys.r_info and not out and ui.WIDTH < 80:
-            message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
+            ui.show_message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
@@ -1138,10 +1091,10 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 msgids = get_out_msgids(drafts)
                 prerender_msg_or_quit()
             else:
-                message_box("Сообщение уже отправлено")
+                ui.show_message_box("Сообщение уже отправлено")
             ui.stdscr.clear()
         elif key in keys.f_delete and favorites and msgids:
-            draw_message_box("Подождите", False)
+            ui.draw_message_box("Подождите", False)
             api.remove_from_favorites(msgids[msgn])
             get_counts(False)
             msgids = api.get_echo_msgids(echo.name)
@@ -1154,14 +1107,14 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 prerender_msg_or_quit()
         elif key in keys.r_getmsg and size == 0 and msgid:
             try:
-                draw_message_box("Подождите", False)
+                ui.draw_message_box("Подождите", False)
                 get_msg(msgid)
                 get_counts(True)
                 ui.stdscr.clear()
                 msg, size = api.find_msg(msgid)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             except Exception as ex:
-                message_box("Не удалось определить msgid.\n" + str(ex))
+                ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
                 ui.stdscr.clear()
         elif key in keys.r_links:
             links = list(filter(lambda it: it.type == parser.TT.URL,
@@ -1312,14 +1265,18 @@ try:
     except ValueError as err:
         config.load_colors("default")
         ui.stdscr.refresh()
-        message_box("Цветовая схема " + cfg.theme + " не установлена.\n"
-                    + str(err) + "\nБудет использована схема по-умолчанию.")
+        ui.show_message_box("Цветовая схема %s не установлена.\n"
+                            "%s\n"
+                            "Будет использована схема по-умолчанию."
+                            % (cfg.theme, str(err)))
         cfg.theme = "default"
     ui.stdscr.bkgd(" ", get_color("text"))
 
     if cfg.splash:
-        splash_screen()
-    draw_message_box("Подождите", False)
+        ui.draw_splash(ui.stdscr, splash)
+        curses.napms(2000)
+        ui.stdscr.clear()
+    ui.draw_message_box("Подождите", False)
     get_counts()
     ui.stdscr.clear()
     show_echo_selector_screen()
