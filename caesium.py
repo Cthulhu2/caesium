@@ -13,7 +13,7 @@ from datetime import datetime
 from shutil import copyfile
 from typing import List
 
-from core import parser, client, config, utils
+from core import parser, client, config, ui, utils
 from core.config import get_color
 
 # TODO: Add http/https/socks proxy support
@@ -224,51 +224,44 @@ def fetch_mail(node_):  # type: (config.Node) -> None
 #
 echo_cursor = 0
 archive_cursor = 0
-WIDTH = 0
-HEIGHT = 0
 
 
 def splash_screen():
-    stdscr.clear()
-    x = int((WIDTH - len(splash[1])) / 2) - 1
-    y = int((HEIGHT - len(splash)) / 2)
+    ui.stdscr.clear()
+    x = int((ui.WIDTH - len(splash[1])) / 2) - 1
+    y = int((ui.HEIGHT - len(splash)) / 2)
     i = 0
     for line in splash:
-        stdscr.addstr(y + i, x, line, get_color("text"))
+        ui.stdscr.addstr(y + i, x, line, get_color("text"))
         i = i + 1
-    stdscr.refresh()
+    ui.stdscr.refresh()
     curses.napms(2000)
-    stdscr.clear()
-
-
-def get_term_size():
-    global WIDTH, HEIGHT
-    HEIGHT, WIDTH = stdscr.getmaxyx()
+    ui.stdscr.clear()
 
 
 def draw_title(y, x, title):
     x = max(0, x)
-    if (x + len(title) + 2) > WIDTH:
-        title = title[:WIDTH - x - 2 - 3] + '...'
+    if (x + len(title) + 2) > ui.WIDTH:
+        title = title[:ui.WIDTH - x - 2 - 3] + '...'
     #
     color = get_color("border")
-    stdscr.addstr(y, x, "[", color)
-    stdscr.addstr(y, x + 1 + len(title), "]", color)
+    ui.stdscr.addstr(y, x, "[", color)
+    ui.stdscr.addstr(y, x + 1 + len(title), "]", color)
     color = get_color("titles")
-    stdscr.addstr(y, x + 1, title, color)
+    ui.stdscr.addstr(y, x + 1, title, color)
 
 
 def draw_status(x, title):
     color = get_color("statusline")
-    stdscr.addstr(HEIGHT - 1, x, title, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, x, title, color)
 
 
 def draw_cursor(y, color):
-    stdscr.insstr(y + 1, 0, " " * WIDTH, color)
+    ui.stdscr.insstr(y + 1, 0, " " * ui.WIDTH, color)
 
 
 def current_time():
-    draw_status(WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"))
+    draw_status(ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"))
 
 
 def get_counts(new=False):
@@ -307,11 +300,11 @@ def draw_echo_selector(start, cursor, archive):
     dsc_lens = []
     hidedsc = False
     m = 0
-    stdscr.attrset(get_color("border"))
+    ui.stdscr.attrset(get_color("border"))
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * WIDTH, color)
+    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
     color = get_color("statusline")
-    stdscr.insstr(HEIGHT - 1, 0, " " * WIDTH, color)
+    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
     if archive:
         echoareas = cfg.nodes[node].archive
         draw_title(0, 0, "Архив")
@@ -324,32 +317,32 @@ def draw_echo_selector(start, cursor, archive):
         desc_len = len(echo.desc)
         if desc_len > m:
             m = desc_len
-        if m > WIDTH - 38:
-            m = WIDTH - 38
+        if m > ui.WIDTH - 38:
+            m = ui.WIDTH - 38
         dsc_lens.append(desc_len)
     y = 0
     count = "Сообщений"
     unread = "Не прочитано"
     description = "Описание"
-    if WIDTH < 80 or m == 0:
+    if ui.WIDTH < 80 or m == 0:
         m = len(unread) - 7
         hidedsc = True
-    draw_title(0, WIDTH + 2 - m - len(count) - len(unread) - 1, count)
-    draw_title(0, WIDTH - 8 - m - 1, unread)
+    draw_title(0, ui.WIDTH + 2 - m - len(count) - len(unread) - 1, count)
+    draw_title(0, ui.WIDTH - 8 - m - 1, unread)
     if not hidedsc:
-        draw_title(0, WIDTH - len(description) - 2, description)
+        draw_title(0, ui.WIDTH - len(description) - 2, description)
     for echo in echoareas:
-        if y - start < HEIGHT - 2:
+        if y - start < ui.HEIGHT - 2:
             if y == cursor:
                 if y >= start:
                     color = get_color("cursor")
-                    stdscr.attrset(color)
+                    ui.stdscr.attrset(color)
                     draw_cursor(y - start, color)
             else:
                 if y >= start:
                     color = get_color("text")
                     draw_cursor(y - start, color)
-                stdscr.attrset(get_color("text"))
+                ui.stdscr.attrset(get_color("text"))
             if y + 1 >= start + 1:
                 if counts_rescan:
                     counts = rescan_counts(echoareas)
@@ -360,19 +353,21 @@ def draw_echo_selector(start, cursor, archive):
                 else:
                     last = -1
                 if last < echo_length - 1 or last == -1 and echo_length == 1:
-                    stdscr.addstr(y + 1 - start, 0, "+")
-                stdscr.addstr(y + 1 - start, 2, echo.name)
-                if WIDTH >= 80:
-                    if WIDTH - 38 >= len(echo.desc):
-                        stdscr.addstr(y + 1 - start, WIDTH - 1 - dsc_lens[y], echo.desc, color)
+                    ui.stdscr.addstr(y + 1 - start, 0, "+")
+                ui.stdscr.addstr(y + 1 - start, 2, echo.name)
+                if ui.WIDTH >= 80:
+                    if ui.WIDTH - 38 >= len(echo.desc):
+                        ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - dsc_lens[y],
+                                         echo.desc, color)
                     else:
-                        cut_index = WIDTH - 38 - len(echo.desc)
-                        stdscr.addstr(y + 1 - start, WIDTH - 1 - len(echo.desc[:cut_index]), echo.desc[:cut_index])
-                stdscr.addstr(y + 1 - start, WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
-                stdscr.addstr(y + 1 - start, WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
+                        cut_index = ui.WIDTH - 38 - len(echo.desc)
+                        ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - len(echo.desc[:cut_index]),
+                                         echo.desc[:cut_index])
+                ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
+                ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
         y = y + 1
     current_time()
-    stdscr.refresh()
+    ui.stdscr.refresh()
 
 
 def find_new(cursor):
@@ -388,18 +383,16 @@ def find_new(cursor):
 
 
 def edit_config():
-    global stdscr
-    terminate_curses()
+    ui.terminate_curses()
     p = subprocess.Popen(cfg.editor + " " + config.CONFIG_FILEPATH, shell=True)
     p.wait()
     reset_config()
     cfg.load()
-    stdscr = curses.initscr()
-    initialize_curses()
+    ui.initialize_curses()
 
 
 def show_echo_selector_screen():
-    global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node, stdscr
+    global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node
     archive = False
     echoareas = cfg.nodes[node].echoareas
     go = True
@@ -421,72 +414,71 @@ def show_echo_selector_screen():
             echo_cursor = cursor
             cursor = archive_cursor
             echoareas = cfg.nodes[node].archive
-        stdscr.clear()
+        ui.stdscr.clear()
         counts_rescan = True
 
     def ensure_cursor_visible():
         nonlocal start
-        if cursor - start > HEIGHT - 3:
-            start = cursor - HEIGHT + 3
+        if cursor - start > ui.HEIGHT - 3:
+            start = cursor - ui.HEIGHT + 3
         elif cursor - start < 0:
             start = cursor
 
     while go:
         draw_echo_selector(start, cursor, archive)
-        key = stdscr.getch()
+        key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
-            get_term_size()
-            if cursor >= HEIGHT - 2:
-                start = cursor - HEIGHT + 3
+            ui.set_term_size()
+            if cursor >= ui.HEIGHT - 2:
+                start = cursor - ui.HEIGHT + 3
             if cursor - start <= 0:
                 start = cursor
-            if start > 0 and HEIGHT - 2 > len(echoareas):
+            if start > 0 and ui.HEIGHT - 2 > len(echoareas):
                 start = 0
-            stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.s_up and cursor > 0:
             cursor = cursor - 1
             if cursor - start < 0 < start:
                 start = start - 1
         elif key in keys.s_down and cursor < len(echoareas) - 1:
             cursor = cursor + 1
-            if cursor - start > HEIGHT - 3 and start < len(echoareas) - HEIGHT + 2:
+            if cursor - start > ui.HEIGHT - 3 and start < len(echoareas) - ui.HEIGHT + 2:
                 start = start + 1
         elif key in keys.s_ppage:
-            cursor = cursor - HEIGHT + 2
+            cursor = cursor - ui.HEIGHT + 2
             if cursor < 0:
                 cursor = 0
             if cursor - start < 0 < start:
-                start = start - HEIGHT + 2
+                start = start - ui.HEIGHT + 2
             if start < 0:
                 start = 0
         elif key in keys.s_npage:
-            cursor = cursor + HEIGHT - 2
+            cursor = cursor + ui.HEIGHT - 2
             if cursor >= len(echoareas):
                 cursor = len(echoareas) - 1
-            if cursor - start > HEIGHT - 3:
-                start = start + HEIGHT - 2
-                if start > len(echoareas) - HEIGHT + 2:
-                    start = len(echoareas) - HEIGHT + 2
+            if cursor - start > ui.HEIGHT - 3:
+                start = start + ui.HEIGHT - 2
+                if start > len(echoareas) - ui.HEIGHT + 2:
+                    start = len(echoareas) - ui.HEIGHT + 2
         elif key in keys.s_home:
             cursor = 0
             start = 0
         elif key in keys.s_end:
             cursor = len(echoareas) - 1
-            if len(echoareas) >= HEIGHT - 2:
-                start = len(echoareas) - HEIGHT + 2
+            if len(echoareas) >= ui.HEIGHT - 2:
+                start = len(echoareas) - ui.HEIGHT + 2
         elif key in keys.s_get:
-            terminate_curses()
+            ui.terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
             fetch_mail(cfg.nodes[node])
-            stdscr = curses.initscr()
-            initialize_curses()
+            ui.initialize_curses()
             draw_message_box("Подождите", False)
             get_counts(True)
-            stdscr.clear()
+            ui.stdscr.clear()
             counts = rescan_counts(echoareas)
             cursor = find_new(0)
-            if cursor >= HEIGHT - 2:
-                start = cursor - HEIGHT + 3
+            if cursor >= ui.HEIGHT - 2:
+                start = cursor - ui.HEIGHT + 3
             if cursor - start <= 0:
                 start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
@@ -542,7 +534,7 @@ def show_echo_selector_screen():
             echoareas = cfg.nodes[node].echoareas
             draw_message_box("Подождите", False)
             get_counts()
-            stdscr.clear()
+            ui.stdscr.clear()
             counts_rescan = True
             cursor = 0
             start = 0
@@ -554,7 +546,7 @@ def show_echo_selector_screen():
             echoareas = cfg.nodes[node].echoareas
             draw_message_box("Подождите", False)
             get_counts()
-            stdscr.clear()
+            ui.stdscr.clear()
             counts_rescan = True
             cursor = 0
             start = 0
@@ -562,7 +554,7 @@ def show_echo_selector_screen():
             edit_config()
             config.load_colors(cfg.theme)
             get_counts()
-            stdscr.clear()
+            ui.stdscr.clear()
             counts_rescan = True
             node = 0
             archive = False
@@ -598,8 +590,8 @@ def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
 def render_body(scr, tokens, scroll):
     tnum, offset = parser.find_visible_token(tokens, scroll)
     line_num = tokens[tnum].line_num
-    for y in range(5, HEIGHT - 1):
-        scr.addstr(y, 0, " " * WIDTH, 1)
+    for y in range(5, ui.HEIGHT - 1):
+        scr.addstr(y, 0, " " * ui.WIDTH, 1)
     y, x = (5, 0)
     text_attr = 0
     if parser.INLINE_STYLE_ENABLED:
@@ -614,7 +606,7 @@ def render_body(scr, tokens, scroll):
         if token.line_num > line_num:
             line_num = token.line_num
             y, x = (y + 1, 0)
-        if y >= HEIGHT - 1:
+        if y >= ui.HEIGHT - 1:
             break  # tokens
         #
         text_attr = apply_attribute(token, text_attr)
@@ -638,7 +630,7 @@ def apply_attribute(token, text_attr):
 
 def render_token(scr, token: parser.Token, y, x, offset, text_attr):
     for i, line in enumerate(token.render[offset:]):
-        if y + i >= HEIGHT - 1:
+        if y + i >= ui.HEIGHT - 1:
             return y + i, x  #
         attr = get_color("text")
         if token.type in (parser.TT.CODE, parser.TT.COMMENT, parser.TT.HEADER,
@@ -658,50 +650,48 @@ def render_token(scr, token: parser.Token, y, x, offset, text_attr):
 
 def draw_reader(echo: str, msgid, out):
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * WIDTH, color)
-    stdscr.insstr(4, 0, "─" * WIDTH, color)
+    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
+    ui.stdscr.insstr(4, 0, "─" * ui.WIDTH, color)
     color = get_color("statusline")
-    stdscr.insstr(HEIGHT - 1, 0, " " * WIDTH, color)
+    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
     if out:
         draw_title(0, 0, echo)
         if msgid.endswith(".out"):
             ns = "не отправлено"
-            draw_title(4, WIDTH - len(ns) - 2, ns)
+            draw_title(4, ui.WIDTH - len(ns) - 2, ns)
     else:
-        if WIDTH >= 80:
+        if ui.WIDTH >= 80:
             draw_title(0, 0, echo + " / " + msgid)
         else:
             draw_title(0, 0, echo)
     draw_status(1, version)
     current_time()
     if parser.INLINE_STYLE_ENABLED:
-        draw_status(WIDTH - 10, "~")
+        draw_status(ui.WIDTH - 10, "~")
     for i in range(0, 3):
         draw_cursor(i, 1)
     color = get_color("titles")
-    stdscr.addstr(1, 1, "От:   ", color)
-    stdscr.addstr(2, 1, "Кому: ", color)
-    stdscr.addstr(3, 1, "Тема: ", color)
+    ui.stdscr.addstr(1, 1, "От:   ", color)
+    ui.stdscr.addstr(2, 1, "Кому: ", color)
+    ui.stdscr.addstr(3, 1, "Тема: ", color)
 
 
 def draw_scrollbar(scr, body_height, thumb_size, scroll_view, y):
     scr.attrset(get_color("scrollbar"))
-    for i in range(5, HEIGHT - 1):
-        scr.addstr(i, WIDTH - 1, "░")
+    for i in range(5, ui.HEIGHT - 1):
+        scr.addstr(i, ui.WIDTH - 1, "░")
     thumb_y = utils.scroll_thumb_pos(body_height, y, scroll_view, thumb_size)
     for i in range(thumb_y + 5, thumb_y + 5 + thumb_size):
-        if i < HEIGHT - 1:
-            scr.addstr(i, WIDTH - 1, "█")
+        if i < ui.HEIGHT - 1:
+            scr.addstr(i, ui.WIDTH - 1, "█")
 
 
 def call_editor(out=''):
-    global stdscr
-    terminate_curses()
+    ui.terminate_curses()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
     p = subprocess.Popen(cfg.editor + " ./temp", shell=True)
     p.wait()
-    stdscr = curses.initscr()
-    initialize_curses()
+    ui.initialize_curses()
     if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
         d = show_menu("Куда сохранить?", ["Сохранить в исходящие",
                                           "Сохранить как черновик"])
@@ -738,12 +728,12 @@ def draw_message_box(smsg, wait):
     if wait:
         maxlen = max(len(any_key), maxlen)
         msgwin = curses.newwin(len(msg) + 4, maxlen + 2,
-                               int(HEIGHT / 2 - 2),
-                               int(WIDTH / 2 - maxlen / 2 - 2))
+                               int(ui.HEIGHT / 2 - 2),
+                               int(ui.WIDTH / 2 - maxlen / 2 - 2))
     else:
         msgwin = curses.newwin(len(msg) + 2, maxlen + 2,
-                               int(HEIGHT / 2 - 2),
-                               int(WIDTH / 2 - maxlen / 2 - 2))
+                               int(ui.HEIGHT / 2 - 2),
+                               int(ui.WIDTH / 2 - maxlen / 2 - 2))
     msgwin.bkgd(' ', get_color("text"))
     msgwin.attrset(get_color("border"))
     msgwin.border()
@@ -761,8 +751,8 @@ def draw_message_box(smsg, wait):
 
 def message_box(smsg):
     draw_message_box(smsg, True)
-    stdscr.getch()
-    stdscr.clear()
+    ui.stdscr.getch()
+    ui.stdscr.clear()
 
 
 def save_message_to_file(msgid, echoarea):
@@ -824,11 +814,11 @@ def quote_msg(msgid, msg):
 
 
 def show_subject(subject):
-    if len(subject) > WIDTH - 8:
+    if len(subject) > ui.WIDTH - 8:
         msg = ""
         line = ""
         for word in subject.split(" "):
-            if len(line + word) <= WIDTH - 4:
+            if len(line + word) <= ui.WIDTH - 4:
                 line = line + word + " "
             else:
                 msg = msg + line + "\n"
@@ -853,15 +843,15 @@ def get_msg(msgid):
 
 
 def show_menu(title, items):
-    # TODO: Fix show_menu crash w fit a large title/items to screen width
+    # TODO: Fix show_menu crash w fit a large title/items to screen ui.WIDTH
     e = "Esc - отмена"
     h = len(items)
     test_width = items + [e + "[]", title + "[]"]
-    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it),
-                                                   test_width)))
+    w = 0 if not items else min(ui.WIDTH - 3, max(map(lambda it: len(it),
+                                                      test_width)))
     menu_win = curses.newwin(h + 2, w + 2,
-                             int(HEIGHT / 2 - h / 2 - 2),
-                             int(WIDTH / 2 - w / 2 - 2))
+                             int(ui.HEIGHT / 2 - h / 2 - 2),
+                             int(ui.WIDTH / 2 - w / 2 - 2))
     menu_win.attrset(get_color("border"))
     menu_win.border()
     color = get_color("border")
@@ -880,7 +870,7 @@ def show_menu(title, items):
             menu_win.addstr(i, 1, " " * w, color)
             menu_win.addstr(i, 1, item[:w], color)
         menu_win.refresh()
-        key = stdscr.getch()
+        key = ui.stdscr.getch()
         if key in keys.r_up:
             if y > 1:
                 y -= 1
@@ -899,8 +889,8 @@ def show_menu(title, items):
 
 def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
-    stdscr.clear()
-    stdscr.attrset(get_color("border"))
+    ui.stdscr.clear()
+    ui.stdscr.attrset(get_color("border"))
     y = 0
     out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
     drafts = (echo == config.ECHO_DRAFTS)
@@ -916,7 +906,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         msgids = api.get_echo_msgids(echo.name)
     msgn = min(msgn, len(msgids) - 1)
     cur_node = cfg.nodes[node]  # type: config.Node
-    scroll_view = HEIGHT - 5 - 1  # screen height - header - status line
+    scroll_view = ui.HEIGHT - 5 - 1  # screen ui.HEIGHT - header - status line
     msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
     size = 0
     go = True
@@ -942,7 +932,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
     def prerender(msgbody):
         tokens = parser.tokenize(msgbody)
-        b_height = parser.prerender(tokens, WIDTH, scroll_view)
+        b_height = parser.prerender(tokens, ui.WIDTH, scroll_view)
         thumb_size = utils.scroll_thumb_size(b_height, scroll_view)
         return tokens, b_height, thumb_size
 
@@ -966,7 +956,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 with open(filepath, "wb") as attachment:
                     attachment.write(token.filedata)
                 draw_message_box("Файл сохранён '%s'" % filepath, True)
-                stdscr.getch()
+                ui.stdscr.getch()
                 if show_menu("Открыть '%s'?" % token.filename,
                              ["Нет", "Да"]) == 2:
                     utils.open_file(filepath)
@@ -1004,46 +994,46 @@ def echo_reader(echo: config.Echo, msgn, archive):
     while go:
         if msgids:
             draw_reader(msg[1], msgids[msgn], out)
-            draw_status(len(version) + 2, utils.msgn_status(msgids, msgn, WIDTH))
-            if echo.desc and WIDTH >= 80:
-                draw_title(0, WIDTH - 2 - len(echo.desc), echo.desc)
+            draw_status(len(version) + 2, utils.msgn_status(msgids, msgn, ui.WIDTH))
+            if echo.desc and ui.WIDTH >= 80:
+                draw_title(0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
             color = get_color("text")
             if not out:
-                if WIDTH >= 80:
-                    stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
+                if ui.WIDTH >= 80:
+                    ui.stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
                 else:
-                    stdscr.addstr(1, 7, msg[3], color)
-                msgtime = utils.msg_strftime(msg[2], WIDTH)
-                stdscr.addstr(1, WIDTH - len(msgtime) - 1, msgtime, color)
+                    ui.stdscr.addstr(1, 7, msg[3], color)
+                msgtime = utils.msg_strftime(msg[2], ui.WIDTH)
+                ui.stdscr.addstr(1, ui.WIDTH - len(msgtime) - 1, msgtime, color)
             else:
                 if cur_node.to:
-                    stdscr.addstr(1, 7, cur_node.to[0], color)
-            stdscr.addstr(2, 7, msg[5], color)
-            stdscr.addstr(3, 7, msg[6][:WIDTH - 8], color)
+                    ui.stdscr.addstr(1, 7, cur_node.to[0], color)
+            ui.stdscr.addstr(2, 7, msg[5], color)
+            ui.stdscr.addstr(3, 7, msg[6][:ui.WIDTH - 8], color)
             s_size = utils.msg_strfsize(size)
             draw_title(4, 0, s_size)
             tags = msg[0].split("/")
-            if "repto" in tags and 36 + len(s_size) < WIDTH:
+            if "repto" in tags and 36 + len(s_size) < ui.WIDTH:
                 repto = tags[tags.index("repto") + 1].strip()
                 draw_title(4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            render_body(stdscr, body_tokens, y)
+            render_body(ui.stdscr, body_tokens, y)
             if body_height > scroll_view:
-                draw_scrollbar(stdscr, body_height,
+                draw_scrollbar(ui.stdscr, body_height,
                                scroll_thumb_size, scroll_view, y)
         else:
             draw_reader(echo.name, "", out)
-        stdscr.attrset(get_color("border"))
-        stdscr.refresh()
-        key = stdscr.getch()
+        ui.stdscr.attrset(get_color("border"))
+        ui.stdscr.refresh()
+        key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
             y = 0
-            get_term_size()
-            scroll_view = HEIGHT - 5 - 1
+            ui.set_term_size()
+            scroll_view = ui.HEIGHT - 5 - 1
             if msgids:
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-            stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.r_prev and msgn > 0 and msgids:
             y = 0
             msgn = msgn - 1
@@ -1088,7 +1078,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_mend and msgids:
             y = max(0, body_height - scroll_view)
         elif key in keys.r_ukeys:
-            if len(msgids) == 0 or y >= body_height - HEIGHT + 5:
+            if len(msgids) == 0 or y >= body_height - ui.HEIGHT + 5:
                 y = 0
                 if msgn == len(msgids) - 1 or len(msgids) == 0:
                     next_echoarea = True
@@ -1123,7 +1113,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     f.write("No subject\n\n")
                     f.write(t.read())
             call_editor()
-            stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.r_save and not out:
             save_message_to_file(msgids[msgn], echo.name)
         elif key in keys.r_favorites and not out:
@@ -1139,7 +1129,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             call_editor()
         elif key in keys.r_subj:
             show_subject(msg[6])
-        elif key in keys.r_info and not out and WIDTH < 80:
+        elif key in keys.r_info and not out and ui.WIDTH < 80:
             message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
@@ -1149,7 +1139,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 prerender_msg_or_quit()
             else:
                 message_box("Сообщение уже отправлено")
-            stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.f_delete and favorites and msgids:
             draw_message_box("Подождите", False)
             api.remove_from_favorites(msgids[msgn])
@@ -1167,12 +1157,12 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 draw_message_box("Подождите", False)
                 get_msg(msgid)
                 get_counts(True)
-                stdscr.clear()
+                ui.stdscr.clear()
                 msg, size = api.find_msg(msgid)
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
             except Exception as ex:
                 message_box("Не удалось определить msgid.\n" + str(ex))
-                stdscr.clear()
+                ui.stdscr.clear()
         elif key in keys.r_links:
             links = list(filter(lambda it: it.type == parser.TT.URL,
                                 body_tokens))
@@ -1183,7 +1173,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                                                           links)))
                 if i:
                     open_link(links[i - 1])
-            stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:
             node_dir = "out/" + cur_node.nodename
             os.rename(node_dir + "/" + msgids[msgn],
@@ -1218,15 +1208,15 @@ def echo_reader(echo: config.Echo, msgn, archive):
     lasts[echo.name] = msgn
     with open("lasts.lst", "wb") as f:
         pickle.dump(lasts, f)
-    stdscr.clear()
+    ui.stdscr.clear()
     return done
 
 
 def draw_msg_list(echo):
-    stdscr.clear()
+    ui.stdscr.clear()
     color = get_color("border")
-    stdscr.insstr(0, 0, "─" * WIDTH, color)
-    if WIDTH >= 80:
+    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
+    if ui.WIDTH >= 80:
         draw_title(0, 0, "Список сообщений в конференции " + echo)
     else:
         draw_title(0, 0, echo)
@@ -1236,23 +1226,23 @@ def show_msg_list_screen(echo: config.Echo, msgn):
     data = api.get_msg_list_data(echo.name)
     draw_msg_list(echo.name)
     echo_len = len(data)
-    if echo_len <= HEIGHT - 1:
+    if echo_len <= ui.HEIGHT - 1:
         start = 0
-    elif msgn + HEIGHT - 1 < echo_len:
+    elif msgn + ui.HEIGHT - 1 < echo_len:
         start = msgn
     else:
-        start = echo_len - HEIGHT + 1
+        start = echo_len - ui.HEIGHT + 1
     y = msgn - start
     while True:
-        for i in range(1, HEIGHT):
+        for i in range(1, ui.HEIGHT):
             color = get_color("cursor" if i - 1 == y else "text")
             draw_cursor(i - 1, color)
             if start + i - 1 < echo_len:
                 msg = data[start + i - 1]
-                stdscr.addstr(i, 0, msg[1], color)
-                stdscr.addstr(i, 16, msg[2][:WIDTH - 26], color)
-                stdscr.insstr(i, WIDTH - 10, msg[3], color)
-        key = stdscr.getch()
+                ui.stdscr.addstr(i, 0, msg[1], color)
+                ui.stdscr.addstr(i, 16, msg[2][:ui.WIDTH - 26], color)
+                ui.stdscr.insstr(i, ui.WIDTH - 10, msg[3], color)
+        key = ui.stdscr.getch()
         if key in keys.s_up:
             y = y - 1
             if y == -1:
@@ -1260,25 +1250,25 @@ def show_msg_list_screen(echo: config.Echo, msgn):
                 start = max(0, start - 1)
         elif key in keys.s_down:
             y = y + 1
-            if y > HEIGHT - 2:
-                y = HEIGHT - 2
+            if y > ui.HEIGHT - 2:
+                y = ui.HEIGHT - 2
                 if y + start + 1 < echo_len:
                     start += 1
             y = min(y, echo_len - 1)
         elif key in keys.s_ppage:
             if y == 0:
-                start = max(0, start - HEIGHT + 1)
+                start = max(0, start - ui.HEIGHT + 1)
             y = 0
         elif key in keys.s_npage:
-            if y == HEIGHT - 2:
-                start = min(start + HEIGHT - 1, echo_len - HEIGHT + 1)
-            y = min(echo_len - 1, HEIGHT - 2)
+            if y == ui.HEIGHT - 2:
+                start = min(start + ui.HEIGHT - 1, echo_len - ui.HEIGHT + 1)
+            y = min(echo_len - 1, ui.HEIGHT - 2)
         elif key in keys.s_home:
             y = 0
             start = 0
         elif key in keys.s_end:
-            y = min(echo_len - 1, HEIGHT - 2)
-            start = max(0, echo_len - HEIGHT + 1)
+            y = min(echo_len - 1, ui.HEIGHT - 2)
+            start = max(0, echo_len - ui.HEIGHT + 1)
         elif key in keys.s_enter:
             return y + start  #
         elif key in keys.r_quit:
@@ -1315,44 +1305,23 @@ elif cfg.keys == "vi":
 else:
     raise Exception("Unknown Keys Scheme :: " + cfg.keys)
 
-
-def initialize_curses():
-    curses.start_color()
-    curses.use_default_colors()
-    curses.noecho()
-    curses.set_escdelay(50)  # ms
-    curses.curs_set(0)
-    curses.cbreak()
-    stdscr.keypad(True)
-    get_term_size()
-
-
-def terminate_curses():
-    curses.curs_set(1)
-    stdscr.keypad(False)
-    curses.echo(True)
-    curses.nocbreak()
-    curses.endwin()
-
-
-stdscr = curses.initscr()
 try:
-    initialize_curses()
+    ui.initialize_curses()
     try:
         config.load_colors(cfg.theme)
     except ValueError as err:
         config.load_colors("default")
-        stdscr.refresh()
+        ui.stdscr.refresh()
         message_box("Цветовая схема " + cfg.theme + " не установлена.\n"
                     + str(err) + "\nБудет использована схема по-умолчанию.")
         cfg.theme = "default"
-    stdscr.bkgd(" ", get_color("text"))
+    ui.stdscr.bkgd(" ", get_color("text"))
 
     if cfg.splash:
         splash_screen()
     draw_message_box("Подождите", False)
     get_counts()
-    stdscr.clear()
+    ui.stdscr.clear()
     show_echo_selector_screen()
 finally:
-    terminate_curses()
+    ui.terminate_curses()
