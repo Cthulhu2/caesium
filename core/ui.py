@@ -48,6 +48,19 @@ def draw_splash(scr, splash):  # type: (curses.window, List[str]) -> None
     scr.refresh()
 
 
+def draw_title(scr, y, x, title):
+    h, w = scr.getmaxyx()
+    x = max(0, x)
+    if (x + len(title) + 2) > w:
+        title = title[:w - x - 2 - 3] + '...'
+    #
+    color = config.get_color("border")
+    scr.addstr(y, x, "[", color)
+    scr.addstr(y, x + 1 + len(title), "]", color)
+    color = config.get_color("titles")
+    scr.addstr(y, x + 1, title, color)
+
+
 def draw_message_box(smsg, wait):
     msg = smsg.split("\n")
     maxlen = max(map(lambda x: len(x), msg))
@@ -73,7 +86,8 @@ def draw_message_box(smsg, wait):
 
     color = config.get_color("titles")
     if wait:
-        win.addstr(len(msg) + 2, int((maxlen + 2 - 21) / 2), any_key, color)
+        win.addstr(len(msg) + 2, int((maxlen + 2 - len(any_key)) / 2),
+                   any_key, color)
     win.refresh()
 
 

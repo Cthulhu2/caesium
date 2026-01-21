@@ -226,29 +226,8 @@ echo_cursor = 0
 archive_cursor = 0
 
 
-def draw_title(y, x, title):
-    x = max(0, x)
-    if (x + len(title) + 2) > ui.WIDTH:
-        title = title[:ui.WIDTH - x - 2 - 3] + '...'
-    #
-    color = get_color("border")
-    ui.stdscr.addstr(y, x, "[", color)
-    ui.stdscr.addstr(y, x + 1 + len(title), "]", color)
-    color = get_color("titles")
-    ui.stdscr.addstr(y, x + 1, title, color)
-
-
-def draw_status(x, title):
-    color = get_color("statusline")
-    ui.stdscr.addstr(ui.HEIGHT - 1, x, title, color)
-
-
 def draw_cursor(y, color):
     ui.stdscr.insstr(y + 1, 0, " " * ui.WIDTH, color)
-
-
-def current_time():
-    draw_status(ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"))
 
 
 def get_counts(new=False):
@@ -290,16 +269,13 @@ def draw_echo_selector(start, cursor, archive):
     ui.stdscr.attrset(get_color("border"))
     color = get_color("border")
     ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
-    color = get_color("statusline")
-    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
+    cur_node = cfg.nodes[node]
     if archive:
-        echoareas = cfg.nodes[node].archive
-        draw_title(0, 0, "Архив")
+        echoareas = cur_node.archive
+        ui.draw_title(ui.stdscr, 0, 0, "Архив")
     else:
-        echoareas = cfg.nodes[node].echoareas
-        draw_title(0, 0, "Конференция")
-    draw_status(1, version)
-    draw_status(len(version) + 2, cfg.nodes[node].nodename)
+        echoareas = cur_node.echoareas
+        ui.draw_title(ui.stdscr, 0, 0, "Конференция")
     for echo in echoareas:
         desc_len = len(echo.desc)
         if desc_len > m:
@@ -314,10 +290,10 @@ def draw_echo_selector(start, cursor, archive):
     if ui.WIDTH < 80 or m == 0:
         m = len(unread) - 7
         hidedsc = True
-    draw_title(0, ui.WIDTH + 2 - m - len(count) - len(unread) - 1, count)
-    draw_title(0, ui.WIDTH - 8 - m - 1, unread)
+    ui.draw_title(ui.stdscr, 0, ui.WIDTH + 2 - m - len(count) - len(unread) - 1, count)
+    ui.draw_title(ui.stdscr, 0, ui.WIDTH - 8 - m - 1, unread)
     if not hidedsc:
-        draw_title(0, ui.WIDTH - len(description) - 2, description)
+        ui.draw_title(ui.stdscr, 0, ui.WIDTH - len(description) - 2, description)
     for echo in echoareas:
         if y - start < ui.HEIGHT - 2:
             if y == cursor:
@@ -353,7 +329,12 @@ def draw_echo_selector(start, cursor, archive):
                 ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
                 ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
         y = y + 1
-    current_time()
+
+    color = get_color("statusline")
+    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, 1, version, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2, cur_node.nodename, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"), color)
     ui.stdscr.refresh()
 
 
@@ -639,28 +620,29 @@ def draw_reader(echo: str, msgid, out):
     color = get_color("border")
     ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
     ui.stdscr.insstr(4, 0, "─" * ui.WIDTH, color)
-    color = get_color("statusline")
-    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
     if out:
-        draw_title(0, 0, echo)
+        ui.draw_title(ui.stdscr, 0, 0, echo)
         if msgid.endswith(".out"):
             ns = "не отправлено"
-            draw_title(4, ui.WIDTH - len(ns) - 2, ns)
+            ui.draw_title(ui.stdscr, 4, ui.WIDTH - len(ns) - 2, ns)
     else:
         if ui.WIDTH >= 80:
-            draw_title(0, 0, echo + " / " + msgid)
+            ui.draw_title(ui.stdscr, 0, 0, echo + " / " + msgid)
         else:
-            draw_title(0, 0, echo)
-    draw_status(1, version)
-    current_time()
-    if parser.INLINE_STYLE_ENABLED:
-        draw_status(ui.WIDTH - 10, "~")
+            ui.draw_title(ui.stdscr, 0, 0, echo)
     for i in range(0, 3):
         draw_cursor(i, 1)
     color = get_color("titles")
     ui.stdscr.addstr(1, 1, "От:   ", color)
     ui.stdscr.addstr(2, 1, "Кому: ", color)
     ui.stdscr.addstr(3, 1, "Тема: ", color)
+    #
+    color = get_color("statusline")
+    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, 1, version, color)
+    ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"), color)
+    if parser.INLINE_STYLE_ENABLED:
+        ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 10, "~", color)
 
 
 def draw_scrollbar(scr, body_height, thumb_size, scroll_view, y):
@@ -902,9 +884,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
     while go:
         if msgids:
             draw_reader(msg[1], msgids[msgn], out)
-            draw_status(len(version) + 2, utils.msgn_status(msgids, msgn, ui.WIDTH))
+            ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
+                             utils.msgn_status(msgids, msgn, ui.WIDTH),
+                             get_color("statusline"))
             if echo.desc and ui.WIDTH >= 80:
-                draw_title(0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
+                ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
             color = get_color("text")
             if not out:
                 if ui.WIDTH >= 80:
@@ -919,11 +903,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
             ui.stdscr.addstr(2, 7, msg[5], color)
             ui.stdscr.addstr(3, 7, msg[6][:ui.WIDTH - 8], color)
             s_size = utils.msg_strfsize(size)
-            draw_title(4, 0, s_size)
+            ui.draw_title(ui.stdscr, 4, 0, s_size)
             tags = msg[0].split("/")
             if "repto" in tags and 36 + len(s_size) < ui.WIDTH:
                 repto = tags[tags.index("repto") + 1].strip()
-                draw_title(4, len(s_size) + 3, "Ответ на " + repto)
+                ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
             render_body(ui.stdscr, body_tokens, y)
@@ -1124,9 +1108,9 @@ def draw_msg_list(echo):
     color = get_color("border")
     ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
     if ui.WIDTH >= 80:
-        draw_title(0, 0, "Список сообщений в конференции " + echo)
+        ui.draw_title(ui.stdscr, 0, 0, "Список сообщений в конференции " + echo)
     else:
-        draw_title(0, 0, echo)
+        ui.draw_title(ui.stdscr, 0, 0, echo)
 
 
 def show_msg_list_screen(echo: config.Echo, msgn):
