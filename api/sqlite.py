@@ -14,24 +14,23 @@ def init(db="idec.db"):
 
     # Create database
     c.execute("""CREATE TABLE IF NOT EXISTS msg(
-        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        msgid TEXT,
-        favorites INTEGER DEFAULT 0,
+        id         INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
+        msgid      TEXT,
+        favorites  INTEGER DEFAULT 0,
         carbonarea INTEGER DEFAULT 0,
-        tags TEXT,
-        echoarea TEXT,
-        time INTEGER,
-        fr TEXT,
-        addr TEXT,
-        t TEXT,
-        subject TEXT,
-        body TEXT,
-        UNIQUE (id));""")
-    c.execute("CREATE INDEX IF NOT EXISTS msgid ON 'msg' ('msgid');")
+        tags       TEXT,
+        echoarea   TEXT,
+        time       INTEGER,
+        fr         TEXT,
+        addr       TEXT,
+        t          TEXT,
+        subject    TEXT,
+        body       TEXT);""")
+    c.execute("CREATE INDEX IF NOT EXISTS msgid    ON 'msg' ('msgid');")
     c.execute("CREATE INDEX IF NOT EXISTS echoarea ON 'msg' ('echoarea');")
-    c.execute("CREATE INDEX IF NOT EXISTS time ON 'msg' ('time');")
-    c.execute("CREATE INDEX IF NOT EXISTS subject ON 'msg' ('subject');")
-    c.execute("CREATE INDEX IF NOT EXISTS body ON 'msg' ('body');")
+    c.execute("CREATE INDEX IF NOT EXISTS time     ON 'msg' ('time');")
+    c.execute("CREATE INDEX IF NOT EXISTS subject  ON 'msg' ('subject');")
+    c.execute("CREATE INDEX IF NOT EXISTS body     ON 'msg' ('body');")
     con.commit()
 
 

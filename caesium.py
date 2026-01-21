@@ -798,9 +798,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
     done = False
     repto = False
     stack = []
-    msgid = None
+    msgid = None  # non-current-echo message id, navigated by ii-link
 
     def read_cur_msg():  # type: () -> (List[str], int)
+        nonlocal msgid
+        msgid = None
         if out:
             return read_out_msg(msgids[msgn], cur_node)
         else:
@@ -878,7 +880,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
     while go:
         if msgids:
-            draw_reader(msg[1], msgids[msgn], out)
+            draw_reader(msg[1], msgid or msgids[msgn], out)
             ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
                              utils.msgn_status(msgids, msgn, ui.WIDTH),
                              get_color("statusline"))
@@ -1002,7 +1004,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             call_editor()
             ui.stdscr.clear()
         elif key in keys.r_save and not out:
-            save_message_to_file(msgids[msgn], echo.name)
+            save_message_to_file(msgid or msgids[msgn], msg[1])
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgids[msgn], msg)
             ui.draw_message_box("Подождите", False)
@@ -1083,7 +1085,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
             if msg:
-                msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 y = max(0, min(y, body_height - scroll_view))
         elif key in keys.r_quit:
