@@ -1083,6 +1083,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
             if msg:
+                msg, size = read_cur_msg()
                 body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
                 y = max(0, min(y, body_height - scroll_view))
         elif key in keys.r_quit:

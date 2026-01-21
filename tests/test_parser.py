@@ -466,6 +466,19 @@ def test_attachments_xpm():
     assert len(tokens) == 2
 
 
+def test_attachments_xpm_code():
+    parser.INLINE_STYLE_ENABLED = False
+    xpm = ["/* XPM */",
+           "static char *file_xpm[] = {",
+           "};"]
+    tokens = parser.tokenize([*xpm,
+                              "Non-XPM"])
+    assert tokens[0] == Token(TT.CODE, "/* XPM */", 0)
+    assert tokens[1] == Token(TT.CODE, "static char *file_xpm[] = {", 1)
+    assert tokens[2] == Token(TT.CODE, "};", 2)
+    assert tokens[3] == Token(TT.TEXT, "Non-XPM", 3)
+
+
 def test_attachments_base64():
     parser.INLINE_STYLE_ENABLED = True
     text = textwrap.fill(base64.b64encode("test data".encode("utf-8"))
@@ -479,6 +492,20 @@ def test_attachments_base64():
     # noinspection PyUnresolvedReferences
     assert str(tokens[0].filedata, "utf-8") == "test data"
     assert len(tokens) == 2
+
+
+def test_attachments_base64_code():
+    parser.INLINE_STYLE_ENABLED = False
+    text = textwrap.fill(base64.b64encode("test data".encode("utf-8"))
+                         .decode("utf-8"), 5).split("\n")
+    tokens = parser.tokenize(["@base64: file.png",
+                              *text,  # 3 lines
+                              "String w Non base64 chars ...."])
+    assert tokens[0] == Token(TT.CODE, "@base64: file.png", 0)
+    assert tokens[1] == Token(TT.CODE, text[0], 1)
+    assert tokens[2] == Token(TT.CODE, text[1], 2)
+    assert tokens[3] == Token(TT.CODE, text[2], 3)
+    assert tokens[4] == Token(TT.TEXT, "String w Non base64 chars ....", 4)
 
 
 def test_attachments_base64_filename():

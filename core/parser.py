@@ -123,7 +123,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                         break  # next_lines
                 continue  # lines
         #
-        if INLINE_STYLE_ENABLED and line.rstrip() == "/* XPM */":
+        if line.rstrip() == "/* XPM */":
             next_lines = lines[line_num:]
             xpm_tokens, xpm_lines_count = _tokenize_xpm(next_lines, line_num)
             if xpm_tokens:
@@ -131,7 +131,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 line_num += xpm_lines_count
                 continue  # lines
         #
-        if INLINE_STYLE_ENABLED and line.rstrip().startswith("@base64:"):
+        if line.rstrip().startswith("@base64:"):
             next_lines = lines[line_num:]
             b64_tokens, b64_lines_count = _tokenize_base64(next_lines, line_num)
             if b64_tokens:
@@ -251,15 +251,20 @@ def _tokenize_xpm(lines, line_num):  # type: (List[str], int) -> (List[Token], i
     value = ""
     ok = False
     xpm_lines_count = 0
-    for i, line in enumerate(lines):
+    for line in lines:
         value += line
+        xpm_lines_count += 1
         if line.rstrip().endswith("};"):
             ok = True
-            xpm_lines_count = i + 1
             break
         value += "\n"
     if not ok:
         return [], 0  #
+
+    if not INLINE_STYLE_ENABLED:
+        return ([Token(TT.CODE, line, line_num + i)
+                 for i, line in enumerate(lines[0:xpm_lines_count])],
+                xpm_lines_count)
 
     value = value.encode("utf-8")
     size = utils.msg_strfsize(len(value))
@@ -292,15 +297,21 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
             break  #
     if not value:
         return [], 0  #
+    if not INLINE_STYLE_ENABLED:
+        return ([Token(TT.CODE, line, line_num + i)
+                 for i, line in enumerate(lines[0:b64_lines_count])],
+                b64_lines_count)
     try:
-        value = base64.b64decode(value)
+        value_bytes = base64.b64decode(value)
     except (TypeError, ValueError):
-        return [], 0  #
-    size = utils.msg_strfsize(len(value))
+        return ([Token(TT.CODE, line, line_num + i)
+                 for i, line in enumerate(lines[0:b64_lines_count])],
+                b64_lines_count)
+    size = utils.msg_strfsize(len(value_bytes))
 
     token = Token(TT.URL, "file:///%s (b64, %s)" % (fname, size), line_num)
     token.filename = fname
-    token.filedata = value
+    token.filedata = value_bytes
     return [token], b64_lines_count
 
 
