@@ -1,8 +1,28 @@
 import base64
 import textwrap
 
+import pytest
+
 from core import parser
 from core.parser import Token, TT
+
+
+@pytest.mark.parametrize("ends", " .,;!@#%&*(){}_=+\\/")
+def test_inline_ends(ends):
+    assert parser.italic_inline_template.match("_italic_" + ends)
+    assert parser.italic_inline_template.match("*italic*" + ends)
+    assert parser.bold_inline_template.match("**bold**" + ends)
+    assert parser.bold_inline_template.match("__bold__" + ends)
+    assert parser.code_inline_template.match("`code`" + ends)
+
+
+@pytest.mark.parametrize("ends", "aA09")
+def test_not_inline_ends(ends):
+    assert not parser.italic_inline_template.match("_italic_" + ends)
+    assert not parser.italic_inline_template.match("*italic*" + ends)
+    assert not parser.bold_inline_template.match("**bold**" + ends)
+    assert not parser.bold_inline_template.match("__bold__" + ends)
+    assert not parser.code_inline_template.match("`code`" + ends)
 
 
 def test_ps_template():
