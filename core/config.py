@@ -69,13 +69,12 @@ class Config:
     keys = "default"
     twit: List[str] = dataclasses.field(default_factory=list)
 
-    def reset(self):
+    def load(self):
         self.nodes.clear()
         self.editor = "nano"
         self.oldquote = False
         self.db = "ait"
-
-    def load(self):
+        #
         node = None  # type: Optional[Node]
         shrink_spaces = re.compile(r"(\s\s+|\t+)")
         with open(CONFIG_FILEPATH) as f:

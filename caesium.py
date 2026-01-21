@@ -53,12 +53,6 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "           Cthulhu Fhtagn"]
 
 
-def reset_config():
-    global node
-    node = 0
-    cfg.reset()
-
-
 def check_directories(storage_api):
     if not os.path.exists("downloads"):
         os.mkdir("downloads")
@@ -354,7 +348,8 @@ def edit_config():
     ui.terminate_curses()
     p = subprocess.Popen(cfg.editor + " " + config.CONFIG_FILEPATH, shell=True)
     p.wait()
-    reset_config()
+    global node
+    node = 0
     cfg.load()
     ui.initialize_curses()
 
@@ -1174,7 +1169,6 @@ else:
 locale.setlocale(locale.LC_ALL, loc[0] + "." + loc[1])
 
 config.ensure_exists()
-reset_config()
 cfg.load()
 if cfg.db == "txt":
     import api.txt as api

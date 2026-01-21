@@ -327,14 +327,13 @@ def prerender(tokens, width, height=None):
             # early scrollable detected, reserve scrollbar width
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
-        value = token.value
-        if value and token.type in (TT.QUOTE1, TT.QUOTE2) and value[0] != " " and not in_quote:
-            value = " " + value
+        value = token.value.replace("\t", "    ")
         if token.type in (TT.QUOTE1, TT.QUOTE2):
-            in_quote = True
+            if value and value[0] != " " and not in_quote:
+                value = " " + value
+            in_quote = True  # add space once per line
         if token.type == TT.HR:
             value = "─" * width
-        value = value.replace("\t", "    ")
 
         # render token
         if x + len(value) <= width:
