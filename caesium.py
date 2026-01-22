@@ -595,11 +595,9 @@ def render_token(scr, token: parser.Token, y, x, offset, text_attr):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= ui.HEIGHT - 1:
             return y + i, x  #
-        attr = get_color("text")
-        if token.type in (parser.TT.CODE, parser.TT.COMMENT, parser.TT.HEADER,
-                          parser.TT.ORIGIN, parser.TT.QUOTE1, parser.TT.QUOTE2,
-                          parser.TT.URL):
-            attr = get_color(token.type.name.lower())
+        attr = get_color(parser.TOKEN2UI.get(token.type, "text"))
+        if token.type == parser.TT.URL:
+            attr |= curses.A_UNDERLINE
         if line:
             scr.addstr(y + i, x, line, attr | text_attr)
 
@@ -837,8 +835,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
         nonlocal msgid, msgn, msg, size, go
         nonlocal body_tokens, body_height, scroll_thumb_size
         global next_echoarea
-        if hasattr(token, "filename"):
-            if hasattr(token, "filedata"):
+        if token.filename:
+            if token.filedata:
                 filepath = "downloads/" + token.filename
                 with open(filepath, "wb") as attachment:
                     attachment.write(token.filedata)
@@ -1058,8 +1056,9 @@ def echo_reader(echo: config.Echo, msgn, archive):
             if len(links) == 1:
                 open_link(links[0])
             elif links:
-                if i := ui.show_menu("Выберите ссылку",
-                                     list(map(lambda it: it.value, links))):
+                if i := ui.show_menu("Выберите ссылку", list(map(
+                        lambda it: (it.url + " " + (it.title or "")).strip(),
+                        links))):
                     open_link(links[i - 1])
             ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:

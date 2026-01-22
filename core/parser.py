@@ -8,9 +8,11 @@ from core import utils
 
 INLINE_STYLE_ENABLED = False
 
-url_template = re.compile(r"((https?|ftp|file|ii)://?"
-                          r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
-                          r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
+url_simple_template = re.compile(r"((https?|ftp|file|ii)://?"
+                                 r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
+                                 r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
+url_gemini_template = re.compile(r"^=>\s*(?P<url>[^\s]+)(?P<title>\s.+)*")
+url_md_template = re.compile(r"\[(?P<title>.*?)]\((?P<url>.*?)\)")
 header_template = re.compile(r"^(={1,3}\s)|(#{1,3}\s)")
 # noinspection RegExpRedundantEscape
 ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|\/\/|#)")
@@ -47,12 +49,36 @@ class TT(Enum):
     URL = auto()
 
 
+TOKEN2UI = {
+    TT.CODE: "code",
+    TT.COMMENT: "comment",
+    TT.HEADER: "header",
+    TT.ORIGIN: "origin",
+    TT.QUOTE1: "quote1",
+    TT.QUOTE2: "quote2",
+    TT.URL: "url",
+}
+
+
 @dataclass
 class Token:
     type: TT
-    value: str
-    line_num: int  # номер строки (начиная с 0)
-    render: List[str] = None  # строки с мягкими переносами
+    value: str  # source text
+    line_num: int  # line number (0-based)
+    render: List[str] = None  # soft-wrapped value according to screen width
+
+    url: str = None
+    # markdown/gemini-like url with title
+    title: str = None
+    # file url with attachment
+    filename: str = None
+    filedata: bytes = None
+
+    @staticmethod
+    def URL(value, line_num, url, title=None, filename=None, filedata=None):
+        return Token(TT.URL, value, line_num,
+                     url=url, title=title,
+                     filename=filename, filedata=filedata)
 
 
 def is_code_block(line):
@@ -152,7 +178,9 @@ def _inline(text: str, line_num: int, token: Token) -> List[Token]:
     tokens = []
     pos = 0
     while pos < len(text):
-        match_url = url_template.search(text, pos)  # type: re.Match
+        match_url = url_simple_template.search(text, pos)  # type: re.Match
+        match_md_url = url_md_template.search(text, pos)
+        match_gem_url = url_gemini_template.search(text, pos)
         match_code = code_inline_template.search(text, pos)
         match_bold = bold_inline_template.search(text, pos)
         match_italic = italic_inline_template.search(text, pos)
@@ -160,6 +188,8 @@ def _inline(text: str, line_num: int, token: Token) -> List[Token]:
                             ((match_code, TT.CODE),
                              (match_italic, TT.ITALIC_BEGIN),
                              (match_bold, TT.BOLD_BEGIN),  # after italic
+                             (match_gem_url, TT.URL),
+                             (match_md_url, TT.URL),
                              (match_url, TT.URL))))  # type: List[Tuple[re.Match, TT]]
         if match:
             # find nearest matched candidate
@@ -172,10 +202,21 @@ def _inline(text: str, line_num: int, token: Token) -> List[Token]:
             #
             if match[1] == TT.URL:
                 pos = match[0].end()
-                if sub_str.endswith(")") and "(" not in sub_str:
-                    sub_str = sub_str[0:-1]
-                    pos -= 1
-                tokens.append(Token(TT.URL, sub_str, line_num))
+                # TODO: Inline styles in URL titles???
+                if match[0] == match_gem_url:
+                    tokens.append(Token(TT.TEXT, "=> ", line_num))
+                # gemini/markdown titled url
+                if match[0] in (match_gem_url, match_md_url):
+                    tokens.append(Token.URL(
+                        text[match[0].start():match[0].end()], line_num,
+                        url=match[0].group("url"),
+                        title=(match[0].group("title") or "").strip()))
+                # simple inline url
+                else:
+                    if sub_str.endswith(")") and "(" not in sub_str:
+                        sub_str = sub_str[0:-1]
+                        pos -= 1
+                    tokens.append(Token.URL(sub_str, line_num, sub_str))
             elif match[1] == TT.CODE:
                 tokens.extend(_inline(sub_str[1:-1], line_num,  # `
                                       Token(TT.CODE, "", line_num)))
@@ -209,7 +250,7 @@ def _simple_inline(text: str, line_num: int, token: Token) -> List[Token]:
     tokens = []
     pos = 0
     while pos < len(text):
-        match = url_template.search(text, pos)  # type: re.Match
+        match = url_simple_template.search(text, pos)  # type: re.Match
         if match and match.start() == pos:
             url = match.group()
             if token.value:
@@ -219,7 +260,7 @@ def _simple_inline(text: str, line_num: int, token: Token) -> List[Token]:
             if url.endswith(")") and "(" not in url:
                 url = url[0:-1]
                 pos -= 1
-            tokens.append(Token(TT.URL, url, line_num))
+            tokens.append(Token.URL(url, line_num, url))
         else:
             url_start = match.start() if match else len(text)
             raw_text = text[pos:url_start]
@@ -268,10 +309,9 @@ def _tokenize_xpm(lines, line_num):  # type: (List[str], int) -> (List[Token], i
 
     value = value.encode("utf-8")
     size = utils.msg_strfsize(len(value))
-
-    token = Token(TT.URL, "file:///%s (xpm, %s)" % (fname, size), line_num)
-    token.filename = fname
-    token.filedata = value
+    url = "file:///%s (xpm, %s)" % (fname, size)
+    token = Token.URL(url, line_num, url=url,
+                      filename=fname, filedata=value)
     return [token], xpm_lines_count
 
 
@@ -309,9 +349,9 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
                 b64_lines_count)
     size = utils.msg_strfsize(len(value_bytes))
 
-    token = Token(TT.URL, "file:///%s (b64, %s)" % (fname, size), line_num)
-    token.filename = fname
-    token.filedata = value_bytes
+    url = "file:///%s (b64, %s)" % (fname, size)
+    token = Token.URL(url, line_num, url=url,
+                      filename=fname, filedata=value_bytes)
     return [token], b64_lines_count
 
 
@@ -339,11 +379,13 @@ def prerender(tokens, width, height=None):
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
         value = token.value.replace("\t", "    ")
-        if token.type in (TT.QUOTE1, TT.QUOTE2):
+        if token.type == TT.URL and INLINE_STYLE_ENABLED:
+            value = token.title or token.url
+        elif token.type in (TT.QUOTE1, TT.QUOTE2):
             if value and value[0] != " " and not in_quote:
                 value = " " + value
             in_quote = True  # add space once per line
-        if token.type == TT.HR:
+        elif token.type == TT.HR:
             value = "─" * width
 
         # render token
