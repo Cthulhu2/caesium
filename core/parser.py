@@ -14,19 +14,17 @@ url_simple_template = re.compile(r"((https?|ftp|file|ii)://?"
 url_gemini_template = re.compile(r"^=>\s*(?P<url>[^\s]+)(?P<title>\s.+)*")
 url_md_template = re.compile(r"\[(?P<title>.*?)]\((?P<url>.*?)\)")
 header_template = re.compile(r"^(={1,3}\s)|(#{1,3}\s)")
-# noinspection RegExpRedundantEscape
-ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|\/\/|#)")
-# noinspection RegExpRedundantEscape
-quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.\(\)]{0,20}>{1,20}")
+ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|//|#)")
+quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.()]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
-code_inline_template = re.compile(r"`[^`]+`(?=$|[\s.,;{}@!~_*\\/\-+=&%#()])")
+code_inline_template = re.compile(r"`[^`]+`(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()])")
 bold_inline_template = re.compile(
-    r"(((?<=\s)|(?<=^))__[^\s_][^_]+[^\s_]__(?=$|[\s.,;{}@!~_*\\/\-+=&%#()]))"
-    r"|(((?<=\s)|(?<=^))\*\*[^\s*][^*]+[^\s*]\*\*(?=$|[\s.,;{}@!~_*\\/\-+=&%#()]))")
+    r"(((?<=\s)|(?<=^))__[^\s_][^_]+[^\s_]__(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))"
+    r"|(((?<=\s)|(?<=^))\*\*[^\s*][^*]+[^\s*]\*\*(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))")
 italic_inline_template = re.compile(
-    r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|[\s.,;{}@!~_*\\/\-+=&%#()]))"
-    r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]\*(?=$|[\s.,;{}@!~_*\\/\-+=&%#()]))")
+    r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))"
+    r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]\*(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))")
 filename_sanitize = re.compile(r"\.{2}|^[ .]|[/<>:\"\\|?*]+|[ .]$")
 simple_b64 = re.compile(r"^[-A-Za-z0-9+/]*={0,3}$")
 

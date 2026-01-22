@@ -13,7 +13,7 @@ def token_url(url, line_num, title=None, filename=None, filedata=None):
                      filename=filename, filedata=filedata)
 
 
-@pytest.mark.parametrize("ends", " .,;!@#%&*(){}_=+\\/")
+@pytest.mark.parametrize("ends", " .,:;!@#%&*(){}_=+\\/")
 def test_inline_ends(ends):
     assert parser.italic_inline_template.match("_italic_" + ends)
     assert parser.italic_inline_template.match("*italic*" + ends)
@@ -77,6 +77,8 @@ Code
 ----
 PS: PostScript
 +++ Origin
+#Comment
+// Comment
 """
 
 
@@ -95,7 +97,9 @@ def test_base_tokens():
     assert tokens[10] == Token(TT.HR, "----", 10)
     assert tokens[11] == Token(TT.COMMENT, "PS: PostScript", 11)
     assert tokens[12] == Token(TT.ORIGIN, "+++ Origin", 12)
-    assert len(tokens) == 13
+    assert tokens[13] == Token(TT.COMMENT, "#Comment", 13)
+    assert tokens[14] == Token(TT.COMMENT, "// Comment", 14)
+    assert len(tokens) == 15
 
 
 EMPTY_LINES = """
@@ -354,6 +358,12 @@ def test_quote_url():
     assert tokens[0].render == [" >"]
     assert tokens[1].render == ["http://in-quote"]
     assert b_height == 1
+
+
+def test_quote_parenthesis():
+    tokens = parser.tokenize(["Quote(r)> quote"])
+    parser.prerender(tokens, width=20)
+    assert tokens[0].render == [" Quote(r)> quote"]
 
 
 def test_url_parenthesis():
