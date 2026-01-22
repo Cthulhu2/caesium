@@ -2,7 +2,7 @@ import curses
 from typing import Optional, List
 
 import keys.default as keys
-from core import config
+from core import config, parser
 
 HEIGHT = 0
 WIDTH = 0
@@ -135,3 +135,65 @@ def show_menu(title, items):
             return y  #
         elif key in keys.r_quit:
             return False  #
+
+
+# region Render Body
+def render_body(scr, tokens, scroll):
+    # type: (curses.window, List[parser.Token], int) -> None
+    h, w = scr.getmaxyx()
+    tnum, offset = parser.find_visible_token(tokens, scroll)
+    line_num = tokens[tnum].line_num
+    for y in range(5, h - 1):
+        scr.addstr(y, 0, " " * w, 1)
+    y, x = (5, 0)
+    text_attr = 0
+    if parser.INLINE_STYLE_ENABLED:
+        # Rewind tokens from the begin of line to apply inline text attributes
+        first_token = tnum
+        while tokens[first_token].line_num == line_num and first_token > 0:
+            first_token -= 1
+        for token in tokens[first_token:tnum]:
+            text_attr = apply_attribute(token, text_attr)
+
+    for token in tokens[tnum:]:
+        if token.line_num > line_num:
+            line_num = token.line_num
+            y, x = (y + 1, 0)
+        if y >= h - 1:
+            break  # tokens
+        #
+        text_attr = apply_attribute(token, text_attr)
+        #
+        y, x = render_token(scr, token, y, x, h, offset, text_attr)
+        offset = 0  # required in the first partial multiline token only
+
+
+def apply_attribute(token, text_attr):
+    if token.type == parser.TT.ITALIC_BEGIN:
+        text_attr |= curses.A_ITALIC
+    elif token.type == parser.TT.ITALIC_END:
+        text_attr &= ~curses.A_ITALIC
+
+    elif token.type == parser.TT.BOLD_BEGIN:
+        text_attr |= curses.A_BOLD
+    elif token.type == parser.TT.BOLD_END:
+        text_attr &= ~curses.A_BOLD
+    return text_attr
+
+
+def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
+    for i, line in enumerate(token.render[offset:]):
+        if y + i >= h - 1:
+            return y + i, x  #
+        attr = config.get_color(parser.TOKEN2UI.get(token.type, "text"))
+        if token.type == parser.TT.URL:
+            attr |= curses.A_UNDERLINE
+        if line:
+            scr.addstr(y + i, x, line, attr | text_attr)
+
+        if len(token.render) > 1 and i + offset < len(token.render) - 1:
+            x = 0  # new line in multiline token -- carriage return
+        else:
+            x += len(line)  # last/single line -- move caret in line
+    return y + (len(token.render) - 1) - offset, x  #
+# endregion Render Body

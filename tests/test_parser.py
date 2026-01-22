@@ -1,10 +1,18 @@
 import base64
 import textwrap
 
+import curses
 import pytest
 
-from core import parser
+from core import parser, ui
 from core.parser import Token, TT
+
+
+def _color_pair_mock(num):
+    return num
+
+
+curses.color_pair = _color_pair_mock
 
 
 def token_url(url, line_num, title=None, filename=None, filedata=None):
@@ -197,6 +205,20 @@ def test_url_gem_md():
     assert tokens[4] == Token(TT.URL, "=> gemini://gem-url Url with Title", 1,
                               url="gemini://gem-url", title="Url with Title")
     assert len(tokens) == 5
+    assert parser.prerender(tokens, width=25, height=10) == 2
+    scr = ScrMock(w=25, h=10)
+    # noinspection PyTypeChecker
+    ui.render_body(scr, tokens, 0)
+    assert tokens[0].render == ["Regular text w "]
+    assert tokens[1].render == ["url title"]
+    assert tokens[2].render == ["."]
+    assert tokens[3].render == ["=> "]
+    assert tokens[4].render == ["Url with Title"]
+    text = scr.to_str()
+    assert text[4:8] == ["",
+                         "Regular text w url title.",
+                         "=> Url with Title        ",
+                         "                         "]
 
 
 SOFT_WRAP = """==     long-long-long-long-header
@@ -569,30 +591,19 @@ class ScrMock:
         self.text = [["" for _ in range(w)]
                      for _ in range(h)]
 
+    def getmaxyx(self):
+        return self.height, self.width
+
     def to_str(self):
         return list(map(lambda line: "".join(line), self.text))
 
-    def addstr(self, y, x, line):
+    def addstr(self, y, x, line, attr=None):
+        assert attr is None or isinstance(attr, int)
         assert y < self.height
         assert x < self.width
         assert x + len(line) <= self.width
         for i, ch in enumerate(line):
             self.text[y][x + i] = ch
-
-
-# TODO: Make render_token testable
-def _render_token(scr, token: parser.Token, y, x, offset, height):
-    for i, line in enumerate(token.render[offset:]):
-        if y + i >= height - 1:
-            return y + i, x
-        if line.strip():
-            scr.addstr(y + i, x, line)
-
-        if len(token.render) > 1 and i + offset < len(token.render) - 1:
-            x = 0  # new line in multiline token -- carriage return
-        else:
-            x += len(line)  # last/single line -- move caret in line
-    return y + (len(token.render) - 1) - offset, x
 
 
 def test_render_token_right_border_new_line():
@@ -602,22 +613,11 @@ def test_render_token_right_border_new_line():
         "",
     ])
     parser.prerender(tokens, width=62, height=30)
-    i = 5
-    x = 0
-    height = 30
-    scr = ScrMock(height, 62)
-    line_num = 0
-    for token in tokens:
-        if token.line_num > line_num:
-            line_num = token.line_num
-            i += 1
-            x = 0
-        if i >= height - 1:
-            break
-        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
-                             height=height)
+    scr = ScrMock(w=62, h=30)
+    # noinspection PyTypeChecker
+    ui.render_body(scr, tokens, 0)
     text = scr.to_str()
-    assert text[6] == ". "
+    assert text[6] == ". " + " " * 60
 
 
 def test_render_token_bottom_inline_overlapped():
@@ -625,23 +625,12 @@ def test_render_token_bottom_inline_overlapped():
         "1234567890 234 678 http://a.",
     ])
     parser.prerender(tokens, width=10, height=30)
-    i = 5
-    x = 0
-    height = 8  # 5 header + 2 body + 1 status line
-    scr = ScrMock(height, 10)
-    line_num = 0
-    for token in tokens:
-        if token.line_num > line_num:
-            line_num = token.line_num
-            i += 1
-            x = 0
-        if i >= height - 1:
-            break
-        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
-                             height=height)
+    scr = ScrMock(8, 10)  # 8 = 5 header + 2 body + 1 status line
+    # noinspection PyTypeChecker
+    ui.render_body(scr, tokens, 0)
     text = scr.to_str()
     assert text[5] == "1234567890"
-    assert text[6] == "234 678 "
+    assert text[6] == "234 678   "
     assert text[7] == ""  # status line
 
 
@@ -651,21 +640,10 @@ def test_render_token_new_line_at_last_space():
         "https://aaaaaa\r"])
 
     parser.prerender(tokens, width=62, height=30)
-    i = 5
-    x = 0
-    height = 30
-    scr = ScrMock(height, 62)
-    line_num = 0
-    for token in tokens:
-        if token.line_num > line_num:
-            line_num = token.line_num
-            i += 1
-            x = 0
-        if i >= height - 1:
-            break
-        i, x = _render_token(scr=scr, token=token, y=i, x=x, offset=0,
-                             height=height)
+    scr = ScrMock(30, 62)
+    # noinspection PyTypeChecker
+    ui.render_body(scr, tokens, 0)
     text = scr.to_str()
     assert text[5] == "aaaa.aa aaaaaaaa aaaaaa aaaaa. aaaaaaaa aaa aaaaaaaaaaa a aaa:"
-    assert text[6] == "https://aaaaaa"
-    assert text[7] == ""
+    assert text[6] == "https://aaaaaa                                                "
+    assert text[7] == " " * 62
