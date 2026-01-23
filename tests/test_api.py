@@ -11,7 +11,7 @@ def test_init_aio():
     api.init("test2.aio")
     assert api.storage == "test2.aio/"
     assert Path("test2.aio").is_dir()
-    os.removedirs(Path("test2.aio"))
+    shutil.rmtree(Path("test2.aio"))
 
 
 def test_init_ait():
@@ -19,7 +19,7 @@ def test_init_ait():
     api.init("test2.ait")
     assert api.storage == "test2.ait/"
     assert Path("test2.ait").is_dir()
-    os.removedirs(Path("test2.ait"))
+    shutil.rmtree(Path("test2.ait"))
 
 
 def test_init_sqlite():
@@ -200,3 +200,33 @@ def test_find_msg(api):
     msg, size = api.find_msg("25Ll1pZMnIbdWB8Ring2")
     assert msg[1] == "ring2.global"
     assert size == 81
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_node_features(api):
+    features = api.get_node_features("unknown")
+    assert features is None
+    #
+    api.save_node_features("node", ["feat1", "", "feat2"])
+    features = api.get_node_features("node")
+    assert features == ["feat1", "feat2"]
+    #
+    api.save_node_features("node", ["feat1", "feat3"])
+    features = api.get_node_features("node")
+    assert features == ["feat1", "feat3"]
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_node_echo_counts(api):
+    ec = api.get_node_echo_counts("unknown")
+    assert ec is None
+    #
+    api.save_node_echo_counts("node", {"echo.1": 1, "echo.2": 2})
+    ec = api.get_node_echo_counts("node")
+    assert ec == {"echo.1": 1, "echo.2": 2}
+    #
+    api.save_node_echo_counts("node", {"echo.2": 2, "echo.3": 3})
+    ec = api.get_node_echo_counts("node")
+    assert ec == {"echo.2": 2, "echo.3": 3}

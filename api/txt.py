@@ -2,6 +2,7 @@
 import codecs
 import os
 import time
+from typing import Optional, List
 
 storage = "txt"
 
@@ -22,6 +23,8 @@ def init(directory=""):
         open(storage + "echo/favorites", "w")
     if not os.path.exists("echo/carbonarea"):
         open(storage + "echo/carbonarea", "w")
+    if not os.path.exists(storage + "nodes"):
+        os.mkdir(storage + "nodes")
 
 
 def get_echo_length(echo):
@@ -165,3 +168,38 @@ def find_msg(msgid):
             if exists:
                 return read_msg(msgid, echo)
     return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
+
+
+def get_node_features(node):  # type: (str) -> Optional[List[str]]
+    features = storage + "nodes/" + node + ".x-features"
+    if not os.path.exists(features):
+        return None  #
+
+    with open(features, "r") as f:
+        return list(filter(None, map(lambda it: it.strip(),
+                                     f.read().splitlines())))
+
+
+def save_node_features(node, features):  # type: (str, List[str]) -> None
+    x_features = storage + "nodes/" + node + ".x-features"
+    with open(x_features, "w") as f:
+        f.write("\n".join(features))
+
+
+def get_node_echo_counts(node):  # type: (str) -> Optional[dict[str, int]]
+    x_counts = storage + "nodes/" + node + ".x-counts"
+    if not os.path.exists(x_counts):
+        return None  #
+
+    with open(x_counts, "r") as f:
+        echo_counts = list(filter(None, map(lambda it: it.strip().split(":"),
+                                            f.read().splitlines())))
+        return {echo[0]: int(echo[1]) for echo in echo_counts}
+
+
+def save_node_echo_counts(node, echo_counts):  # type: (str, dict[str, int]) -> None
+    ec = ["%s:%s\n" % (echo, str(count))
+          for echo, count in echo_counts.items()]
+    x_counts = storage + "nodes/" + node + ".x-counts"
+    with open(x_counts, "w") as f:
+        f.writelines(ec)

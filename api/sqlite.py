@@ -1,7 +1,9 @@
 # coding=utf-8
 import sqlite3
 import time
-from typing import Optional
+from typing import Optional, List
+
+from core import FEAT_FEATURES, FEAT_X_C
 
 con = None  # type: Optional[sqlite3.Connection]
 c = None  # type: Optional[sqlite3.Cursor]
@@ -31,6 +33,15 @@ def init(db="idec.db"):
     c.execute("CREATE INDEX IF NOT EXISTS time     ON 'msg' ('time');")
     c.execute("CREATE INDEX IF NOT EXISTS subject  ON 'msg' ('subject');")
     c.execute("CREATE INDEX IF NOT EXISTS body     ON 'msg' ('body');")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS node_feature(
+        node        TEXT,
+        feature     TEXT,
+        response    TEXT,
+        PRIMARY KEY (node, feature));""")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_node_feature"
+              " ON node_feature (node, feature);")
+
     con.commit()
 
 
@@ -157,3 +168,45 @@ def read_msg(msgid, echoarea):
 
 def find_msg(msgid):
     return read_msg(msgid, None)
+
+
+def get_node_features(node):  # type: (str) -> Optional[List[str]]
+    features = c.execute("SELECT response FROM node_feature"
+                         " WHERE node = ? AND feature = ?;",
+                         (node, FEAT_FEATURES)).fetchone()
+    if features:
+        return list(filter(None, map(lambda it: it.strip(),
+                                     features[0].splitlines())))
+    return None
+
+
+def save_node_features(node, features):  # type: (str, List[str]) -> None
+    features = "\n".join(features)
+    c.execute("DELETE FROM node_feature WHERE node = ? AND feature = ?;",
+              (node, FEAT_FEATURES))
+    c.execute("INSERT INTO node_feature (node, feature, response) VALUES (?, ?, ?);",
+              (node, FEAT_FEATURES, features))
+    con.commit()
+
+
+def get_node_echo_counts(node):  # type: (str) -> Optional[dict[str, int]]
+    ec = c.execute("SELECT response FROM node_feature"
+                   " WHERE node = ? AND feature = ?;",
+                   (node, FEAT_X_C)).fetchone()
+    if ec:
+        echo_counts = list(filter(None, map(lambda it: it.strip().split(":"),
+                                            ec[0].splitlines())))
+        return {echo[0]: int(echo[1]) for echo in echo_counts}
+    return None
+
+
+def save_node_echo_counts(node, echo_counts):  # type: (str, dict[str, int]) -> None
+    ec = ["%s:%s\n" % (echo, str(count))
+          for echo, count in echo_counts.items()]
+    ec = "".join(ec)
+
+    c.execute("DELETE FROM node_feature WHERE node = ? AND feature = ?;",
+              (node, FEAT_X_C))
+    c.execute("INSERT INTO node_feature (node, feature, response) VALUES (?, ?, ?);",
+              (node, FEAT_X_C, ec))
+    con.commit()

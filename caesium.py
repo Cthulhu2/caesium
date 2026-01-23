@@ -4,16 +4,18 @@ import base64
 import codecs
 import curses
 import hashlib
+import itertools
 import locale
 import os
 import pickle
 import subprocess
 import sys
+import traceback
 from datetime import datetime
 from shutil import copyfile
 from typing import List
 
-from core import parser, client, config, ui, utils
+from core import parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
 from core.config import get_color
 
 # TODO: Add http/https/socks proxy support
@@ -175,11 +177,37 @@ def debundle(bundle):
 
 
 def get_mail(node_):  # type: (config.Node) -> None
-    fetch_msg_list = []
-    print("Получение индекса от ноды...")
+    features = api.get_node_features(node_.nodename)
+    if features is None:
+        print("Запрос x/features...")
+        features = client.get_features(node_.url)
+        api.save_node_features(node_.nodename, features)
+        print("  x/features: " + ", ".join(features))
+    is_node_smart = FEAT_X_C in features and FEAT_U_E in features
+    #
     echoareas = list(map(lambda e: e.name, filter(lambda e: e.sync,
                                                   node_.echoareas)))
-    remote_msg_list = client.get_msg_list(node_.url, echoareas)
+    old_nec = None
+    new_nec = None
+    offsets = None
+    if is_node_smart:
+        old_nec = api.get_node_echo_counts(node_.nodename)
+        new_nec = client.get_echo_count(node_.url, echoareas)
+        offsets = utils.offsets_echo_count(old_nec or {}, new_nec)
+
+    fetch_msg_list = []
+    print("Получение индекса от ноды...")
+    if is_node_smart and old_nec:
+        remote_msg_list = []
+        grouped = {offset: [ec[0] for ec in ec]
+                   for offset, ec in itertools.groupby(offsets.items(),
+                                                       lambda ec: ec[1])}
+        for offset, echoareas in grouped.items():
+            print("  offset %s: %s" % (str(offset), ", ".join(echoareas)))
+            remote_msg_list += client.get_msg_list(node_.url, echoareas, offset)
+    else:
+        remote_msg_list = client.get_msg_list(node_.url, echoareas)
+
     print("Построение разностного индекса...")
     local_index = None
     for line in remote_msg_list:
@@ -196,6 +224,8 @@ def get_mail(node_):  # type: (config.Node) -> None
             debundle(client.get_bundle(node_.url, "/".join(get_list)))
     else:
         print("Новых сообщений не обнаружено.", end="")
+    if is_node_smart:
+        api.save_node_echo_counts(node_.nodename, new_nec)
     print()
 
 
@@ -210,6 +240,7 @@ def fetch_mail(node_):  # type: (config.Node) -> None
         print("\nПрервано пользователем")
     except Exception as ex:
         print("\nОШИБКА: " + str(ex))
+        print(traceback.format_exc())
     input("Нажмите Enter для продолжения.")
 
 

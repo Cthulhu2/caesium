@@ -29,10 +29,13 @@ def get_bundle(url, msgids):
     return list(filter(None, data))
 
 
-def get_msg_list(url, echoareas):  # type: (str, List[str]) -> List[str]
+def get_msg_list(url, echoareas, offset=None, count=None):
+    # type: (str, List[str], int, int) -> List[str]
     if not echoareas:
         return []
-    echoareas = "/".join(echoareas)
+    x_filter = "/%s:%s" % (str(offset), str(count or "")) if offset else ""
+
+    echoareas = "/".join(echoareas) + x_filter
     req = urllib.request.Request(url + "u/e/" + echoareas, method="GET")
     data = _do_request(req)
     data = data.split("\n")
@@ -67,3 +70,12 @@ def get_echo_hash(url, echoareas):  # type: (str, List[str]) -> dict[str, str]
                  for it in map(lambda it: it.split(":"),
                                filter(None, data))}
     return echo_hash
+
+
+def get_features(url):  # type: (str) -> List[str]
+    req = urllib.request.Request(url + "x/features", method="GET")
+    try:
+        data = _do_request(req).split("\n")
+    except Exception as ex:
+        return ["error: " + str(ex)]
+    return list(filter(None, map(lambda it: it.strip(), data)))
