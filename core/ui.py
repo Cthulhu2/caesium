@@ -169,6 +169,11 @@ def render_body(scr, tokens, scroll):
 
 
 def apply_attribute(token, text_attr):
+    if token.type == parser.TT.URL:
+        text_attr |= curses.A_UNDERLINE
+    else:
+        text_attr &= ~curses.A_UNDERLINE
+
     if token.type == parser.TT.ITALIC_BEGIN:
         text_attr |= curses.A_ITALIC
     elif token.type == parser.TT.ITALIC_END:
@@ -186,8 +191,6 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
         if y + i >= h - 1:
             return y + i, x  #
         attr = config.get_color(parser.TOKEN2UI.get(token.type, "text"))
-        if token.type == parser.TT.URL:
-            attr |= curses.A_UNDERLINE
         if line:
             scr.addstr(y + i, x, line, attr | text_attr)
 

@@ -802,7 +802,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             go = False
 
     def open_link(token):  # type: (parser.Token) -> None
-        link = token.value
+        link = token.url
         nonlocal msgid, msgn, msg, size, go
         nonlocal body_tokens, body_height, scroll_thumb_size
         global next_echoarea
