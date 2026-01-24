@@ -18,13 +18,13 @@ ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|//|#)")
 quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.()]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")
-code_inline_template = re.compile(r"`[^`]+`(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()])")
+code_inline_template = re.compile(r"`[^`]+`(?=$|[\s.,:;'{}@!~_*\\/\-+=&%#()])")
 bold_inline_template = re.compile(
-    r"(((?<=\s)|(?<=^))__[^\s_][^_]+[^\s_]__(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))"
-    r"|(((?<=\s)|(?<=^))\*\*[^\s*][^*]+[^\s*]\*\*(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))")
+    r"(((?<=\s)|(?<=^))__[^\s_][^_]+[^\s_]__(?=$|[\s.,:;'{}@!~_*\\/\-+=&%#()]))"
+    r"|(((?<=\s)|(?<=^))\*\*[^\s*][^*]+[^\s*]\*\*(?=$|[\s.,:;'{}@!~_*\\/\-+=&%#()]))")
 italic_inline_template = re.compile(
-    r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))"
-    r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]\*(?=$|[\s.,:;{}@!~_*\\/\-+=&%#()]))")
+    r"(((?<=\s)|(?<=^))_[^\s_][^_]+[^\s_]_(?=$|[\s.,:;'{}@!~_*\\/\-+=&%#()]))"
+    r"|(((?<=\s)|(?<=^))\*[^\s*][^*]+[^\s*]\*(?=$|[\s.,:;'{}@!~_*\\/\-+=&%#()]))")
 filename_sanitize = re.compile(r"\.{2}|^[ .]|[/<>:\"\\|?*]+|[ .]$")
 simple_b64 = re.compile(r"^[-A-Za-z0-9+/]*={0,3}$")
 
@@ -207,7 +207,7 @@ def _inline(text: str, line_num: int, token: Token) -> List[Token]:
                 if match[0] in (match_gem_url, match_md_url):
                     tokens.append(Token.URL(
                         text[match[0].start():match[0].end()], line_num,
-                        url=match[0].group("url"),
+                        url=match[0].group("url").strip(),
                         title=(match[0].group("title") or "").strip()))
                 # simple inline url
                 else:
