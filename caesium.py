@@ -626,8 +626,9 @@ def call_editor(out=''):
     p.wait()
     ui.initialize_curses()
     if h != hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest():
-        d = ui.show_menu("Куда сохранить?", ["Сохранить в исходящие",
-                                             "Сохранить как черновик"])
+        d = ui.SelectWindow("Куда сохранить?", ["Сохранить в исходящие",
+                                                "Сохранить как черновик"]
+                            ).show()
         if d == 2:
             if not out:
                 save_out(True)
@@ -813,9 +814,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     attachment.write(token.filedata)
                 ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
                 ui.stdscr.getch()
-                if ui.show_menu("Открыть '%s'?" % token.filename,
-                                ["Нет", "Да"]) == 2:
+                if ui.SelectWindow("Открыть '%s'?" % token.filename,
+                                   ["Нет", "Да"]).show() == 2:
                     utils.open_file(filepath)
+        elif link.startswith("#"):  # markdown anchor?
+            pass  # TODO: Find header by anchor title and scroll to
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
                 ui.show_message_box("Не удалось запустить Интернет-браузер")
@@ -1005,8 +1008,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
             msgids = api.get_echo_msgids(echo.name)
             prerender_msg_or_quit()
         elif key in keys.f_delete and drafts and msgids:
-            if ui.show_menu("Удалить черновик '%s'?" % msgids[msgn],
-                            ["Нет", "Да"]) == 2:
+            if ui.SelectWindow("Удалить черновик '%s'?" % msgids[msgn],
+                               ["Нет", "Да"]).show() == 2:
                 os.remove("out/" + cur_node.nodename + "/" + msgids[msgn])
                 msgids = get_out_msgids(drafts)
                 prerender_msg_or_quit()
@@ -1027,9 +1030,14 @@ def echo_reader(echo: config.Echo, msgn, archive):
             if len(links) == 1:
                 open_link(links[0])
             elif links:
-                if i := ui.show_menu("Выберите ссылку", list(map(
+                win = ui.SelectWindow("Выберите ссылку", list(map(
                         lambda it: (it.url + " " + (it.title or "")).strip(),
-                        links))):
+                        links)))
+                i = win.show()
+                if win.resized:
+                    scroll_view = ui.HEIGHT - 5 - 1
+                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                if i:
                     open_link(links[i - 1])
             ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:

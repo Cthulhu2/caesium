@@ -47,17 +47,6 @@ class TT(Enum):
     URL = auto()
 
 
-TOKEN2UI = {
-    TT.CODE: "code",
-    TT.COMMENT: "comment",
-    TT.HEADER: "header",
-    TT.ORIGIN: "origin",
-    TT.QUOTE1: "quote1",
-    TT.QUOTE2: "quote2",
-    TT.URL: "url",
-}
-
-
 @dataclass
 class Token:
     type: TT

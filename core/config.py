@@ -131,30 +131,52 @@ class Config:
 #
 # Theme
 #
+UI_BORDER = "border"
+UI_CURSOR = "cursor"
+UI_SCROLL = "scrollbar"
+UI_STATUS = "statusline"
+UI_TITLES = "titles"
+UI_CODE = "code"
+UI_COMMENT = "comment"
+UI_HEADER = "header"
+UI_ORIGIN = "origin"
+UI_QUOTE1 = "quote1"
+UI_QUOTE2 = "quote2"
+UI_TEXT = "text"
+UI_URL = "url"
+
+TOKEN2UI = {
+    parser.TT.CODE: UI_CODE,
+    parser.TT.COMMENT: UI_COMMENT,
+    parser.TT.HEADER: UI_HEADER,
+    parser.TT.ORIGIN: UI_ORIGIN,
+    parser.TT.QUOTE1: UI_QUOTE1,
+    parser.TT.QUOTE2: UI_QUOTE2,
+    parser.TT.URL: UI_URL,
+}
+
 color_pairs = {
     # "ui-element": [color-pair-NUM, bold-attr]
-    # @formatter:off
-    "border":     [1,  0],
-    "cursor":     [2,  0],
-    "scrollbar":  [3,  0],
-    "statusline": [4,  0],
-    "titles":     [5,  0],
+    UI_BORDER: [1, 0],
+    UI_CURSOR: [2, 0],
+    UI_SCROLL: [3, 0],
+    UI_STATUS: [4, 0],
+    UI_TITLES: [5, 0],
     # tokens
-    "code":       [6,  0],
-    "comment":    [7,  0],
-    "header":     [8,  0],
-    "origin":     [9,  0],
-    "quote1":     [10, 0],
-    "quote2":     [11, 0],
-    "text":       [12, 0],
-    "url":        [13, 0],
-    # @formatter:on
+    UI_CODE: [6, 0],
+    UI_COMMENT: [7, 0],
+    UI_HEADER: [8, 0],
+    UI_ORIGIN: [9, 0],
+    UI_QUOTE1: [10, 0],
+    UI_QUOTE2: [11, 0],
+    UI_TEXT: [12, 0],
+    UI_URL: [13, 0],
 }
 
 
 def get_color(theme_part):
     if theme_part not in color_pairs:
-        theme_part = "text"
+        theme_part = UI_TEXT
     cp = color_pairs[theme_part][0]
     bold = color_pairs[theme_part][1]
     return curses.color_pair(cp) | bold

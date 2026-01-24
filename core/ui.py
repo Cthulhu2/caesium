@@ -2,8 +2,10 @@ import curses
 from typing import Optional, List
 
 import keys.default as keys
-from core import config, parser
+from core import config, parser, utils
 
+LABEL_ANY_KEY = "Нажмите любую клавишу"
+LABEL_ESC = "Esc - отмена"
 HEIGHT = 0
 WIDTH = 0
 
@@ -42,7 +44,7 @@ def draw_splash(scr, splash):  # type: (curses.window, List[str]) -> None
     h, w = scr.getmaxyx()
     x = int((w - len(splash[1])) / 2) - 1
     y = int((h - len(splash)) / 2)
-    color = config.get_color("text")
+    color = config.get_color(config.UI_TEXT)
     for i, line in enumerate(splash):
         scr.addstr(y + i, x, line, color)
     scr.refresh()
@@ -54,19 +56,18 @@ def draw_title(scr, y, x, title):
     if (x + len(title) + 2) > w:
         title = title[:w - x - 2 - 3] + '...'
     #
-    color = config.get_color("border")
+    color = config.get_color(config.UI_BORDER)
     scr.addstr(y, x, "[", color)
     scr.addstr(y, x + 1 + len(title), "]", color)
-    color = config.get_color("titles")
+    color = config.get_color(config.UI_TITLES)
     scr.addstr(y, x + 1, title, color)
 
 
 def draw_message_box(smsg, wait):
     msg = smsg.split("\n")
     maxlen = max(map(lambda x: len(x), msg))
-    any_key = "Нажмите любую клавишу"
     if wait:
-        maxlen = max(len(any_key), maxlen)
+        maxlen = max(len(LABEL_ANY_KEY), maxlen)
         win = curses.newwin(len(msg) + 4,
                             maxlen + 2,
                             int(HEIGHT / 2 - 2),
@@ -76,18 +77,18 @@ def draw_message_box(smsg, wait):
                             maxlen + 2,
                             int(HEIGHT / 2 - 2),
                             int(WIDTH / 2 - maxlen / 2 - 2))
-    win.bkgd(' ', config.get_color("text"))
-    win.attrset(config.get_color("border"))
+    win.bkgd(' ', config.get_color(config.UI_TEXT))
+    win.attrset(config.get_color(config.UI_BORDER))
     win.border()
 
-    color = config.get_color("text")
+    color = config.get_color(config.UI_TEXT)
     for i, line in enumerate(msg, start=1):
         win.addstr(i, 1, line, color)
 
-    color = config.get_color("titles")
+    color = config.get_color(config.UI_TITLES)
     if wait:
-        win.addstr(len(msg) + 2, int((maxlen + 2 - len(any_key)) / 2),
-                   any_key, color)
+        win.addstr(len(msg) + 2, int((maxlen + 2 - len(LABEL_ANY_KEY)) / 2),
+                   LABEL_ANY_KEY, color)
     win.refresh()
 
 
@@ -97,44 +98,116 @@ def show_message_box(smsg):
     stdscr.clear()
 
 
-def show_menu(title, items):
-    # type: (str, List[str]) -> int
-    # TODO: Fix show_menu crash w fit a large title/items to screen ui.WIDTH
-    e = "Esc - отмена"
-    h = len(items)
-    test_width = items + [e + "[]", title + "[]"]
-    w = 0 if not items else min(WIDTH - 3, max(map(lambda it: len(it),
-                                                   test_width)))
-    win = curses.newwin(h + 2, w + 2,
-                        int(HEIGHT / 2 - h / 2 - 2),
-                        int(WIDTH / 2 - w / 2 - 2))
-    win.attrset(config.get_color("border"))
-    win.border()
-    color = config.get_color("border")
-    win.addstr(0, 1, "[", color)
-    win.addstr(0, 2 + len(title), "]", color)
-    win.addstr(h + 1, 1, "[", color)
-    win.addstr(h + 1, 2 + len(e), "]", color)
+class SelectWindow:
+    def __init__(self, title, items):
+        self.title = title
+        self.items = items
+        self.cursor = 0
+        self.scroll_y = 0
+        self.scroll_visible = False
+        self.scroll_thumb_sz = 1
+        self.win = self.init_win(self.items, self.title)
+        self.resized = False
 
-    color = config.get_color("titles")
-    win.addstr(0, 2, title, color)
-    win.addstr(h + 1, 2, e, color)
-    y = 1
-    while True:
-        for i, item in enumerate(items, start=1):
-            color = config.get_color("cursor" if i == y else "text")
-            win.addstr(i, 1, " " * w, color)
-            win.addstr(i, 1, item[:w], color)
-        win.refresh()
-        key = stdscr.getch()
-        if key in keys.r_up:
-            y = y - 1 if y > 1 else h
-        elif key in keys.r_down:
-            y = y + 1 if y < h else 1
-        elif key in keys.s_enter:
-            return y  #
-        elif key in keys.r_quit:
-            return False  #
+    def init_win(self, items, title, win=None):
+        test_width = items + [LABEL_ESC + "[]", title + "[]"]
+        w = 0 if not items else max(map(lambda it: len(it), test_width))
+        h = min(HEIGHT - 2, len(items))
+        w = min(WIDTH - 2, w)
+        y = max(0, int(HEIGHT / 2 - h / 2 - 2))
+        x = max(0, int(WIDTH / 2 - w / 2 - 2))
+        if win:
+            win.resize(h + 2, w + 2)
+            win.mvwin(y, x)
+        else:
+            win = curses.newwin(h + 2, w + 2, y, x)
+        color = config.get_color(config.UI_BORDER)
+        lbl_title = title[0:min(w - 4, len(title))]
+        lbl_esc = LABEL_ESC[0:min(w - 4, len(LABEL_ESC))]
+        win.attrset(color)
+        win.border()
+        win.addstr(0, 1, "[", color)
+        win.addstr(0, 2 + len(lbl_title), "]", color)
+        win.addstr(h + 1, 1, "[", color)
+        win.addstr(h + 1, 2 + len(lbl_esc), "]", color)
+
+        color = config.get_color(config.UI_TITLES)
+        win.addstr(0, 2, lbl_title, color)
+        win.addstr(h + 1, 2, lbl_esc, color)
+        self.scroll_visible = (h < len(items))
+        self.scroll_thumb_sz = utils.scroll_thumb_size(len(items), h)
+        return win
+
+    @staticmethod
+    def draw_content(win, items, cursor, scroll):
+        # type: (curses.window, List[str], int, int) -> None
+        h, w = win.getmaxyx()
+        for i, item in enumerate(items[scroll:scroll + h - 2]):
+            color = config.get_color(config.UI_CURSOR if i + scroll == cursor else
+                                     config.UI_TEXT)
+            win.addstr(i + 1, 1, " " * (w - 2), color)
+            win.addstr(i + 1, 1, item[:w - 2], color)
+
+    def draw_scrollbar(self, win, items, scroll):
+        h, w = self.win.getmaxyx()
+        win.attrset(config.get_color(config.UI_SCROLL))
+        for i in range(1, h - 1):
+            win.addstr(i, w - 1, "░")
+        thumb_y = utils.scroll_thumb_pos(len(items), scroll, h - 2, self.scroll_thumb_sz)
+        for i in range(thumb_y + 1, thumb_y + 1 + self.scroll_thumb_sz):
+            if i < h - 1:
+                win.addstr(i, w - 1, "█")
+
+    def scroll_to_cursor(self, view_size):
+        if self.cursor < self.scroll_y:
+            self.scroll_y = self.cursor  # scroll up
+        elif self.cursor >= self.scroll_y + view_size:
+            self.scroll_y = self.cursor - view_size + 1  # scroll down
+
+    def show(self):
+        while True:
+            h, w = self.win.getmaxyx()
+            view_size = h - 2
+            if h < 3 or w < 5:
+                if h > 0 and w > 0:
+                    self.win.insstr(0, 0, "#" * w)
+            else:
+                self.scroll_to_cursor(view_size)
+                self.draw_content(self.win, self.items, self.cursor, self.scroll_y)
+                if self.scroll_visible:
+                    self.draw_scrollbar(self.win, self.items, self.scroll_y)
+            self.win.refresh()
+            key = stdscr.getch()
+            if key == curses.KEY_RESIZE:
+                set_term_size()
+                stdscr.clear()
+                stdscr.refresh()
+                self.win = self.init_win(self.items, self.title, self.win)
+                self.resized = True
+            elif key in keys.r_up:
+                self.cursor = self.cursor - 1 if self.cursor > 0 else len(self.items) - 1
+            elif key in keys.r_down:
+                self.cursor = self.cursor + 1 if self.cursor < len(self.items) - 1 else 0
+            elif key in keys.r_home:
+                self.cursor = 0
+            elif key in keys.r_mend:
+                self.cursor = len(self.items) - 1
+            elif key in keys.r_ppage:
+                if self.cursor > self.scroll_y:
+                    self.cursor = self.scroll_y
+                else:
+                    self.cursor = max(0, self.cursor - view_size)
+            elif key in keys.r_npage:
+                if self.cursor < self.scroll_y + view_size - 1:
+                    self.cursor = min(len(self.items) - 1,
+                                      self.scroll_y + view_size - 1)
+                else:
+                    self.cursor = min(len(self.items) - 1,
+                                      self.cursor + view_size - 1)
+            elif key in keys.s_enter:
+                return self.cursor + 1  # return 1-based index
+            elif key in keys.r_quit:
+                return False  #
 
 
 # region Render Body
@@ -190,7 +263,7 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= h - 1:
             return y + i, x  #
-        attr = config.get_color(parser.TOKEN2UI.get(token.type, "text"))
+        attr = config.get_color(config.TOKEN2UI.get(token.type, config.UI_TEXT))
         if line:
             scr.addstr(y + i, x, line, attr | text_attr)
 
