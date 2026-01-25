@@ -2,7 +2,7 @@ import curses
 from typing import Optional, List
 
 import keys.default as keys
-from core import config, parser, utils
+from core import config, parser
 
 LABEL_ANY_KEY = "Нажмите любую клавишу"
 LABEL_ESC = "Esc - отмена"
@@ -98,14 +98,72 @@ def show_message_box(smsg):
     stdscr.clear()
 
 
+def draw_scrollbarV(scr, y, x, scroll):
+    # type: (curses.window, int, int, ScrollCalc) -> None
+    color = config.get_color(config.UI_SCROLL)
+    for i in range(y, y + scroll.track):
+        scr.addstr(i, x, "░", color)
+    for i in range(y + scroll.thumb_pos, y + scroll.thumb_pos + scroll.thumb_sz):
+        scr.addstr(i, x, "█", color)
+
+
+class ScrollCalc:
+    content: int  # scrollable content length
+    view: int  # scroll view length
+    thumb_sz: int  # thumb size
+    track: int  # track length
+    _pos: int = 0  # scroll position in the scrollable content
+    #
+    thumb_pos: int  # calculated thumb position on the track
+    is_scrollable = False
+
+    def __init__(self, content: int, view: int,
+                 pos: int = 0, track: int = None):
+        self.content = content
+        self.view = view
+        self.thumb_sz = max(1, min(self.view, int(self.view * self.view
+                                                  / self.content + 0.5)))
+        self.track = track or view
+        self.is_scrollable = self.content > self.view
+        self._pos = pos
+        self.calc()
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos):
+        if self._pos == pos:
+            return
+        self._pos = max(0, min(self.content - self.view, pos))
+        self.calc()
+
+    def pos_bottom(self):
+        return max(0, min(self.pos + self.view, self.content) - 1)
+
+    def calc(self):
+        available_track = self.track - self.thumb_sz
+        thumb_pos = 0
+        if self.is_scrollable:
+            thumb_pos = int((self.pos / (self.content - self.view))
+                            * available_track + 0.5)
+        self.thumb_pos = max(0, min(available_track, thumb_pos))
+
+    def ensure_visible(self, pos):
+        if pos < self.pos:
+            self.pos = pos  # scroll up
+        elif pos >= self.pos + self.view:
+            self.pos = pos - self.view + 1  # scroll down
+
+
 class SelectWindow:
+    scrollY: ScrollCalc
+
     def __init__(self, title, items):
         self.title = title
         self.items = items
         self.cursor = 0
-        self.scroll_y = 0
-        self.scroll_visible = False
-        self.scroll_thumb_sz = 1
         self.win = self.init_win(self.items, self.title)
         self.resized = False
 
@@ -134,48 +192,30 @@ class SelectWindow:
         color = config.get_color(config.UI_TITLES)
         win.addstr(0, 2, lbl_title, color)
         win.addstr(h + 1, 2, lbl_esc, color)
-        self.scroll_visible = (h < len(items))
-        self.scroll_thumb_sz = utils.scroll_thumb_size(len(items), h)
+        self.scrollY = ScrollCalc(len(items), h)
         return win
 
     @staticmethod
-    def draw_content(win, items, cursor, scroll):
+    def draw_content(win, items, cursor, pos):
         # type: (curses.window, List[str], int, int) -> None
         h, w = win.getmaxyx()
-        for i, item in enumerate(items[scroll:scroll + h - 2]):
-            color = config.get_color(config.UI_CURSOR if i + scroll == cursor else
+        for i, item in enumerate(items[pos:pos + h - 2]):
+            color = config.get_color(config.UI_CURSOR if i + pos == cursor else
                                      config.UI_TEXT)
             win.addstr(i + 1, 1, " " * (w - 2), color)
             win.addstr(i + 1, 1, item[:w - 2], color)
 
-    def draw_scrollbar(self, win, items, scroll):
-        h, w = self.win.getmaxyx()
-        win.attrset(config.get_color(config.UI_SCROLL))
-        for i in range(1, h - 1):
-            win.addstr(i, w - 1, "░")
-        thumb_y = utils.scroll_thumb_pos(len(items), scroll, h - 2, self.scroll_thumb_sz)
-        for i in range(thumb_y + 1, thumb_y + 1 + self.scroll_thumb_sz):
-            if i < h - 1:
-                win.addstr(i, w - 1, "█")
-
-    def scroll_to_cursor(self, view_size):
-        if self.cursor < self.scroll_y:
-            self.scroll_y = self.cursor  # scroll up
-        elif self.cursor >= self.scroll_y + view_size:
-            self.scroll_y = self.cursor - view_size + 1  # scroll down
-
     def show(self):
         while True:
             h, w = self.win.getmaxyx()
-            view_size = h - 2
             if h < 3 or w < 5:
                 if h > 0 and w > 0:
                     self.win.insstr(0, 0, "#" * w)
             else:
-                self.scroll_to_cursor(view_size)
-                self.draw_content(self.win, self.items, self.cursor, self.scroll_y)
-                if self.scroll_visible:
-                    self.draw_scrollbar(self.win, self.items, self.scroll_y)
+                self.scrollY.ensure_visible(self.cursor)
+                self.draw_content(self.win, self.items, self.cursor, self.scrollY.pos)
+                if self.scrollY.is_scrollable:
+                    draw_scrollbarV(self.win, 1, w - 1, self.scrollY)
             self.win.refresh()
             key = stdscr.getch()
             if key == curses.KEY_RESIZE:
@@ -193,17 +233,17 @@ class SelectWindow:
             elif key in keys.r_mend:
                 self.cursor = len(self.items) - 1
             elif key in keys.r_ppage:
-                if self.cursor > self.scroll_y:
-                    self.cursor = self.scroll_y
+                if self.cursor > self.scrollY.pos:
+                    self.cursor = self.scrollY.pos
                 else:
-                    self.cursor = max(0, self.cursor - view_size)
+                    self.cursor = max(0, self.cursor - self.scrollY.view)
             elif key in keys.r_npage:
-                if self.cursor < self.scroll_y + view_size - 1:
-                    self.cursor = min(len(self.items) - 1,
-                                      self.scroll_y + view_size - 1)
+                page_bottom = self.scrollY.pos_bottom()
+                if self.cursor < page_bottom:
+                    self.cursor = page_bottom
                 else:
                     self.cursor = min(len(self.items) - 1,
-                                      self.cursor + view_size - 1)
+                                      page_bottom + self.scrollY.view)
             elif key in keys.s_enter:
                 return self.cursor + 1  # return 1-based index
             elif key in keys.r_quit:

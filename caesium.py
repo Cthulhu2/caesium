@@ -609,16 +609,6 @@ def draw_reader(echo: str, msgid, out):
         ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 10, "~", color)
 
 
-def draw_scrollbar(scr, body_height, thumb_size, scroll_view, y):
-    scr.attrset(get_color("scrollbar"))
-    for i in range(5, ui.HEIGHT - 1):
-        scr.addstr(i, ui.WIDTH - 1, "░")
-    thumb_y = utils.scroll_thumb_pos(body_height, y, scroll_view, thumb_size)
-    for i in range(thumb_y + 5, thumb_y + 5 + thumb_size):
-        if i < ui.HEIGHT - 1:
-            scr.addstr(i, ui.WIDTH - 1, "█")
-
-
 def call_editor(out=''):
     ui.terminate_curses()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
@@ -746,7 +736,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
     ui.stdscr.clear()
     ui.stdscr.attrset(get_color("border"))
-    y = 0
     out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
     drafts = (echo == config.ECHO_DRAFTS)
     favorites = (echo == config.ECHO_FAVORITES)
@@ -761,7 +750,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
         msgids = api.get_echo_msgids(echo.name)
     msgn = min(msgn, len(msgids) - 1)
     cur_node = cfg.nodes[node]  # type: config.Node
-    scroll_view = ui.HEIGHT - 5 - 1  # screen ui.HEIGHT - header - status line
     msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
     size = 0
     go = True
@@ -787,25 +775,24 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 break
             msg, size = api.read_msg(msgids[msgn], echo.name)
 
-    def prerender(msgbody):
+    def prerender(msgbody, pos=0):
         tokens = parser.tokenize(msgbody)
-        b_height = parser.prerender(tokens, ui.WIDTH, scroll_view)
-        thumb_size = utils.scroll_thumb_size(b_height, scroll_view)
-        return tokens, b_height, thumb_size
+        view = ui.HEIGHT - 5 - 1  # screen ui.HEIGHT - header - status line
+        body_height = parser.prerender(tokens, ui.WIDTH, view)
+        return tokens, ui.ScrollCalc(body_height, view, pos)
 
     def prerender_msg_or_quit():
-        nonlocal msgn, msg, size, go, body_tokens, body_height, scroll_thumb_size
+        nonlocal msgn, msg, size, go, body_tokens, scroll
         if msgids:
             msgn = min(msgn, len(msgids) - 1)
             msg, size = read_cur_msg()
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         else:
             go = False
 
     def open_link(token):  # type: (parser.Token) -> None
         link = token.url
-        nonlocal msgid, msgn, msg, size, go
-        nonlocal body_tokens, body_height, scroll_thumb_size
+        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll
         global next_echoarea
         if token.filename:
             if token.filedata:
@@ -840,7 +827,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         else:
             msg, size = api.find_msg(link[5:])
             msgid = link[5:]
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
             if not stack or stack[-1] != msgn:
                 stack.append(msgn)
 
@@ -848,7 +835,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         read_msg_skip_twit(-1)
         if msgn < 0:
             next_echoarea = True
-    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+    body_tokens, scroll = prerender(msg[8:])
 
     while go:
         if msgids:
@@ -879,93 +866,81 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            ui.render_body(ui.stdscr, body_tokens, y)
-            if body_height > scroll_view:
-                draw_scrollbar(ui.stdscr, body_height,
-                               scroll_thumb_size, scroll_view, y)
+            ui.render_body(ui.stdscr, body_tokens, scroll.pos)
+            if scroll.is_scrollable:
+                ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, scroll)
         else:
             draw_reader(echo.name, "", out)
         ui.stdscr.attrset(get_color("border"))
         ui.stdscr.refresh()
         key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
-            y = 0
             ui.set_term_size()
-            scroll_view = ui.HEIGHT - 5 - 1
-            if msgids:
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:], scroll.pos)
             ui.stdscr.clear()
         elif key in keys.r_prev and msgn > 0 and msgids:
-            y = 0
             msgn = msgn - 1
             stack.clear()
             tmp = msgn
             read_msg_skip_twit(-1)
             if msgn < 0:
                 msgn = tmp + 1
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_next and msgn < len(msgids) - 1 and msgids:
-            y = 0
             msgn = msgn + 1
             stack.clear()
             read_msg_skip_twit(+1)
             if msgn >= len(msgids):
                 go = False
                 next_echoarea = True
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
         elif key in keys.r_prep and not any((favorites, carbonarea, out)) and repto:
             if repto in msgids:
-                y = 0
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = read_cur_msg()
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_nrep and len(stack) > 0:
-            y = 0
             msgn = stack.pop()
             msg, size = read_cur_msg()
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_up and msgids:
-            y = max(0, y - 1)
+            scroll.pos -= 1
         elif key in keys.r_ppage and msgids:
-            y = max(0, y - scroll_view)
+            scroll.pos -= scroll.view
         elif key in keys.r_npage and msgids:
-            y = min(body_height - scroll_view, y + scroll_view)
+            scroll.pos += scroll.view
         elif key in keys.r_home and msgids:
-            y = 0
+            scroll.pos = 0
         elif key in keys.r_mend and msgids:
-            y = max(0, body_height - scroll_view)
+            scroll.pos = scroll.content - scroll.view
         elif key in keys.r_ukeys:
-            if len(msgids) == 0 or y >= body_height - ui.HEIGHT + 5:
-                y = 0
-                if msgn == len(msgids) - 1 or len(msgids) == 0:
+            if not msgids or scroll.pos >= scroll.content - scroll.view:
+                if msgn == len(msgids) - 1 or not msgids:
                     next_echoarea = True
                     go = False
                 else:
                     msgn = msgn + 1
                     stack.clear()
                     msg, size = read_cur_msg()
-                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                    body_tokens, scroll = prerender(msg[8:])
             else:
-                if msgids and body_height > scroll_view:
-                    y = min(body_height - scroll_view, y + scroll_view)
+                scroll.pos += scroll.view
         elif key in keys.r_down and msgids:
-            y = min(body_height - scroll_view, y + 1)
+            scroll.pos += 1
         elif key in keys.r_begin and msgids:
-            y = 0
             msgn = 0
             stack.clear()
             msg, size = read_cur_msg()
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_end and msgids:
-            y = 0
             msgn = len(msgids) - 1
             stack.clear()
             msg, size = read_cur_msg()
-            body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+            body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_ins and not any((archive, out, favorites, carbonarea)):
             with open("template.txt", "r") as t:
                 with open("temp", "w") as f:
@@ -1020,7 +995,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 get_counts(True)
                 ui.stdscr.clear()
                 msg, size = api.find_msg(msgid)
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                body_tokens, scroll = prerender(msg[8:])
             except Exception as ex:
                 ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
                 ui.stdscr.clear()
@@ -1035,8 +1010,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                         links)))
                 i = win.show()
                 if win.resized:
-                    scroll_view = ui.HEIGHT - 5 - 1
-                    body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                    body_tokens, scroll = prerender(msg[8:])
                 if i:
                     open_link(links[i - 1])
             ui.stdscr.clear()
@@ -1055,16 +1029,13 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_list and not out and not drafts:
             selected_msgn = show_msg_list_screen(echo, msgn)
             if selected_msgn > -1:
-                y = 0
                 msgn = selected_msgn
                 stack.clear()
                 msg, size = read_cur_msg()
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
+                body_tokens, scroll = prerender(msg[8:])
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
-            if msg:
-                body_tokens, body_height, scroll_thumb_size = prerender(msg[8:])
-                y = max(0, min(y, body_height - scroll_view))
+            body_tokens, scroll = prerender(msg[8:], scroll.pos)
         elif key in keys.r_quit:
             go = False
             next_echoarea = False

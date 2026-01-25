@@ -10,19 +10,6 @@ def separate(fetch_list, step=20):  # type: (List, int) -> List
         yield fetch_list[x:x + step]
 
 
-def scroll_thumb_size(length, scroll_view):  # type: (int, int) -> int
-    return max(1, min(scroll_view,
-                      int(scroll_view * scroll_view / length + 0.5)))
-
-
-def scroll_thumb_pos(length, scroll_pos, scroll_view, thumb_size):
-    # type: (int, int, int, int) -> int
-    available_track = scroll_view - thumb_size
-    thumb_pos = int((scroll_pos / (length - scroll_view))
-                    * available_track + 0.5)
-    return max(0, min(available_track, thumb_pos))
-
-
 def msgn_status(msgids, msgn, width):  # type: (List[str], int, int) -> str
     total = len(msgids)
     remains = total - msgn - 1
