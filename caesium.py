@@ -389,16 +389,25 @@ def show_echo_selector_screen():
     global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node
     archive = False
     echoareas = cfg.nodes[node].echoareas
-    go = True
-    start = 0
-    if archive:
-        cursor = echo_cursor
-    else:
-        cursor = archive_cursor
+    cursor = echo_cursor
+    scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
+    scroll.ensure_visible(cursor, center=True)
+
+    def reload_echoareas():
+        global counts_rescan
+        nonlocal archive, echoareas, cursor, scroll
+        archive = False
+        echoareas = cfg.nodes[node].echoareas
+        ui.draw_message_box("Подождите", False)
+        get_counts()
+        ui.stdscr.clear()
+        counts_rescan = True
+        cursor = 0
+        scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
 
     def toggle_archive():
         global echo_cursor, archive_cursor, counts_rescan
-        nonlocal cursor, echoareas, archive
+        nonlocal cursor, echoareas, archive, scroll
         archive = not archive
         if not archive:
             archive_cursor = cursor
@@ -410,57 +419,39 @@ def show_echo_selector_screen():
             echoareas = cfg.nodes[node].archive
         ui.stdscr.clear()
         counts_rescan = True
+        scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
+        scroll.ensure_visible(cursor, center=True)
 
-    def ensure_cursor_visible():
-        nonlocal start
-        if cursor - start > ui.HEIGHT - 3:
-            start = cursor - ui.HEIGHT + 3
-        elif cursor - start < 0:
-            start = cursor
-
+    go = True
     while go:
-        draw_echo_selector(start, cursor, archive)
+        scroll.ensure_visible(cursor)
+        draw_echo_selector(scroll.pos, cursor, archive)
+        if scroll.is_scrollable:
+            ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
         key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
-            if cursor >= ui.HEIGHT - 2:
-                start = cursor - ui.HEIGHT + 3
-            if cursor - start <= 0:
-                start = cursor
-            if start > 0 and ui.HEIGHT - 2 > len(echoareas):
-                start = 0
+            scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2, cursor)
             ui.stdscr.clear()
-        elif key in keys.s_up and cursor > 0:
-            cursor = cursor - 1
-            if cursor - start < 0 < start:
-                start = start - 1
-        elif key in keys.s_down and cursor < len(echoareas) - 1:
-            cursor = cursor + 1
-            if cursor - start > ui.HEIGHT - 3 and start < len(echoareas) - ui.HEIGHT + 2:
-                start = start + 1
+        elif key in keys.s_up:
+            cursor = max(0, cursor - 1)
+        elif key in keys.s_down:
+            cursor = min(scroll.content - 1, cursor + 1)
         elif key in keys.s_ppage:
-            cursor = cursor - ui.HEIGHT + 2
-            if cursor < 0:
-                cursor = 0
-            if cursor - start < 0 < start:
-                start = start - ui.HEIGHT + 2
-            if start < 0:
-                start = 0
+            if cursor > scroll.pos:
+                cursor = scroll.pos
+            else:
+                cursor = max(0, cursor - scroll.view)
         elif key in keys.s_npage:
-            cursor = cursor + ui.HEIGHT - 2
-            if cursor >= len(echoareas):
-                cursor = len(echoareas) - 1
-            if cursor - start > ui.HEIGHT - 3:
-                start = start + ui.HEIGHT - 2
-                if start > len(echoareas) - ui.HEIGHT + 2:
-                    start = len(echoareas) - ui.HEIGHT + 2
+            page_bottom = scroll.pos_bottom()
+            if cursor < page_bottom:
+                cursor = page_bottom
+            else:
+                cursor = min(scroll.content - 1, page_bottom + scroll.view)
         elif key in keys.s_home:
             cursor = 0
-            start = 0
         elif key in keys.s_end:
-            cursor = len(echoareas) - 1
-            if len(echoareas) >= ui.HEIGHT - 2:
-                start = len(echoareas) - ui.HEIGHT + 2
+            cursor = scroll.content - 1
         elif key in keys.s_get:
             ui.terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -471,13 +462,8 @@ def show_echo_selector_screen():
             ui.stdscr.clear()
             counts = rescan_counts(echoareas)
             cursor = find_new(0)
-            if cursor >= ui.HEIGHT - 2:
-                start = cursor - ui.HEIGHT + 3
-            if cursor - start <= 0:
-                start = cursor
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             toggle_archive()
-            ensure_cursor_visible()
         elif key in keys.s_enter:
             ui.draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -499,7 +485,6 @@ def show_echo_selector_screen():
             if next_echoarea and isinstance(next_echoarea, bool):
                 counts = rescan_counts(echoareas)
                 cursor = find_new(cursor)
-                ensure_cursor_visible()
                 next_echoarea = False
             elif next_echoarea and isinstance(next_echoarea, str):
                 cur_node = cfg.nodes[node]
@@ -509,7 +494,6 @@ def show_echo_selector_screen():
                     toggle_archive()
                 # noinspection PyTypeChecker
                 cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
-                ensure_cursor_visible()
                 next_echoarea = False
 
         elif key in keys.s_out:
@@ -521,39 +505,20 @@ def show_echo_selector_screen():
             if out_length > -1:
                 go = not echo_reader(config.ECHO_DRAFTS, out_length, archive)
         elif key in keys.s_nnode:
-            archive = False
             node = node + 1
             if node == len(cfg.nodes):
                 node = 0
-            echoareas = cfg.nodes[node].echoareas
-            ui.draw_message_box("Подождите", False)
-            get_counts()
-            ui.stdscr.clear()
-            counts_rescan = True
-            cursor = 0
-            start = 0
+            reload_echoareas()
         elif key in keys.s_pnode:
-            archive = False
             node = node - 1
             if node == -1:
                 node = len(cfg.nodes) - 1
-            echoareas = cfg.nodes[node].echoareas
-            ui.draw_message_box("Подождите", False)
-            get_counts()
-            ui.stdscr.clear()
-            counts_rescan = True
-            cursor = 0
-            start = 0
+            reload_echoareas()
         elif key in keys.s_config:
             edit_config()
             config.load_colors(cfg.theme)
-            get_counts()
-            ui.stdscr.clear()
-            counts_rescan = True
             node = 0
-            archive = False
-            echoareas = cfg.nodes[node].echoareas
-            cursor = 0
+            reload_echoareas()
         elif key in keys.g_quit:
             go = False
     if archive:
@@ -1066,8 +1031,9 @@ def draw_msg_list(echo):
 def show_msg_list_screen(echo: config.Echo, msgn):
     data = api.get_msg_list_data(echo.name)
     draw_msg_list(echo.name)
-    scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
     cursor = msgn
+    scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
+    scroll.ensure_visible(cursor, center=True)
     while True:
         scroll.ensure_visible(cursor)
         for i in range(1, ui.HEIGHT - 1):

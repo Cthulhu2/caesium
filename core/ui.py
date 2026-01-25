@@ -150,11 +150,15 @@ class ScrollCalc:
                             * available_track + 0.5)
         self.thumb_pos = max(0, min(available_track, thumb_pos))
 
-    def ensure_visible(self, pos):
+    def ensure_visible(self, pos, center=False):
         if pos < self.pos:
             self.pos = pos  # scroll up
+            if center:
+                self.pos -= self.view // 2
         elif pos >= self.pos + self.view:
             self.pos = pos - self.view + 1  # scroll down
+            if center:
+                self.pos += self.view // 2
 
 
 class SelectWindow:
