@@ -125,7 +125,7 @@ class ScrollCalc:
                                                   / self.content + 0.5)))
         self.track = track or view
         self.is_scrollable = self.content > self.view
-        self._pos = pos
+        self._pos = max(0, min(self.content - self.view, pos))
         self.calc()
 
     @property

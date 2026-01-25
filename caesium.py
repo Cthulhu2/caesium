@@ -16,7 +16,7 @@ from shutil import copyfile
 from typing import List
 
 from core import parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
-from core.config import get_color
+from core.config import get_color, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
 
 # TODO: Add http/https/socks proxy support
 # import socket
@@ -596,17 +596,21 @@ def draw_reader(echo: str, msgid, out):
             ui.draw_title(ui.stdscr, 0, 0, echo)
     for i in range(0, 3):
         draw_cursor(i, 1)
-    color = get_color("titles")
+    color = get_color(UI_TITLES)
     ui.stdscr.addstr(1, 1, "От:   ", color)
     ui.stdscr.addstr(2, 1, "Кому: ", color)
     ui.stdscr.addstr(3, 1, "Тема: ", color)
-    #
-    color = get_color("statusline")
-    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
-    ui.stdscr.addstr(ui.HEIGHT - 1, 1, version, color)
-    ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"), color)
+    draw_status_bar(ui.stdscr)
+
+
+def draw_status_bar(scr):  # type: (curses.window) -> None
+    h, w = scr.getmaxyx()
+    color = get_color(UI_STATUS)
+    scr.insstr(h - 1, 0, " " * w, color)
+    scr.addstr(h - 1, 1, version, color)
+    scr.addstr(h - 1, w - 8, "│ " + datetime.now().strftime("%H:%M"), color)
     if parser.INLINE_STYLE_ENABLED:
-        ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 10, "~", color)
+        scr.addstr(h - 1, w - 10, "~", color)
 
 
 def call_editor(out=''):
@@ -1051,7 +1055,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
 def draw_msg_list(echo):
     ui.stdscr.clear()
-    color = get_color("border")
+    color = get_color(config.UI_BORDER)
     ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
     if ui.WIDTH >= 80:
         ui.draw_title(ui.stdscr, 0, 0, "Список сообщений в конференции " + echo)
@@ -1062,52 +1066,47 @@ def draw_msg_list(echo):
 def show_msg_list_screen(echo: config.Echo, msgn):
     data = api.get_msg_list_data(echo.name)
     draw_msg_list(echo.name)
-    echo_len = len(data)
-    if echo_len <= ui.HEIGHT - 1:
-        start = 0
-    elif msgn + ui.HEIGHT - 1 < echo_len:
-        start = msgn
-    else:
-        start = echo_len - ui.HEIGHT + 1
-    y = msgn - start
+    scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
+    cursor = msgn
     while True:
-        for i in range(1, ui.HEIGHT):
-            color = get_color("cursor" if i - 1 == y else "text")
+        scroll.ensure_visible(cursor)
+        for i in range(1, ui.HEIGHT - 1):
+            color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
+                              UI_CURSOR)
             draw_cursor(i - 1, color)
-            if start + i - 1 < echo_len:
-                msg = data[start + i - 1]
+            if scroll.pos + i - 1 < scroll.content:
+                msg = data[scroll.pos + i - 1]
                 ui.stdscr.addstr(i, 0, msg[1], color)
-                ui.stdscr.addstr(i, 16, msg[2][:ui.WIDTH - 26], color)
-                ui.stdscr.insstr(i, ui.WIDTH - 10, msg[3], color)
+                ui.stdscr.addstr(i, 16, msg[2][:ui.WIDTH - 27], color)
+                ui.stdscr.addstr(i, ui.WIDTH - 11, msg[3], color)
+        if scroll.is_scrollable:
+            ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
+        draw_status_bar(ui.stdscr)
+        ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
+                         utils.msgn_status(data, cursor, ui.WIDTH),
+                         get_color(UI_STATUS))
         key = ui.stdscr.getch()
         if key in keys.s_up:
-            y = y - 1
-            if y == -1:
-                y = 0
-                start = max(0, start - 1)
+            cursor = max(0, cursor - 1)
         elif key in keys.s_down:
-            y = y + 1
-            if y > ui.HEIGHT - 2:
-                y = ui.HEIGHT - 2
-                if y + start + 1 < echo_len:
-                    start += 1
-            y = min(y, echo_len - 1)
+            cursor = min(scroll.content - 1, cursor + 1)
         elif key in keys.s_ppage:
-            if y == 0:
-                start = max(0, start - ui.HEIGHT + 1)
-            y = 0
+            if cursor > scroll.pos:
+                cursor = scroll.pos
+            else:
+                cursor = max(0, cursor - scroll.view)
         elif key in keys.s_npage:
-            if y == ui.HEIGHT - 2:
-                start = min(start + ui.HEIGHT - 1, echo_len - ui.HEIGHT + 1)
-            y = min(echo_len - 1, ui.HEIGHT - 2)
+            page_bottom = scroll.pos_bottom()
+            if cursor < page_bottom:
+                cursor = page_bottom
+            else:
+                cursor = min(scroll.content - 1, page_bottom + scroll.view)
         elif key in keys.s_home:
-            y = 0
-            start = 0
+            cursor = 0
         elif key in keys.s_end:
-            y = min(echo_len - 1, ui.HEIGHT - 2)
-            start = max(0, echo_len - ui.HEIGHT + 1)
+            cursor = scroll.content - 1
         elif key in keys.s_enter:
-            return y + start  #
+            return cursor  #
         elif key in keys.r_quit:
             return -1  #
 
