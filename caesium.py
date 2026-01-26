@@ -16,7 +16,9 @@ from shutil import copyfile
 from typing import List
 
 from core import parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
-from core.config import get_color, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
+from core.config import (
+    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
+)
 
 # TODO: Add http/https/socks proxy support
 # import socket
@@ -996,7 +998,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
             msgids = get_out_msgids(drafts)
             prerender_msg_or_quit()
         elif key in keys.r_list and not out and not drafts:
-            selected_msgn = show_msg_list_screen(echo, msgn)
+            data = api.get_msg_list_data(echo.name)
+            selected_msgn = MsgListScreen(echo.name, data, msgn).show()
             if selected_msgn > -1:
                 msgn = selected_msgn
                 stack.clear()
@@ -1018,63 +1021,82 @@ def echo_reader(echo: config.Echo, msgn, archive):
     return done
 
 
-def draw_msg_list(echo):
-    ui.stdscr.clear()
-    color = get_color(config.UI_BORDER)
-    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
-    if ui.WIDTH >= 80:
-        ui.draw_title(ui.stdscr, 0, 0, "Список сообщений в конференции " + echo)
-    else:
-        ui.draw_title(ui.stdscr, 0, 0, echo)
+class MsgListScreen:
+    def __init__(self, echo, data, msgn):
+        # type: (str, List[List[str]], int) -> MsgListScreen
+        self.data = data
+        self.echo = echo
+        self.cursor = msgn
+        self.scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
+        self.scroll.ensure_visible(self.cursor, center=True)
 
+    def show(self):  # type: () -> int
+        ui.stdscr.clear()
+        self.draw_title(ui.stdscr, self.echo)
+        while True:
+            self.scroll.ensure_visible(self.cursor)
+            self.draw(ui.stdscr, self.data, self.cursor, self.scroll)
+            #
+            key = ui.stdscr.getch()
+            #
+            if key in keys.s_enter:
+                return self.cursor  #
+            elif key in keys.r_quit:
+                return -1  #
+            else:
+                self.on_key_pressed(key, self.scroll)
 
-def show_msg_list_screen(echo: config.Echo, msgn):
-    data = api.get_msg_list_data(echo.name)
-    draw_msg_list(echo.name)
-    cursor = msgn
-    scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
-    scroll.ensure_visible(cursor, center=True)
-    while True:
-        scroll.ensure_visible(cursor)
-        for i in range(1, ui.HEIGHT - 1):
+    @staticmethod
+    def draw_title(win, echo):
+        _, w = win.getmaxyx()
+        color = get_color(UI_BORDER)
+        win.addstr(0, 0, "─" * w, color)
+        if w >= 80:
+            ui.draw_title(win, 0, 0, "Список сообщений в конференции " + echo)
+        else:
+            ui.draw_title(win, 0, 0, echo)
+
+    @staticmethod
+    def draw(win, data, cursor, scroll):
+        h, w = win.getmaxyx()
+        for i in range(1, h - 1):
             color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
                               UI_CURSOR)
-            draw_cursor(i - 1, color)
+            win.addstr(i, 0, " " * w, color)
+            #
             if scroll.pos + i - 1 < scroll.content:
                 msg = data[scroll.pos + i - 1]
-                ui.stdscr.addstr(i, 0, msg[1], color)
-                ui.stdscr.addstr(i, 16, msg[2][:ui.WIDTH - 27], color)
-                ui.stdscr.addstr(i, ui.WIDTH - 11, msg[3], color)
+                win.addstr(i, 0, msg[1], color)
+                win.addstr(i, 16, msg[2][:w - 27], color)
+                win.addstr(i, w - 11, msg[3], color)
+        #
         if scroll.is_scrollable:
-            ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
-        draw_status_bar(ui.stdscr)
-        ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
-                         utils.msgn_status(data, cursor, ui.WIDTH),
-                         get_color(UI_STATUS))
-        key = ui.stdscr.getch()
+            ui.draw_scrollbarV(win, 1, w - 1, scroll)
+        draw_status_bar(win)
+        win.addstr(h - 1, len(version) + 2,
+                   utils.msgn_status(data, cursor, w),
+                   get_color(UI_STATUS))
+
+    def on_key_pressed(self, key, scroll):
         if key in keys.s_up:
-            cursor = max(0, cursor - 1)
+            self.cursor = max(0, self.cursor - 1)
         elif key in keys.s_down:
-            cursor = min(scroll.content - 1, cursor + 1)
+            self.cursor = min(scroll.content - 1, self.cursor + 1)
         elif key in keys.s_ppage:
-            if cursor > scroll.pos:
-                cursor = scroll.pos
+            if self.cursor > scroll.pos:
+                self.cursor = scroll.pos
             else:
-                cursor = max(0, cursor - scroll.view)
+                self.cursor = max(0, self.cursor - scroll.view)
         elif key in keys.s_npage:
             page_bottom = scroll.pos_bottom()
-            if cursor < page_bottom:
-                cursor = page_bottom
+            if self.cursor < page_bottom:
+                self.cursor = page_bottom
             else:
-                cursor = min(scroll.content - 1, page_bottom + scroll.view)
+                self.cursor = min(scroll.content - 1, page_bottom + scroll.view)
         elif key in keys.s_home:
-            cursor = 0
+            self.cursor = 0
         elif key in keys.s_end:
-            cursor = scroll.content - 1
-        elif key in keys.s_enter:
-            return cursor  #
-        elif key in keys.r_quit:
-            return -1  #
+            self.cursor = scroll.content - 1
 
 
 if sys.version_info >= (3, 11):

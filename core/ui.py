@@ -3,6 +3,7 @@ from typing import Optional, List
 
 import keys.default as keys
 from core import config, parser
+from core.config import UI_TEXT, UI_CURSOR
 
 LABEL_ANY_KEY = "Нажмите любую клавишу"
 LABEL_ESC = "Esc - отмена"
@@ -162,7 +163,7 @@ class ScrollCalc:
 
 
 class SelectWindow:
-    scrollY: ScrollCalc
+    scroll: ScrollCalc
 
     def __init__(self, title, items):
         self.title = title
@@ -196,62 +197,71 @@ class SelectWindow:
         color = config.get_color(config.UI_TITLES)
         win.addstr(0, 2, lbl_title, color)
         win.addstr(h + 1, 2, lbl_esc, color)
-        self.scrollY = ScrollCalc(len(items), h)
+        self.scroll = ScrollCalc(len(items), h)
         return win
-
-    @staticmethod
-    def draw_content(win, items, cursor, pos):
-        # type: (curses.window, List[str], int, int) -> None
-        h, w = win.getmaxyx()
-        for i, item in enumerate(items[pos:pos + h - 2]):
-            color = config.get_color(config.UI_CURSOR if i + pos == cursor else
-                                     config.UI_TEXT)
-            win.addstr(i + 1, 1, " " * (w - 2), color)
-            win.addstr(i + 1, 1, item[:w - 2], color)
 
     def show(self):
         while True:
-            h, w = self.win.getmaxyx()
-            if h < 3 or w < 5:
-                if h > 0 and w > 0:
-                    self.win.insstr(0, 0, "#" * w)
-            else:
-                self.scrollY.ensure_visible(self.cursor)
-                self.draw_content(self.win, self.items, self.cursor, self.scrollY.pos)
-                if self.scrollY.is_scrollable:
-                    draw_scrollbarV(self.win, 1, w - 1, self.scrollY)
+            self.draw(self.win, self.items, self.cursor, self.scroll)
             self.win.refresh()
+            #
             key = stdscr.getch()
+            #
             if key == curses.KEY_RESIZE:
                 set_term_size()
                 stdscr.clear()
                 stdscr.refresh()
                 self.win = self.init_win(self.items, self.title, self.win)
                 self.resized = True
-            elif key in keys.r_up:
-                self.cursor = self.cursor - 1 if self.cursor > 0 else len(self.items) - 1
-            elif key in keys.r_down:
-                self.cursor = self.cursor + 1 if self.cursor < len(self.items) - 1 else 0
-            elif key in keys.r_home:
-                self.cursor = 0
-            elif key in keys.r_mend:
-                self.cursor = len(self.items) - 1
-            elif key in keys.r_ppage:
-                if self.cursor > self.scrollY.pos:
-                    self.cursor = self.scrollY.pos
-                else:
-                    self.cursor = max(0, self.cursor - self.scrollY.view)
-            elif key in keys.r_npage:
-                page_bottom = self.scrollY.pos_bottom()
-                if self.cursor < page_bottom:
-                    self.cursor = page_bottom
-                else:
-                    self.cursor = min(len(self.items) - 1,
-                                      page_bottom + self.scrollY.view)
             elif key in keys.s_enter:
                 return self.cursor + 1  # return 1-based index
             elif key in keys.r_quit:
                 return False  #
+            else:
+                self.on_key_pressed(key, self.scroll)
+
+    @staticmethod
+    def draw(win, items, cursor, scroll):
+        h, w = win.getmaxyx()
+        if h < 3 or w < 5:
+            if h > 0 and w > 0:
+                win.insstr(0, 0, "#" * w)
+            return  # no space to draw
+        #
+        scroll.ensure_visible(cursor)
+        for i, item in enumerate(items[scroll.pos:scroll.pos + h - 2]):
+            color = config.get_color(UI_TEXT if i + scroll.pos != cursor else
+                                     UI_CURSOR)
+            win.addstr(i + 1, 1, " " * (w - 2), color)
+            win.addstr(i + 1, 1, item[:w - 2], color)
+
+        if scroll.is_scrollable:
+            draw_scrollbarV(win, 1, w - 1, scroll)
+
+    def on_key_pressed(self, key, scroll):  # type: (int, ScrollCalc) -> None
+        if key in keys.r_up:
+            self.cursor -= 1
+            if self.cursor < 0:
+                self.cursor = scroll.content - 1
+        elif key in keys.r_down:
+            self.cursor += 1
+            if self.cursor >= self.scroll.content:
+                self.cursor = 0
+        elif key in keys.r_home:
+            self.cursor = 0
+        elif key in keys.r_mend:
+            self.cursor = scroll.content - 1
+        elif key in keys.r_ppage:
+            if self.cursor > scroll.pos:
+                self.cursor = scroll.pos
+            else:
+                self.cursor = max(0, self.cursor - scroll.view)
+        elif key in keys.r_npage:
+            page_bottom = scroll.pos_bottom()
+            if self.cursor < page_bottom:
+                self.cursor = page_bottom
+            else:
+                self.cursor = min(scroll.content - 1, page_bottom + scroll.view)
 
 
 # region Render Body
