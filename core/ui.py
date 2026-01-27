@@ -1,9 +1,13 @@
 import curses
+from datetime import datetime
 from typing import Optional, List
 
 import keys.default as keys
-from core import config, parser
-from core.config import UI_TEXT, UI_CURSOR
+from core import parser
+from core.config import (
+    get_color, TOKEN2UI,
+    UI_BORDER, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
+)
 
 LABEL_ANY_KEY = "Нажмите любую клавишу"
 LABEL_ESC = "Esc - отмена"
@@ -45,7 +49,7 @@ def draw_splash(scr, splash):  # type: (curses.window, List[str]) -> None
     h, w = scr.getmaxyx()
     x = int((w - len(splash[1])) / 2) - 1
     y = int((h - len(splash)) / 2)
-    color = config.get_color(config.UI_TEXT)
+    color = get_color(UI_TEXT)
     for i, line in enumerate(splash):
         scr.addstr(y + i, x, line, color)
     scr.refresh()
@@ -57,10 +61,10 @@ def draw_title(scr, y, x, title):
     if (x + len(title) + 2) > w:
         title = title[:w - x - 2 - 3] + '...'
     #
-    color = config.get_color(config.UI_BORDER)
+    color = get_color(UI_BORDER)
     scr.addstr(y, x, "[", color)
     scr.addstr(y, x + 1 + len(title), "]", color)
-    color = config.get_color(config.UI_TITLES)
+    color = get_color(UI_TITLES)
     scr.addstr(y, x + 1, title, color)
 
 
@@ -78,15 +82,15 @@ def draw_message_box(smsg, wait):
                             maxlen + 2,
                             int(HEIGHT / 2 - 2),
                             int(WIDTH / 2 - maxlen / 2 - 2))
-    win.bkgd(' ', config.get_color(config.UI_TEXT))
-    win.attrset(config.get_color(config.UI_BORDER))
+    win.bkgd(' ', get_color(UI_TEXT))
+    win.attrset(get_color(UI_BORDER))
     win.border()
 
-    color = config.get_color(config.UI_TEXT)
+    color = get_color(UI_TEXT)
     for i, line in enumerate(msg, start=1):
         win.addstr(i, 1, line, color)
 
-    color = config.get_color(config.UI_TITLES)
+    color = get_color(UI_TITLES)
     if wait:
         win.addstr(len(msg) + 2, int((maxlen + 2 - len(LABEL_ANY_KEY)) / 2),
                    LABEL_ANY_KEY, color)
@@ -101,11 +105,21 @@ def show_message_box(smsg):
 
 def draw_scrollbarV(scr, y, x, scroll):
     # type: (curses.window, int, int, ScrollCalc) -> None
-    color = config.get_color(config.UI_SCROLL)
+    color = get_color(UI_SCROLL)
     for i in range(y, y + scroll.track):
         scr.addstr(i, x, "░", color)
     for i in range(y + scroll.thumb_pos, y + scroll.thumb_pos + scroll.thumb_sz):
         scr.addstr(i, x, "█", color)
+
+
+def draw_status_bar(scr, version):  # type: (curses.window, str) -> None
+    h, w = scr.getmaxyx()
+    color = get_color(UI_STATUS)
+    scr.insstr(h - 1, 0, " " * w, color)
+    scr.addstr(h - 1, 1, version, color)
+    scr.addstr(h - 1, w - 8, "│ " + datetime.now().strftime("%H:%M"), color)
+    if parser.INLINE_STYLE_ENABLED:
+        scr.addstr(h - 1, w - 10, "~", color)
 
 
 class ScrollCalc:
@@ -184,7 +198,7 @@ class SelectWindow:
             win.mvwin(y, x)
         else:
             win = curses.newwin(h + 2, w + 2, y, x)
-        color = config.get_color(config.UI_BORDER)
+        color = get_color(UI_BORDER)
         lbl_title = title[0:min(w - 4, len(title))]
         lbl_esc = LABEL_ESC[0:min(w - 4, len(LABEL_ESC))]
         win.attrset(color)
@@ -194,7 +208,7 @@ class SelectWindow:
         win.addstr(h + 1, 1, "[", color)
         win.addstr(h + 1, 2 + len(lbl_esc), "]", color)
 
-        color = config.get_color(config.UI_TITLES)
+        color = get_color(UI_TITLES)
         win.addstr(0, 2, lbl_title, color)
         win.addstr(h + 1, 2, lbl_esc, color)
         self.scroll = ScrollCalc(len(items), h)
@@ -230,8 +244,8 @@ class SelectWindow:
         #
         scroll.ensure_visible(cursor)
         for i, item in enumerate(items[scroll.pos:scroll.pos + h - 2]):
-            color = config.get_color(UI_TEXT if i + scroll.pos != cursor else
-                                     UI_CURSOR)
+            color = get_color(UI_TEXT if i + scroll.pos != cursor else
+                              UI_CURSOR)
             win.addstr(i + 1, 1, " " * (w - 2), color)
             win.addstr(i + 1, 1, item[:w - 2], color)
 
@@ -317,7 +331,7 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
     for i, line in enumerate(token.render[offset:]):
         if y + i >= h - 1:
             return y + i, x  #
-        attr = config.get_color(config.TOKEN2UI.get(token.type, config.UI_TEXT))
+        attr = get_color(TOKEN2UI.get(token.type, UI_TEXT))
         if line:
             scr.addstr(y + i, x, line, attr | text_attr)
 

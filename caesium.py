@@ -567,17 +567,7 @@ def draw_reader(echo: str, msgid, out):
     ui.stdscr.addstr(1, 1, "От:   ", color)
     ui.stdscr.addstr(2, 1, "Кому: ", color)
     ui.stdscr.addstr(3, 1, "Тема: ", color)
-    draw_status_bar(ui.stdscr)
-
-
-def draw_status_bar(scr):  # type: (curses.window) -> None
-    h, w = scr.getmaxyx()
-    color = get_color(UI_STATUS)
-    scr.insstr(h - 1, 0, " " * w, color)
-    scr.addstr(h - 1, 1, version, color)
-    scr.addstr(h - 1, w - 8, "│ " + datetime.now().strftime("%H:%M"), color)
-    if parser.INLINE_STYLE_ENABLED:
-        scr.addstr(h - 1, w - 10, "~", color)
+    ui.draw_status_bar(ui.stdscr, version)
 
 
 def call_editor(out=''):
@@ -706,7 +696,7 @@ def get_msg(msgid):
 def echo_reader(echo: config.Echo, msgn, archive):
     global next_echoarea
     ui.stdscr.clear()
-    ui.stdscr.attrset(get_color("border"))
+    ui.stdscr.attrset(get_color(UI_BORDER))
     out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
     drafts = (echo == config.ECHO_DRAFTS)
     favorites = (echo == config.ECHO_FAVORITES)
@@ -813,10 +803,10 @@ def echo_reader(echo: config.Echo, msgn, archive):
             draw_reader(msg[1], msgid or msgids[msgn], out)
             ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
                              utils.msgn_status(msgids, msgn, ui.WIDTH),
-                             get_color("statusline"))
+                             get_color(UI_STATUS))
             if echo.desc and ui.WIDTH >= 80:
                 ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
-            color = get_color("text")
+            color = get_color(UI_TEXT)
             if not out:
                 if ui.WIDTH >= 80:
                     ui.stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
@@ -824,9 +814,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     ui.stdscr.addstr(1, 7, msg[3], color)
                 msgtime = utils.msg_strftime(msg[2], ui.WIDTH)
                 ui.stdscr.addstr(1, ui.WIDTH - len(msgtime) - 1, msgtime, color)
-            else:
-                if cur_node.to:
-                    ui.stdscr.addstr(1, 7, cur_node.to[0], color)
+            elif cur_node.to:
+                ui.stdscr.addstr(1, 7, cur_node.to[0], color)
             ui.stdscr.addstr(2, 7, msg[5], color)
             ui.stdscr.addstr(3, 7, msg[6][:ui.WIDTH - 8], color)
             s_size = utils.msg_strfsize(size)
@@ -842,8 +831,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, scroll)
         else:
             draw_reader(echo.name, "", out)
-        ui.stdscr.attrset(get_color("border"))
-        ui.stdscr.refresh()
         key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
@@ -986,15 +973,13 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     open_link(links[i - 1])
             ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:
-            node_dir = "out/" + cur_node.nodename
-            os.rename(node_dir + "/" + msgids[msgn],
-                      node_dir + "/" + msgids[msgn].replace(".draft", ".out"))
+            draft_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
+            os.rename(draft_msg, draft_msg.replace(".draft", ".out"))
             msgids = get_out_msgids(drafts)
             prerender_msg_or_quit()
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            node_dir = "out/" + cur_node.nodename
-            os.rename(node_dir + "/" + msgids[msgn],
-                      node_dir + "/" + msgids[msgn].replace(".out", ".draft"))
+            out_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
+            os.rename(out_msg, out_msg.replace(".out", ".draft"))
             msgids = get_out_msgids(drafts)
             prerender_msg_or_quit()
         elif key in keys.r_list and not out and not drafts:
@@ -1082,7 +1067,7 @@ class MsgListScreen:
         #
         if scroll.is_scrollable:
             ui.draw_scrollbarV(win, 1, w - 1, scroll)
-        draw_status_bar(win)
+        ui.draw_status_bar(win, version)
         win.addstr(h - 1, len(version) + 2,
                    utils.msgn_status(data, cursor, w),
                    get_color(UI_STATUS))
