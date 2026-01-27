@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List
 
 import keys.default as keys
-from core import parser
+from core import __version__, parser
 from core.config import (
     get_color, TOKEN2UI,
     UI_BORDER, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
@@ -15,6 +15,7 @@ HEIGHT = 0
 WIDTH = 0
 
 stdscr = None  # type: Optional[curses.window]
+version = "Caesium/%s │" % __version__
 
 
 def set_term_size():
@@ -112,12 +113,14 @@ def draw_scrollbarV(scr, y, x, scroll):
         scr.addstr(i, x, "█", color)
 
 
-def draw_status_bar(scr, version):  # type: (curses.window, str) -> None
+def draw_status_bar(scr, text=None):  # type: (curses.window, str) -> None
     h, w = scr.getmaxyx()
     color = get_color(UI_STATUS)
     scr.insstr(h - 1, 0, " " * w, color)
     scr.addstr(h - 1, 1, version, color)
     scr.addstr(h - 1, w - 8, "│ " + datetime.now().strftime("%H:%M"), color)
+    if text:
+        scr.addstr(h - 1, len(version) + 2, text, color)
     if parser.INLINE_STYLE_ENABLED:
         scr.addstr(h - 1, w - 10, "~", color)
 

@@ -11,7 +11,6 @@ import pickle
 import subprocess
 import sys
 import traceback
-from datetime import datetime
 from shutil import copyfile
 from typing import List
 
@@ -19,7 +18,7 @@ from core import (
     __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
 )
 from core.config import (
-    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
+    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_TITLES
 )
 
 # TODO: Add http/https/socks proxy support
@@ -43,8 +42,6 @@ echo_counts = {}
 next_echoarea = False
 node = 0
 cfg = config.Config()
-
-version = "Caesium/%s │" % __version__
 
 splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
@@ -294,8 +291,7 @@ def draw_echo_selector(start, cursor, archive):
     dsc_lens = []
     hidedsc = False
     m = 0
-    ui.stdscr.attrset(get_color("border"))
-    color = get_color("border")
+    color = get_color(UI_BORDER)
     ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
     cur_node = cfg.nodes[node]
     if archive:
@@ -325,15 +321,12 @@ def draw_echo_selector(start, cursor, archive):
     for echo in echoareas:
         if y - start < ui.HEIGHT - 2:
             if y == cursor:
-                if y >= start:
-                    color = get_color("cursor")
-                    ui.stdscr.attrset(color)
-                    draw_cursor(y - start, color)
+                color = get_color(UI_CURSOR)
             else:
-                if y >= start:
-                    color = get_color("text")
-                    draw_cursor(y - start, color)
-                ui.stdscr.attrset(get_color("text"))
+                color = get_color(UI_TEXT)
+            ui.stdscr.attrset(color)
+            if y >= start:
+                draw_cursor(y - start, color)
             if y + 1 >= start + 1:
                 if counts_rescan:
                     counts = rescan_counts(echoareas)
@@ -349,7 +342,7 @@ def draw_echo_selector(start, cursor, archive):
                 if ui.WIDTH >= 80:
                     if ui.WIDTH - 38 >= len(echo.desc):
                         ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - dsc_lens[y],
-                                         echo.desc, color)
+                                         echo.desc)
                     else:
                         cut_index = ui.WIDTH - 38 - len(echo.desc)
                         ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - len(echo.desc[:cut_index]),
@@ -358,12 +351,7 @@ def draw_echo_selector(start, cursor, archive):
                 ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
         y = y + 1
 
-    color = get_color("statusline")
-    ui.stdscr.insstr(ui.HEIGHT - 1, 0, " " * ui.WIDTH, color)
-    ui.stdscr.addstr(ui.HEIGHT - 1, 1, version, color)
-    ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2, cur_node.nodename, color)
-    ui.stdscr.addstr(ui.HEIGHT - 1, ui.WIDTH - 8, "│ " + datetime.now().strftime("%H:%M"), color)
-    ui.stdscr.refresh()
+    ui.draw_status_bar(ui.stdscr, text=cur_node.nodename)
 
 
 def find_new(cursor):
@@ -431,6 +419,7 @@ def show_echo_selector_screen():
         draw_echo_selector(scroll.pos, cursor, archive)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
+        ui.stdscr.refresh()
         key = ui.stdscr.getch()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
@@ -548,10 +537,10 @@ def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
     return msg, size
 
 
-def draw_reader(echo: str, msgid, out):
-    color = get_color("border")
-    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
-    ui.stdscr.insstr(4, 0, "─" * ui.WIDTH, color)
+def draw_reader(echo: str, msgid, out, status_text=None):
+    color = get_color(UI_BORDER)
+    ui.stdscr.addstr(0, 0, "─" * ui.WIDTH, color)
+    ui.stdscr.addstr(4, 0, "─" * ui.WIDTH, color)
     if out:
         ui.draw_title(ui.stdscr, 0, 0, echo)
         if msgid.endswith(".out"):
@@ -568,7 +557,7 @@ def draw_reader(echo: str, msgid, out):
     ui.stdscr.addstr(1, 1, "От:   ", color)
     ui.stdscr.addstr(2, 1, "Кому: ", color)
     ui.stdscr.addstr(3, 1, "Тема: ", color)
-    ui.draw_status_bar(ui.stdscr, version)
+    ui.draw_status_bar(ui.stdscr, text=status_text)
 
 
 def call_editor(out=''):
@@ -801,10 +790,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
     while go:
         if msgids:
-            draw_reader(msg[1], msgid or msgids[msgn], out)
-            ui.stdscr.addstr(ui.HEIGHT - 1, len(version) + 2,
-                             utils.msgn_status(msgids, msgn, ui.WIDTH),
-                             get_color(UI_STATUS))
+            draw_reader(msg[1], msgid or msgids[msgn], out,
+                        status_text=utils.msgn_status(msgids, msgn, ui.WIDTH))
             if echo.desc and ui.WIDTH >= 80:
                 ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
             color = get_color(UI_TEXT)
@@ -1068,10 +1055,7 @@ class MsgListScreen:
         #
         if scroll.is_scrollable:
             ui.draw_scrollbarV(win, 1, w - 1, scroll)
-        ui.draw_status_bar(win, version)
-        win.addstr(h - 1, len(version) + 2,
-                   utils.msgn_status(data, cursor, w),
-                   get_color(UI_STATUS))
+        ui.draw_status_bar(win, text=utils.msgn_status(data, cursor, w))
 
     def on_key_pressed(self, key, scroll):
         if key in keys.s_up:
