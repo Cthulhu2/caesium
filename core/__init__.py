@@ -1,3 +1,6 @@
+
+__version__ = "0.7"  # keep eyes on template.txt
+
 # Расширения IDEC
 # https://github.com/idec-net/new-docs/blob/master/extensions.md
 FEAT_FEATURES = "x/features"

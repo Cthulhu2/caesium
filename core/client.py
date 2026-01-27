@@ -4,7 +4,9 @@ import urllib.request
 import zlib
 from typing import List
 
-USER_AGENT = "Caesium/x.x"
+from core import __version__
+
+USER_AGENT = "Caesium/" + __version__
 
 
 def _headers():

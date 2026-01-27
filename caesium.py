@@ -15,7 +15,9 @@ from datetime import datetime
 from shutil import copyfile
 from typing import List
 
-from core import parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
+from core import (
+    __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
+)
 from core.config import (
     get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
 )
@@ -42,8 +44,7 @@ next_echoarea = False
 node = 0
 cfg = config.Config()
 
-version = "Caesium/0.7 │"
-client.USER_AGENT = "Caesium/0.7"
+version = "Caesium/%s │" % __version__
 
 splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
           "████████ ████████ ████████ ████████ ███ ███  ███ ██████████",
@@ -52,7 +53,7 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "███      ███  ███ ███           ███ ███ ███  ███ ███ ██ ███",
           "████████ ████████ ████████ ████████ ███ ████████ ███ ██ ███",
           "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
-          "           ncurses ii/idec client        v0.7",
+          "           ncurses ii/idec client        v" + __version__,
           "           Andrew Lobanov             20.01.2026",
           "           Cthulhu Fhtagn"]
 
