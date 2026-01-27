@@ -981,7 +981,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                         links)))
                 i = win.show()
                 if win.resized:
-                    body_tokens, scroll = prerender(msg[8:])
+                    body_tokens, scroll = prerender(msg[8:], scroll.pos)
                 if i:
                     open_link(links[i - 1])
             ui.stdscr.clear()
@@ -999,7 +999,10 @@ def echo_reader(echo: config.Echo, msgn, archive):
             prerender_msg_or_quit()
         elif key in keys.r_list and not out and not drafts:
             data = api.get_msg_list_data(echo.name)
-            selected_msgn = MsgListScreen(echo.name, data, msgn).show()
+            win = MsgListScreen(echo.name, data, msgn)
+            selected_msgn = win.show()
+            if win.resized:
+                body_tokens, scroll = prerender(msg[8:], scroll.pos)
             if selected_msgn > -1:
                 msgn = selected_msgn
                 stack.clear()
@@ -1027,8 +1030,9 @@ class MsgListScreen:
         self.data = data
         self.echo = echo
         self.cursor = msgn
-        self.scroll = ui.ScrollCalc(len(data), ui.HEIGHT - 2)
+        self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
+        self.resized = False
 
     def show(self):  # type: () -> int
         ui.stdscr.clear()
@@ -1039,7 +1043,13 @@ class MsgListScreen:
             #
             key = ui.stdscr.getch()
             #
-            if key in keys.s_enter:
+            if key == curses.KEY_RESIZE:
+                ui.set_term_size()
+                ui.stdscr.clear()
+                self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
+                self.draw_title(ui.stdscr, self.echo)
+                self.resized = True
+            elif key in keys.s_enter:
                 return self.cursor  #
             elif key in keys.r_quit:
                 return -1  #
