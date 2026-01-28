@@ -72,7 +72,8 @@ class Search:
             if self.result:
                 cursor = self.result[self.idx]
                 scroll.pos = cursor - scroll.view + 1
-        elif key == curses.KEY_BACKSPACE:
+        elif key in (curses.KEY_BACKSPACE, 127):
+            # 127 - Ctrl+? - Android backspace
             self.search(self.query[0:-1], scroll.pos)
         elif len(keystroke) == 1:
             self.search(self.query + keystroke, scroll.pos)
