@@ -12,13 +12,14 @@ import subprocess
 import sys
 import traceback
 from shutil import copyfile
-from typing import List
+from typing import List, Optional
 
+from core.keystroke import getkeystroke
 from core import (
-    __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E
+    __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E, search
 )
 from core.config import (
-    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_TITLES
+    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
 )
 
 # TODO: Add http/https/socks proxy support
@@ -64,6 +65,13 @@ def check_directories(storage_api):
         if not os.path.exists("out/" + n.nodename):
             os.mkdir("out/" + n.nodename)
     storage_api.init()
+
+
+def get_keystroke():
+    ui.stdscr.timeout(-1)
+    key = ui.stdscr.getch()
+    ui.stdscr.timeout(0)
+    return getkeystroke(ui.stdscr, key)
 
 
 #
@@ -286,7 +294,8 @@ def rescan_counts(echoareas):
     return counts_
 
 
-def draw_echo_selector(start, cursor, archive):
+def draw_echo_selector(start, cursor, archive, search_):
+    # type: (int, int, bool, search.Search) -> None
     global counts, counts_rescan
     dsc_lens = []
     hidedsc = False
@@ -349,6 +358,12 @@ def draw_echo_selector(start, cursor, archive):
                                          echo.desc[:cut_index])
                 ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
                 ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
+                if search_ and y in search_.result:
+                    idx = search_.result.index(y)
+                    for match in search_.matches[idx]:
+                        ui.stdscr.addstr(y + 1 - start, 2 + match.start(),
+                                         echo.name[match.start():match.end()],
+                                         color | curses.A_REVERSE)
         y = y + 1
 
     ui.draw_status_bar(ui.stdscr, text=cur_node.nodename)
@@ -383,6 +398,7 @@ def show_echo_selector_screen():
     cursor = echo_cursor
     scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
     scroll.ensure_visible(cursor, center=True)
+    search_ = None  # type: Optional[search.Search]
 
     def reload_echoareas():
         global counts_rescan
@@ -413,18 +429,38 @@ def show_echo_selector_screen():
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
         scroll.ensure_visible(cursor, center=True)
 
+    def on_search_item(pattern, echo):
+        result_echo_name = []
+        p = 0
+        while match := pattern.search(echo.name, p):
+            result_echo_name.append(match)
+            p = match.end()
+        return result_echo_name
+
     go = True
     while go:
         scroll.ensure_visible(cursor)
-        draw_echo_selector(scroll.pos, cursor, archive)
+        draw_echo_selector(scroll.pos, cursor, archive, search_)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
+        if search_:
+            search_.draw(ui.stdscr, ui.HEIGHT - 1,
+                         len(ui.version) + 2,
+                         ui.WIDTH - len(ui.version) - 12,
+                         get_color(UI_STATUS))
         ui.stdscr.refresh()
-        key = ui.stdscr.getch()
+        keystroke, key, _ = get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
             scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2, cursor)
             ui.stdscr.clear()
+        elif search_:
+            if key in keys.s_csearch:
+                search_ = None
+                curses.curs_set(0)
+            else:
+                cursor = search_.on_key_pressed_search(
+                    key, keystroke, scroll, cursor)
         elif key in keys.s_up:
             cursor = max(0, cursor - 1)
         elif key in keys.s_down:
@@ -511,6 +547,10 @@ def show_echo_selector_screen():
             config.load_colors(cfg.theme)
             node = 0
             reload_echoareas()
+        elif key in keys.s_osearch:
+            curses.curs_set(1)
+            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+            search_ = search.Search(echoareas, on_search_item)
         elif key in keys.g_quit:
             go = False
     if archive:
@@ -952,8 +992,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 open_link(links[0])
             elif links:
                 win = ui.SelectWindow("Выберите ссылку", list(map(
-                        lambda it: (it.url + " " + (it.title or "")).strip(),
-                        links)))
+                    lambda it: (it.url + " " + (it.title or "")).strip(),
+                    links)))
                 i = win.show()
                 if win.resized:
                     body_tokens, scroll = prerender(msg[8:], scroll.pos)
@@ -1006,6 +1046,7 @@ class MsgListScreen:
         self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
+        self.search = None  # type: Optional[search.Search]
 
     def show(self):  # type: () -> int
         ui.stdscr.clear()
@@ -1013,8 +1054,13 @@ class MsgListScreen:
         while True:
             self.scroll.ensure_visible(self.cursor)
             self.draw(ui.stdscr, self.data, self.cursor, self.scroll)
+            if self.search:
+                self.search.draw(ui.stdscr, ui.HEIGHT - 1,
+                                 len(ui.version) + 2,
+                                 ui.WIDTH - len(ui.version) - 12,
+                                 get_color(UI_STATUS))
             #
-            key = ui.stdscr.getch()
+            keystroke, key, _ = get_keystroke()
             #
             if key == curses.KEY_RESIZE:
                 ui.set_term_size()
@@ -1022,6 +1068,13 @@ class MsgListScreen:
                 self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
                 self.draw_title(ui.stdscr, self.echo)
                 self.resized = True
+            elif self.search:
+                if key in keys.s_csearch:
+                    self.search = None
+                    curses.curs_set(0)
+                else:
+                    self.cursor = self.search.on_key_pressed_search(
+                        key, keystroke, self.scroll, self.cursor)
             elif key in keys.s_enter:
                 return self.cursor  #
             elif key in keys.r_quit:
@@ -1039,19 +1092,32 @@ class MsgListScreen:
         else:
             ui.draw_title(win, 0, 0, echo)
 
-    @staticmethod
-    def draw(win, data, cursor, scroll):
+    def draw(self, win, data, cursor, scroll):
         h, w = win.getmaxyx()
         for i in range(1, h - 1):
             color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
                               UI_CURSOR)
             win.addstr(i, 0, " " * w, color)
+            pos = scroll.pos + i - 1
+            if pos >= scroll.content:
+                continue  #
             #
-            if scroll.pos + i - 1 < scroll.content:
-                msg = data[scroll.pos + i - 1]
-                win.addstr(i, 0, msg[1], color)
-                win.addstr(i, 16, msg[2][:w - 27], color)
-                win.addstr(i, w - 11, msg[3], color)
+            msg = data[pos]
+            win.addstr(i, 0, msg[1], color)
+            win.addstr(i, 16, msg[2][:w - 27], color)
+            win.addstr(i, w - 11, msg[3], color)
+            #
+            if self.search and pos in self.search.result:
+                idx = self.search.result.index(pos)
+                m_name, m_subj = self.search.matches[idx]
+                for m in m_name:
+                    win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
+                               color | curses.A_REVERSE)
+                for m in m_subj:
+                    end = min(w - 17, m.end())
+                    win.addstr(i, 16 + m.start(), msg[2][m.start():end],
+                               color | curses.A_REVERSE)
+
         #
         if scroll.is_scrollable:
             ui.draw_scrollbarV(win, 1, w - 1, scroll)
@@ -1077,6 +1143,26 @@ class MsgListScreen:
             self.cursor = 0
         elif key in keys.s_end:
             self.cursor = scroll.content - 1
+        elif key in keys.s_osearch:
+            curses.curs_set(1)
+            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+            self.search = search.Search(self.data, self.on_search_item)
+
+    @staticmethod
+    def on_search_item(pattern, it):
+        result_name = []
+        result_subj = []
+        p = 0
+        while match := pattern.search(it[1], p):
+            result_name.append(match)
+            p = match.end()
+        p = 0
+        while match := pattern.search(it[2], p):
+            result_subj.append(match)
+            p = match.end()
+        if result_name or result_subj:
+            return result_name, result_subj
+        return None
 
 
 if sys.version_info >= (3, 11):
@@ -1108,6 +1194,7 @@ elif cfg.keys == "vi":
 else:
     raise Exception("Unknown Keys Scheme :: " + cfg.keys)
 ui.keys = keys
+search.keys = keys
 
 try:
     ui.initialize_curses()
