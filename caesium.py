@@ -10,6 +10,7 @@ import os
 import pickle
 import subprocess
 import sys
+import textwrap
 import traceback
 from shutil import copyfile
 from typing import List, Optional
@@ -667,20 +668,6 @@ def quote_msg(msgid, msg):
             f.write(t.read())
 
 
-def show_subject(subject):
-    if len(subject) > ui.WIDTH - 8:
-        msg = ""
-        line = ""
-        for word in subject.split(" "):
-            if len(line + word) <= ui.WIDTH - 4:
-                line = line + word + " "
-            else:
-                msg = msg + line + "\n"
-                line = word + " "
-        msg = msg + line
-        ui.show_message_box(msg)
-
-
 def get_msg(msgid):
     node_ = cfg.nodes[node]
     bundle = client.get_bundle(node_.url, msgid)
@@ -694,6 +681,17 @@ def get_msg(msgid):
                 if msgbody[5] in node_.to and msgid not in carbonarea:
                     api.add_to_carbonarea(msgid, msgbody)
             api.save_message([(msgid, msgbody)], node_, node_.to)
+
+
+def save_attachment(token):  # type: (parser.Token) -> None
+    filepath = "downloads/" + token.filename
+    with open(filepath, "wb") as attachment:
+        attachment.write(token.filedata)
+    ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
+    ui.stdscr.getch()
+    if ui.SelectWindow("Открыть '%s'?" % token.filename,
+                       ["Нет", "Да"]).show() == 2:
+        utils.open_file(filepath)
 
 
 def echo_reader(echo: config.Echo, msgn, archive):
@@ -760,14 +758,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         global next_echoarea
         if token.filename:
             if token.filedata:
-                filepath = "downloads/" + token.filename
-                with open(filepath, "wb") as attachment:
-                    attachment.write(token.filedata)
-                ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
-                ui.stdscr.getch()
-                if ui.SelectWindow("Открыть '%s'?" % token.filename,
-                                   ["Нет", "Да"]).show() == 2:
-                    utils.open_file(filepath)
+                save_attachment(token)
         elif link.startswith("#"):  # markdown anchor?
             pos = parser.find_pos_by_anchor(body_tokens, token)
             if pos != -1:
@@ -924,10 +915,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_quote and not any((archive, out)) and msgids:
             quote_msg(msgids[msgn], msg)
             call_editor()
-        elif key in keys.r_subj:
-            show_subject(msg[6])
-        elif key in keys.r_info and not out and ui.WIDTH < 80:
-            ui.show_message_box("id  : " + msgids[msgn] + "\naddr: " + msg[4])
+        elif key in keys.r_info:
+            subj = textwrap.fill(msg[6], ui.WIDTH * 0.75,
+                                 subsequent_indent="      ")
+            ui.show_message_box("id:   %s\naddr: %s\nsubj: %s"
+                                % (msgids[msgn], msg[4], subj))
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")

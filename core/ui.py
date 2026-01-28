@@ -81,17 +81,14 @@ def draw_title(scr, y, x, title):
 def draw_message_box(smsg, wait):
     msg = smsg.split("\n")
     maxlen = max(map(lambda x: len(x), msg))
+    box_height = len(msg) + 2  # len + border
     if wait:
+        box_height += 2  # + new line + LABEL_ANY_KEY
         maxlen = max(len(LABEL_ANY_KEY), maxlen)
-        win = curses.newwin(len(msg) + 4,
-                            maxlen + 2,
-                            int(HEIGHT / 2 - 2),
-                            int(WIDTH / 2 - maxlen / 2 - 2))
-    else:
-        win = curses.newwin(len(msg) + 2,
-                            maxlen + 2,
-                            int(HEIGHT / 2 - 2),
-                            int(WIDTH / 2 - maxlen / 2 - 2))
+    maxlen += 2  # + border
+    win = curses.newwin(box_height, maxlen,
+                        int((HEIGHT - box_height) / 2),
+                        int((WIDTH - maxlen) / 2))
     win.bkgd(' ', get_color(UI_TEXT))
     win.attrset(get_color(UI_BORDER))
     win.border()
@@ -102,7 +99,7 @@ def draw_message_box(smsg, wait):
 
     color = get_color(UI_TITLES)
     if wait:
-        win.addstr(len(msg) + 2, int((maxlen + 2 - len(LABEL_ANY_KEY)) / 2),
+        win.addstr(len(msg) + 2, int((maxlen - len(LABEL_ANY_KEY)) / 2),
                    LABEL_ANY_KEY, color)
     win.refresh()
 
