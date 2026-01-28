@@ -251,10 +251,6 @@ echo_cursor = 0
 archive_cursor = 0
 
 
-def draw_cursor(y, color):
-    ui.stdscr.insstr(y + 1, 0, " " * ui.WIDTH, color)
-
-
 def get_counts(new=False):
     for echo in cfg.nodes[node].echoareas:  # type: config.Echo
         if not new:
@@ -286,79 +282,65 @@ def rescan_counts(echoareas):
     return counts_
 
 
-def draw_echo_selector(start, cursor, archive, search_):
-    # type: (int, int, bool, search.Search) -> None
+def draw_echo_selector(win, start, cursor, archive, search_):
+    # type: (curses.window, int, int, bool, search.Search) -> None
     global counts, counts_rescan
-    dsc_lens = []
-    hidedsc = False
-    m = 0
+    h, w = win.getmaxyx()
     color = get_color(UI_BORDER)
-    ui.stdscr.insstr(0, 0, "─" * ui.WIDTH, color)
+    win.addstr(0, 0, "─" * w, color)
     cur_node = cfg.nodes[node]
     if archive:
         echoareas = cur_node.archive
-        ui.draw_title(ui.stdscr, 0, 0, "Архив")
+        ui.draw_title(win, 0, 0, "Архив")
     else:
         echoareas = cur_node.echoareas
-        ui.draw_title(ui.stdscr, 0, 0, "Конференция")
-    for echo in echoareas:
-        desc_len = len(echo.desc)
-        if desc_len > m:
-            m = desc_len
-        if m > ui.WIDTH - 38:
-            m = ui.WIDTH - 38
-        dsc_lens.append(desc_len)
-    y = 0
+        ui.draw_title(win, 0, 0, "Конференция")
+    if counts_rescan:
+        counts = rescan_counts(echoareas)
+        counts_rescan = False
+    #
+    m = min(w - 38, max(map(lambda e: len(e.desc), echoareas)))
     count = "Сообщений"
     unread = "Не прочитано"
     description = "Описание"
-    if ui.WIDTH < 80 or m == 0:
+    show_desc = (w >= 80) and m > 0
+    if w < 80 or m == 0:
         m = len(unread) - 7
-        hidedsc = True
-    ui.draw_title(ui.stdscr, 0, ui.WIDTH + 2 - m - len(count) - len(unread) - 1, count)
-    ui.draw_title(ui.stdscr, 0, ui.WIDTH - 8 - m - 1, unread)
-    if not hidedsc:
-        ui.draw_title(ui.stdscr, 0, ui.WIDTH - len(description) - 2, description)
-    for echo in echoareas:
-        if y - start < ui.HEIGHT - 2:
-            if y == cursor:
-                color = get_color(UI_CURSOR)
-            else:
-                color = get_color(UI_TEXT)
-            ui.stdscr.attrset(color)
-            if y >= start:
-                draw_cursor(y - start, color)
-            if y + 1 >= start + 1:
-                if counts_rescan:
-                    counts = rescan_counts(echoareas)
-                    counts_rescan = False
-                echo_length = int(counts[y][0])
-                if echo.name in lasts:
-                    last = lasts[echo.name]
-                else:
-                    last = -1
-                if last < echo_length - 1 or last == -1 and echo_length == 1:
-                    ui.stdscr.addstr(y + 1 - start, 0, "+")
-                ui.stdscr.addstr(y + 1 - start, 2, echo.name)
-                if ui.WIDTH >= 80:
-                    if ui.WIDTH - 38 >= len(echo.desc):
-                        ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - dsc_lens[y],
-                                         echo.desc)
-                    else:
-                        cut_index = ui.WIDTH - 38 - len(echo.desc)
-                        ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 1 - len(echo.desc[:cut_index]),
-                                         echo.desc[:cut_index])
-                ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 10 - m - len(counts[y][0]), counts[y][0])
-                ui.stdscr.addstr(y + 1 - start, ui.WIDTH - 2 - m - len(counts[y][1]), counts[y][1])
-                if search_ and y in search_.result:
-                    idx = search_.result.index(y)
-                    for match in search_.matches[idx]:
-                        ui.stdscr.addstr(y + 1 - start, 2 + match.start(),
-                                         echo.name[match.start():match.end()],
-                                         color | curses.A_REVERSE)
-        y = y + 1
+    ui.draw_title(win, 0, w + 2 - m - len(count) - len(unread) - 1, count)
+    ui.draw_title(win, 0, w - 8 - m - 1, unread)
+    if show_desc:
+        ui.draw_title(win, 0, w - len(description) - 2, description)
 
-    ui.draw_status_bar(ui.stdscr, text=cur_node.nodename)
+    for y in range(1, h - 1):
+        echoN = y - 1 + start
+        if echoN == cursor:
+            color = get_color(UI_CURSOR)
+        else:
+            color = get_color(UI_TEXT)
+        win.addstr(y, 0, " " * w, color)
+        if echoN >= len(echoareas):
+            continue  #
+        #
+        win.attrset(color)
+        echo = echoareas[echoN]
+        total, unread = counts[echoN]
+        if int(unread) > 0:
+            win.addstr(y, 0, "+")
+        win.addstr(y, 2, echo.name)
+        win.addstr(y, w - 10 - m - len(total), total)
+        win.addstr(y, w - 2 - m - len(unread), unread)
+        if show_desc:
+            win.addstr(y, max(w - m - 1, w - 1 - len(echo.desc)),
+                       echo.desc[0:w-38])
+        #
+        if search_ and echoN in search_.result:
+            idx = search_.result.index(echoN)
+            for match in search_.matches[idx]:
+                win.addstr(y, 2 + match.start(),
+                           echo.name[match.start():match.end()],
+                           color | curses.A_REVERSE)
+
+    ui.draw_status_bar(win, text=cur_node.nodename)
 
 
 def find_new(cursor):
@@ -432,7 +414,7 @@ def show_echo_selector_screen():
     go = True
     while go:
         scroll.ensure_visible(cursor)
-        draw_echo_selector(scroll.pos, cursor, archive, search_)
+        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, search_)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
         if search_:
@@ -582,8 +564,8 @@ def draw_reader(echo: str, msgid, out, status_text=None):
             ui.draw_title(ui.stdscr, 0, 0, echo + " / " + msgid)
         else:
             ui.draw_title(ui.stdscr, 0, 0, echo)
-    for i in range(0, 3):
-        draw_cursor(i, 1)
+    for i in range(1, 4):
+        ui.stdscr.addstr(i, 0, " " * ui.WIDTH, 1)
     color = get_color(UI_TITLES)
     ui.stdscr.addstr(1, 1, "От:   ", color)
     ui.stdscr.addstr(2, 1, "Кому: ", color)
