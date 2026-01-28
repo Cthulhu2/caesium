@@ -1114,7 +1114,9 @@ class MsgListScreen:
                     win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
                                color | curses.A_REVERSE)
                 for m in m_subj:
-                    end = min(w - 17, m.end())
+                    end = min(w - 27, m.end())
+                    if m.start() + 16 > w - 12:
+                        continue
                     win.addstr(i, 16 + m.start(), msg[2][m.start():end],
                                color | curses.A_REVERSE)
 
