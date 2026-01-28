@@ -435,6 +435,12 @@ def show_echo_selector_screen():
                 curses.curs_set(0)
             else:
                 cursor = search_.on_key_pressed_search(key, ks, scroll, cursor)
+                if search_.result:
+                    if key in keys.s_npage:
+                        scroll.pos = cursor
+                    elif key in keys.s_ppage:
+                        scroll.pos = cursor - scroll.view + 1
+                    scroll.ensure_visible(cursor, center=True)
         elif key in keys.s_up:
             cursor = max(0, cursor - 1)
         elif key in keys.s_down:

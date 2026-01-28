@@ -2,6 +2,7 @@ import curses
 import re
 
 import keys.default as keys
+from core import ui
 
 LABEL_SEARCH = "<введите текст для поиска>"
 
@@ -21,7 +22,11 @@ class Search:
         # type: (curses.window, int, int, int, int) -> None
         win.addstr(y, x, " " * w, color)
         if self.query:
-            win.addstr(y, x, self.query, color)
+            idx = self.idx - self.last
+            if idx <= 0:
+                idx = len(self.result) - self.last + self.idx
+            win.addstr(y, x, "%s  (%d / %d)"
+                       % (self.query, idx, len(self.result)), color)
         else:
             win.addstr(y, x, LABEL_SEARCH, color)
         win.move(y, x + len(self.query))
@@ -51,7 +56,19 @@ class Search:
             self.first = self.result.index(min(self.result))
             self.last = self.result.index(max(self.result))
 
-    def on_key_pressed_search(self, key, keystroke, scroll, cursor):
+    @staticmethod
+    def _next_page_top_pos(pager):
+        if isinstance(pager, ui.ScrollCalc):
+            return pager.pos + pager.view
+        return pager.next_after()
+
+    @staticmethod
+    def _prev_page_bottom_pos(pager):
+        if isinstance(pager, ui.ScrollCalc):
+            return pager.pos
+        return pager.prev_before()
+
+    def on_key_pressed_search(self, key, keystroke, pager, cursor):
         if "Space" == keystroke:
             keystroke = " "
         if key in keys.s_home:
@@ -63,23 +80,16 @@ class Search:
         elif key in keys.s_up:
             self.prev()
         elif key in keys.s_npage:
-            self.next_after(scroll.pos + scroll.view)
-            if self.result:
-                cursor = self.result[self.idx]
-                scroll.pos = cursor
-        elif key in keys.r_ppage:
-            self.prev_before(scroll.pos)
-            if self.result:
-                cursor = self.result[self.idx]
-                scroll.pos = cursor - scroll.view + 1
+            self.next_after(self._next_page_top_pos(pager))
+        elif key in keys.s_ppage:
+            self.prev_before(self._prev_page_bottom_pos(pager))
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
-            self.search(self.query[0:-1], scroll.pos)
+            self.search(self.query[0:-1], pager.pos)
         elif len(keystroke) == 1:
-            self.search(self.query + keystroke, scroll.pos)
+            self.search(self.query + keystroke, pager.pos)
         if self.result:
             cursor = self.result[self.idx]
-            scroll.ensure_visible(cursor, center=True)
         return cursor
 
     def home(self):
