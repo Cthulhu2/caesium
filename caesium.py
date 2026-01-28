@@ -71,7 +71,9 @@ def get_keystroke():
     ui.stdscr.timeout(-1)
     key = ui.stdscr.getch()
     ui.stdscr.timeout(0)
-    return getkeystroke(ui.stdscr, key)
+    ks, key, _ = getkeystroke(ui.stdscr, key)
+    ui.stdscr.timeout(-1)
+    return ks, key, _
 
 
 #
