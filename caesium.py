@@ -14,7 +14,6 @@ import traceback
 from shutil import copyfile
 from typing import List, Optional
 
-from core.keystroke import getkeystroke
 from core import (
     __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E, search
 )
@@ -65,15 +64,6 @@ def check_directories(storage_api):
         if not os.path.exists("out/" + n.nodename):
             os.mkdir("out/" + n.nodename)
     storage_api.init()
-
-
-def get_keystroke():
-    ui.stdscr.timeout(-1)
-    key = ui.stdscr.getch()
-    ui.stdscr.timeout(0)
-    ks, key, _ = getkeystroke(ui.stdscr, key)
-    ui.stdscr.timeout(-1)
-    return ks, key, _
 
 
 #
@@ -451,7 +441,7 @@ def show_echo_selector_screen():
                          ui.WIDTH - len(ui.version) - 12,
                          get_color(UI_STATUS))
         ui.stdscr.refresh()
-        keystroke, key, _ = get_keystroke()
+        ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
             scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2, cursor)
@@ -461,8 +451,7 @@ def show_echo_selector_screen():
                 search_ = None
                 curses.curs_set(0)
             else:
-                cursor = search_.on_key_pressed_search(
-                    key, keystroke, scroll, cursor)
+                cursor = search_.on_key_pressed_search(key, ks, scroll, cursor)
         elif key in keys.s_up:
             cursor = max(0, cursor - 1)
         elif key in keys.s_down:
@@ -1016,7 +1005,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             prerender_msg_or_quit()
         elif key in keys.r_list and not out and not drafts:
             data = api.get_msg_list_data(echo.name)
-            win = MsgListScreen(echo.name, data, msgn)
+            win = ui.MsgListScreen(echo.name, data, msgn)
             selected_msgn = win.show()
             if win.resized:
                 body_tokens, scroll = prerender(msg[8:], scroll.pos)
@@ -1039,136 +1028,6 @@ def echo_reader(echo: config.Echo, msgn, archive):
         pickle.dump(lasts, f)
     ui.stdscr.clear()
     return done
-
-
-class MsgListScreen:
-    def __init__(self, echo, data, msgn):
-        # type: (str, List[List[str]], int) -> MsgListScreen
-        self.data = data
-        self.echo = echo
-        self.cursor = msgn
-        self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
-        self.scroll.ensure_visible(self.cursor, center=True)
-        self.resized = False
-        self.search_ = None  # type: Optional[search.Search]
-
-    def show(self):  # type: () -> int
-        ui.stdscr.clear()
-        self.draw_title(ui.stdscr, self.echo)
-        while True:
-            self.scroll.ensure_visible(self.cursor)
-            self.draw(ui.stdscr, self.data, self.cursor, self.scroll)
-            if self.search_:
-                self.search_.draw(ui.stdscr, ui.HEIGHT - 1,
-                                  len(ui.version) + 2,
-                                  ui.WIDTH - len(ui.version) - 12,
-                                  get_color(UI_STATUS))
-            #
-            keystroke, key, _ = get_keystroke()
-            #
-            if key == curses.KEY_RESIZE:
-                ui.set_term_size()
-                ui.stdscr.clear()
-                self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
-                self.draw_title(ui.stdscr, self.echo)
-                self.resized = True
-            elif self.search_:
-                if key in keys.s_csearch:
-                    self.search_ = None
-                    curses.curs_set(0)
-                else:
-                    self.cursor = self.search_.on_key_pressed_search(
-                        key, keystroke, self.scroll, self.cursor)
-            elif key in keys.s_enter:
-                return self.cursor  #
-            elif key in keys.r_quit:
-                return -1  #
-            else:
-                self.on_key_pressed(key, self.scroll)
-
-    @staticmethod
-    def draw_title(win, echo):
-        _, w = win.getmaxyx()
-        color = get_color(UI_BORDER)
-        win.addstr(0, 0, "─" * w, color)
-        if w >= 80:
-            ui.draw_title(win, 0, 0, "Список сообщений в конференции " + echo)
-        else:
-            ui.draw_title(win, 0, 0, echo)
-
-    def draw(self, win, data, cursor, scroll):
-        h, w = win.getmaxyx()
-        for i in range(1, h - 1):
-            color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
-                              UI_CURSOR)
-            win.addstr(i, 0, " " * w, color)
-            pos = scroll.pos + i - 1
-            if pos >= scroll.content:
-                continue  #
-            #
-            msg = data[pos]
-            win.addstr(i, 0, msg[1], color)
-            win.addstr(i, 16, msg[2][:w - 27], color)
-            win.addstr(i, w - 11, msg[3], color)
-            #
-            if self.search_ and pos in self.search_.result:
-                idx = self.search_.result.index(pos)
-                m_name, m_subj = self.search_.matches[idx]
-                for m in m_name:
-                    win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
-                               color | curses.A_REVERSE)
-                for m in m_subj:
-                    end = min(w - 27, m.end())
-                    if m.start() + 16 > w - 12:
-                        continue
-                    win.addstr(i, 16 + m.start(), msg[2][m.start():end],
-                               color | curses.A_REVERSE)
-
-        #
-        if scroll.is_scrollable:
-            ui.draw_scrollbarV(win, 1, w - 1, scroll)
-        ui.draw_status_bar(win, text=utils.msgn_status(data, cursor, w))
-
-    def on_key_pressed(self, key, scroll):
-        if key in keys.s_up:
-            self.cursor = max(0, self.cursor - 1)
-        elif key in keys.s_down:
-            self.cursor = min(scroll.content - 1, self.cursor + 1)
-        elif key in keys.s_ppage:
-            if self.cursor > scroll.pos:
-                self.cursor = scroll.pos
-            else:
-                self.cursor = max(0, self.cursor - scroll.view)
-        elif key in keys.s_npage:
-            page_bottom = scroll.pos_bottom()
-            if self.cursor < page_bottom:
-                self.cursor = page_bottom
-            else:
-                self.cursor = min(scroll.content - 1, page_bottom + scroll.view)
-        elif key in keys.s_home:
-            self.cursor = 0
-        elif key in keys.s_end:
-            self.cursor = scroll.content - 1
-        elif key in keys.s_osearch:
-            curses.curs_set(1)
-            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
-            self.search_ = search.Search(self.data, self.on_search_item)
-
-    @staticmethod
-    def on_search_item(pattern, it):
-        result_name = []
-        result_subj = []
-        p = 0
-        while match := pattern.search(it[1], p):
-            result_name.append(match)
-            p = match.end()
-        p = 0
-        while match := pattern.search(it[2], p):
-            result_subj.append(match)
-            p = match.end()
-        if result_name or result_subj:
-            return result_name, result_subj
-        return None
 
 
 if sys.version_info >= (3, 11):

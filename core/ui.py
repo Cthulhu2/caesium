@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List
 
 import keys.default as keys
-from core import __version__, parser
+from core import __version__, parser, utils, search, keystroke
 from core.config import (
     get_color, TOKEN2UI,
     UI_BORDER, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
@@ -43,6 +43,15 @@ def terminate_curses():
     curses.echo(True)
     curses.nocbreak()
     curses.endwin()
+
+
+def get_keystroke():
+    stdscr.timeout(-1)
+    key = stdscr.getch()
+    stdscr.timeout(0)
+    ks, key, _ = keystroke.getkeystroke(stdscr, key)
+    stdscr.timeout(-1)
+    return ks, key, _
 
 
 def draw_splash(scr, splash):  # type: (curses.window, List[str]) -> None
@@ -344,3 +353,133 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
             x += len(line)  # last/single line -- move caret in line
     return y + (len(token.render) - 1) - offset, x  #
 # endregion Render Body
+
+
+class MsgListScreen:
+    def __init__(self, echo, data, msgn):
+        # type: (str, List[List[str]], int) -> MsgListScreen
+        self.data = data
+        self.echo = echo
+        self.cursor = msgn
+        self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
+        self.scroll.ensure_visible(self.cursor, center=True)
+        self.resized = False
+        self.search_ = None  # type: Optional[search.Search]
+
+    def show(self):  # type: () -> int
+        stdscr.clear()
+        self.draw_title(stdscr, self.echo)
+        while True:
+            self.scroll.ensure_visible(self.cursor)
+            self.draw(stdscr, self.data, self.cursor, self.scroll)
+            if self.search_:
+                self.search_.draw(stdscr, HEIGHT - 1,
+                                  len(version) + 2,
+                                  WIDTH - len(version) - 12,
+                                  get_color(UI_STATUS))
+            #
+            ks, key, _ = get_keystroke()
+            #
+            if key == curses.KEY_RESIZE:
+                set_term_size()
+                stdscr.clear()
+                self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
+                self.draw_title(stdscr, self.echo)
+                self.resized = True
+            elif self.search_:
+                if key in keys.s_csearch:
+                    self.search_ = None
+                    curses.curs_set(0)
+                else:
+                    self.cursor = self.search_.on_key_pressed_search(
+                        key, ks, self.scroll, self.cursor)
+            elif key in keys.s_enter:
+                return self.cursor  #
+            elif key in keys.r_quit:
+                return -1  #
+            else:
+                self.on_key_pressed(key, self.scroll)
+
+    @staticmethod
+    def draw_title(win, echo):
+        _, w = win.getmaxyx()
+        color = get_color(UI_BORDER)
+        win.addstr(0, 0, "─" * w, color)
+        if w >= 80:
+            draw_title(win, 0, 0, "Список сообщений в конференции " + echo)
+        else:
+            draw_title(win, 0, 0, echo)
+
+    def draw(self, win, data, cursor, scroll):
+        h, w = win.getmaxyx()
+        for i in range(1, h - 1):
+            color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
+                              UI_CURSOR)
+            win.addstr(i, 0, " " * w, color)
+            pos = scroll.pos + i - 1
+            if pos >= scroll.content:
+                continue  #
+            #
+            msg = data[pos]
+            win.addstr(i, 0, msg[1], color)
+            win.addstr(i, 16, msg[2][:w - 27], color)
+            win.addstr(i, w - 11, msg[3], color)
+            #
+            if self.search_ and pos in self.search_.result:
+                idx = self.search_.result.index(pos)
+                m_name, m_subj = self.search_.matches[idx]
+                for m in m_name:
+                    win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
+                               color | curses.A_REVERSE)
+                for m in m_subj:
+                    end = min(w - 27, m.end())
+                    if m.start() + 16 > w - 12:
+                        continue
+                    win.addstr(i, 16 + m.start(), msg[2][m.start():end],
+                               color | curses.A_REVERSE)
+
+        #
+        if scroll.is_scrollable:
+            draw_scrollbarV(win, 1, w - 1, scroll)
+        draw_status_bar(win, text=utils.msgn_status(data, cursor, w))
+
+    def on_key_pressed(self, key, scroll):
+        if key in keys.s_up:
+            self.cursor = max(0, self.cursor - 1)
+        elif key in keys.s_down:
+            self.cursor = min(scroll.content - 1, self.cursor + 1)
+        elif key in keys.s_ppage:
+            if self.cursor > scroll.pos:
+                self.cursor = scroll.pos
+            else:
+                self.cursor = max(0, self.cursor - scroll.view)
+        elif key in keys.s_npage:
+            page_bottom = scroll.pos_bottom()
+            if self.cursor < page_bottom:
+                self.cursor = page_bottom
+            else:
+                self.cursor = min(scroll.content - 1, page_bottom + scroll.view)
+        elif key in keys.s_home:
+            self.cursor = 0
+        elif key in keys.s_end:
+            self.cursor = scroll.content - 1
+        elif key in keys.s_osearch:
+            curses.curs_set(1)
+            stdscr.move(HEIGHT - 1, len(version) + 2)
+            self.search_ = search.Search(self.data, self.on_search_item)
+
+    @staticmethod
+    def on_search_item(pattern, it):
+        result_name = []
+        result_subj = []
+        p = 0
+        while match := pattern.search(it[1], p):
+            result_name.append(match)
+            p = match.end()
+        p = 0
+        while match := pattern.search(it[2], p):
+            result_subj.append(match)
+            p = match.end()
+        if result_name or result_subj:
+            return result_name, result_subj
+        return None
