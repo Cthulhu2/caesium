@@ -8,7 +8,7 @@ from core import utils
 
 INLINE_STYLE_ENABLED = False
 
-url_simple_template = re.compile(r"((https?|ftp|file|ii)://?"
+url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
 url_gemini_template = re.compile(r"^=>\s*(?P<url>[^\s]+)(?P<title>\s.+)*")
