@@ -798,7 +798,9 @@ def echo_reader(echo: config.Echo, msgn, archive):
                                    ["Нет", "Да"]).show() == 2:
                     utils.open_file(filepath)
         elif link.startswith("#"):  # markdown anchor?
-            pass  # TODO: Find header by anchor title and scroll to
+            pos = parser.find_pos_by_anchor(body_tokens, token)
+            if pos != -1:
+                scroll.pos = pos
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
                 ui.show_message_box("Не удалось запустить Интернет-браузер")
@@ -1048,7 +1050,7 @@ class MsgListScreen:
         self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
-        self.search = None  # type: Optional[search.Search]
+        self.search_ = None  # type: Optional[search.Search]
 
     def show(self):  # type: () -> int
         ui.stdscr.clear()
@@ -1056,11 +1058,11 @@ class MsgListScreen:
         while True:
             self.scroll.ensure_visible(self.cursor)
             self.draw(ui.stdscr, self.data, self.cursor, self.scroll)
-            if self.search:
-                self.search.draw(ui.stdscr, ui.HEIGHT - 1,
-                                 len(ui.version) + 2,
-                                 ui.WIDTH - len(ui.version) - 12,
-                                 get_color(UI_STATUS))
+            if self.search_:
+                self.search_.draw(ui.stdscr, ui.HEIGHT - 1,
+                                  len(ui.version) + 2,
+                                  ui.WIDTH - len(ui.version) - 12,
+                                  get_color(UI_STATUS))
             #
             keystroke, key, _ = get_keystroke()
             #
@@ -1070,12 +1072,12 @@ class MsgListScreen:
                 self.scroll = ui.ScrollCalc(len(self.data), ui.HEIGHT - 2)
                 self.draw_title(ui.stdscr, self.echo)
                 self.resized = True
-            elif self.search:
+            elif self.search_:
                 if key in keys.s_csearch:
-                    self.search = None
+                    self.search_ = None
                     curses.curs_set(0)
                 else:
-                    self.cursor = self.search.on_key_pressed_search(
+                    self.cursor = self.search_.on_key_pressed_search(
                         key, keystroke, self.scroll, self.cursor)
             elif key in keys.s_enter:
                 return self.cursor  #
@@ -1109,9 +1111,9 @@ class MsgListScreen:
             win.addstr(i, 16, msg[2][:w - 27], color)
             win.addstr(i, w - 11, msg[3], color)
             #
-            if self.search and pos in self.search.result:
-                idx = self.search.result.index(pos)
-                m_name, m_subj = self.search.matches[idx]
+            if self.search_ and pos in self.search_.result:
+                idx = self.search_.result.index(pos)
+                m_name, m_subj = self.search_.matches[idx]
                 for m in m_name:
                     win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
                                color | curses.A_REVERSE)
@@ -1150,7 +1152,7 @@ class MsgListScreen:
         elif key in keys.s_osearch:
             curses.curs_set(1)
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
-            self.search = search.Search(self.data, self.on_search_item)
+            self.search_ = search.Search(self.data, self.on_search_item)
 
     @staticmethod
     def on_search_item(pattern, it):

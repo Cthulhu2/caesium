@@ -647,3 +647,18 @@ def test_render_token_new_line_at_last_space():
     assert text[5] == "aaaa.aa aaaaaaaa aaaaaa aaaaa. aaaaaaaa aaa aaaaaaaaaaa a aaa:"
     assert text[6] == "https://aaaaaa                                                "
     assert text[7] == " " * 62
+
+
+def test_find_pos_by_anchor():
+    tokens = parser.tokenize(["= H 1",
+                              "== 1.1. H 2",
+                              "=== H 3"])
+    parser.prerender(tokens, width=62)
+    #
+    assert parser.find_pos_by_anchor(tokens, Token.URL("", 0, "#", "Unknown")) == -1
+
+    assert parser.find_pos_by_anchor(tokens, Token.URL("", 0, "#11-h-2")) == 1
+    assert parser.find_pos_by_anchor(tokens, Token.URL("", 0, "#", " 1.1. H 2 ")) == 1
+
+    assert parser.find_pos_by_anchor(tokens, Token.URL("", 0, "#h-3")) == 2
+    assert parser.find_pos_by_anchor(tokens, Token.URL("", 0, "#", " h 3 ")) == 2

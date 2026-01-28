@@ -462,13 +462,21 @@ def find_visible_token(tokens, scroll):
     return len(tokens) - 1, len(tokens[-1].render) - 1
 
 
-def scrollable_size(tokens):
-    # type: (List[Token]) -> int
+def find_pos_by_anchor(tokens, anchor):
+    # type: (List[Token], Token) -> int
     y = 0
     line_num = 0
     for token in tokens:
         if token.line_num > line_num:
             line_num = token.line_num
             y += 1
+        #
+        if token.type == TT.HEADER and " " in token.value:
+            title = token.value.split(" ", maxsplit=1)[1].strip().lower()
+            if title.replace(".", "").replace(" ", "-") == anchor.url[1:]:
+                return y  #
+            if anchor.title and anchor.title.strip().lower() == title:
+                return y  #
+        #
         y += len(token.render) - 1
-    return y + 1
+    return -1  #
