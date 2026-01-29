@@ -16,6 +16,7 @@ class Search:
         self.idx = 0
         self.first = 0
         self.last = 0
+        self.err = ""
         self.searcher = searcher
 
     def draw(self, win, y, x, w, color,):
@@ -25,8 +26,9 @@ class Search:
             idx = self.idx - self.last
             if idx <= 0:
                 idx = len(self.result) - self.last + self.idx
-            win.addstr(y, x, "%s  (%d / %d)"
-                       % (self.query, idx, len(self.result)), color)
+            win.addnstr(y, x, "%s  (%s%d / %d)"
+                        % (self.query, self.err, idx, len(self.result)),
+                        w, color)
         else:
             win.addstr(y, x, LABEL_SEARCH, color)
         win.move(y, x + len(self.query))
@@ -38,9 +40,14 @@ class Search:
         self.first = 0
         self.last = 0
         self.query = query
+        self.err = ""
         if not query:
             return  #
-        template = re.compile(query, re.IGNORECASE)
+        try:
+            template = re.compile(query, re.IGNORECASE)
+        except re.error:
+            self.err = "err "
+            return  # error
 
         def search_item(it, idx):
             if result_item := self.searcher(template, it):
@@ -68,7 +75,7 @@ class Search:
             return pager.pos
         return pager.prev_before()
 
-    def on_key_pressed_search(self, key, keystroke, pager, cursor):
+    def on_key_pressed_search(self, key, keystroke, pager, cursor, w=0):
         if "Space" == keystroke:
             keystroke = " "
         if key in keys.s_home:
@@ -86,7 +93,7 @@ class Search:
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
             self.search(self.query[0:-1], pager.pos)
-        elif len(keystroke) == 1:
+        elif len(keystroke) == 1 and (not w or len(self.query) < w):
             self.search(self.query + keystroke, pager.pos)
         if self.result:
             cursor = self.result[self.idx]

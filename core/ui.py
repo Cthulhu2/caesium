@@ -389,7 +389,8 @@ class MsgListScreen:
                     curses.curs_set(0)
                 else:
                     self.cursor = self.search_.on_key_pressed_search(
-                        key, ks, self.scroll, self.cursor)
+                        key, ks, self.scroll, self.cursor,
+                        WIDTH - len(version) - 12)
                     if self.search_.result:
                         if key in keys.s_npage:
                             self.scroll.pos = self.cursor
@@ -477,10 +478,14 @@ class MsgListScreen:
         result_subj = []
         p = 0
         while match := pattern.search(it[1], p):
+            if p >= len(it[1]):
+                break
             result_name.append(match)
             p = match.end()
         p = 0
         while match := pattern.search(it[2], p):
+            if p >= len(it[2]):
+                break
             result_subj.append(match)
             p = match.end()
         if result_name or result_subj:

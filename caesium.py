@@ -405,12 +405,14 @@ def show_echo_selector_screen():
         scroll.ensure_visible(cursor, center=True)
 
     def on_search_item(pattern, echo):
-        result_echo_name = []
+        result = []
         p = 0
         while match := pattern.search(echo.name, p):
-            result_echo_name.append(match)
+            if p >= len(echo.name):
+                break
+            result.append(match)
             p = match.end()
-        return result_echo_name
+        return result
 
     go = True
     while go:
@@ -434,7 +436,8 @@ def show_echo_selector_screen():
                 search_ = None
                 curses.curs_set(0)
             else:
-                cursor = search_.on_key_pressed_search(key, ks, scroll, cursor)
+                cursor = search_.on_key_pressed_search(
+                    key, ks, scroll, cursor, ui.WIDTH - len(ui.version) - 12)
                 if search_.result:
                     if key in keys.s_npage:
                         scroll.pos = cursor
