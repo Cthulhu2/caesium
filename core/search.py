@@ -14,8 +14,6 @@ class Search:
         self.matches = []
         self.result = []
         self.idx = 0
-        self.first = 0
-        self.last = 0
         self.err = ""
         self.searcher = searcher
 
@@ -23,9 +21,7 @@ class Search:
         # type: (curses.window, int, int, int, int) -> None
         win.addstr(y, x, " " * w, color)
         if self.query:
-            idx = self.idx - self.last
-            if idx <= 0:
-                idx = len(self.result) - self.last + self.idx
+            idx = self.idx + 1 if self.result else 0
             win.addnstr(y, x, "%s  (%s%d / %d)"
                         % (self.query, self.err, idx, len(self.result)),
                         w, color)
@@ -37,8 +33,6 @@ class Search:
         self.result = []
         self.matches = []
         self.idx = 0
-        self.first = 0
-        self.last = 0
         self.query = query
         self.err = ""
         if not query:
@@ -49,19 +43,12 @@ class Search:
             self.err = "err "
             return  # error
 
-        def search_item(it, idx):
-            if result_item := self.searcher(template, it):
-                self.result.append(idx)
+        for i, item in enumerate(self.items):
+            if result_item := self.searcher(template, item):
+                self.result.append(i)
                 self.matches.append(result_item)
-
-        for i, item in enumerate(self.items[pos:], start=pos):
-            search_item(item, i)
-        for i, item in enumerate(self.items[0:pos]):
-            search_item(item, i)
-
-        if self.result:
-            self.first = self.result.index(min(self.result))
-            self.last = self.result.index(max(self.result))
+                if self.idx == 0 and i > pos:
+                    self.idx = len(self.result) - 1
 
     @staticmethod
     def _next_page_top_pos(pager):
@@ -100,10 +87,10 @@ class Search:
         return cursor
 
     def home(self):
-        self.idx = self.first
+        self.idx = 0
 
     def end(self):
-        self.idx = self.last
+        self.idx = len(self.result) - 1
 
     def next(self):
         self.idx += 1
@@ -124,7 +111,7 @@ class Search:
             if self.idx >= len(self.result):
                 self.idx = 0
             if self.idx == init:
-                self.idx = self.last
+                self.end()
                 break  #
 
     def prev_before(self, pos):
@@ -136,5 +123,5 @@ class Search:
             if self.idx < 0:
                 self.idx = len(self.result) - 1
             if self.idx == init:
-                self.idx = self.first
+                self.home()
                 break  #
