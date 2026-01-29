@@ -4,18 +4,33 @@ import re
 import keys.default as keys
 from core import ui
 
-LABEL_SEARCH = "<введите текст для поиска>"
+LABEL_SEARCH = "<введите regex для поиска>"
+
+
+class Pager:
+    pos: int = 0
+
+    def __init__(self, pos, next_after, prev_before):
+        self.pos = pos
+        self.next_after = next_after
+        self.prev_before = prev_before
+
+    def next_after(self):
+        pass
+
+    def prev_before(self):
+        pass
 
 
 class Search:
-    def __init__(self, items, searcher):
+    def __init__(self, items, matcher):
         self.items = items
         self.query = ""
         self.matches = []
         self.result = []
         self.idx = 0
         self.err = ""
-        self.searcher = searcher
+        self.matcher = matcher
 
     def draw(self, win, y, x, w, color,):
         # type: (curses.window, int, int, int, int) -> None
@@ -32,7 +47,7 @@ class Search:
     def search(self, query, pos):
         self.result = []
         self.matches = []
-        self.idx = 0
+        self.idx = -1
         self.query = query
         self.err = ""
         if not query:
@@ -43,12 +58,15 @@ class Search:
             self.err = "err "
             return  # error
 
+        sidx = 0
         for i, item in enumerate(self.items):
-            if result_item := self.searcher(template, item):
-                self.result.append(i)
-                self.matches.append(result_item)
-                if self.idx == 0 and i > pos:
-                    self.idx = len(self.result) - 1
+            if matches := self.matcher(sidx, template, item):
+                for m in matches:
+                    self.result.append(i)
+                    self.matches.append(m)
+                    sidx += 1
+                    if self.idx == -1 and i >= pos:
+                        self.idx = len(self.result) - 1
 
     @staticmethod
     def _next_page_top_pos(pager):
@@ -62,7 +80,7 @@ class Search:
             return pager.pos
         return pager.prev_before()
 
-    def on_key_pressed_search(self, key, keystroke, pager, cursor, w=0):
+    def on_key_pressed_search(self, key, keystroke, pager, w=0):
         if "Space" == keystroke:
             keystroke = " "
         if key in keys.s_home:
@@ -82,9 +100,6 @@ class Search:
             self.search(self.query[0:-1], pager.pos)
         elif len(keystroke) == 1 and (not w or len(self.query) < w):
             self.search(self.query + keystroke, pager.pos)
-        if self.result:
-            cursor = self.result[self.idx]
-        return cursor
 
     def home(self):
         self.idx = 0

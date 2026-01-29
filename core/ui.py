@@ -288,8 +288,8 @@ class SelectWindow:
 
 
 # region Render Body
-def render_body(scr, tokens, scroll):
-    # type: (curses.window, List[parser.Token], int) -> None
+def render_body(scr, tokens, scroll, search_=None):
+    # type: (curses.window, List[parser.Token], int, search.Search) -> None
     h, w = scr.getmaxyx()
     tnum, offset = parser.find_visible_token(tokens, scroll)
     line_num = tokens[tnum].line_num
@@ -314,7 +314,7 @@ def render_body(scr, tokens, scroll):
         #
         text_attr = apply_attribute(token, text_attr)
         #
-        y, x = render_token(scr, token, y, x, h, offset, text_attr)
+        y, x = render_token(scr, token, y, x, h, offset, text_attr, search_)
         offset = 0  # required in the first partial multiline token only
 
 
@@ -336,13 +336,27 @@ def apply_attribute(token, text_attr):
     return text_attr
 
 
-def render_token(scr, token: parser.Token, y, x, h, offset, text_attr):
+def render_token(scr, token: parser.Token, y, x, h, offset, text_attr, search_=None):
+    matches = []
+    # noinspection PyUnresolvedReferences
+    if (search_ and search_.result
+            and hasattr(token, 'search_idx')
+            and token.search_idx is not None):
+        # noinspection PyUnresolvedReferences
+        matches = token.search_matches
+    #
     for i, line in enumerate(token.render[offset:]):
         if y + i >= h - 1:
             return y + i, x  #
         attr = get_color(TOKEN2UI.get(token.type, UI_TEXT))
         if line:
             scr.addstr(y + i, x, line, attr | text_attr)
+            #
+            for m_idx, (off, match) in enumerate(matches):
+                if off == offset + i:
+                    scr.addstr(y + i, x + match.start(),
+                               line[match.start():match.end()],
+                               attr | text_attr | curses.A_REVERSE)
 
         if len(token.render) > 1 and i + offset < len(token.render) - 1:
             x = 0  # new line in multiline token -- carriage return
@@ -388,10 +402,10 @@ class MsgListScreen:
                     self.search_ = None
                     curses.curs_set(0)
                 else:
-                    self.cursor = self.search_.on_key_pressed_search(
-                        key, ks, self.scroll, self.cursor,
-                        WIDTH - len(version) - 12)
+                    self.search_.on_key_pressed_search(
+                        key, ks, self.scroll, WIDTH - len(version) - 12)
                     if self.search_.result:
+                        self.cursor = self.search_.result[self.search_.idx]
                         if key in keys.s_npage:
                             self.scroll.pos = self.cursor
                         elif key in keys.s_ppage:
@@ -472,8 +486,9 @@ class MsgListScreen:
             stdscr.move(HEIGHT - 1, len(version) + 2)
             self.search_ = search.Search(self.data, self.on_search_item)
 
+    # noinspection PyUnusedLocal
     @staticmethod
-    def on_search_item(pattern, it):
+    def on_search_item(sidx, pattern, it):
         result_name = []
         result_subj = []
         p = 0
@@ -489,5 +504,5 @@ class MsgListScreen:
             result_subj.append(match)
             p = match.end()
         if result_name or result_subj:
-            return result_name, result_subj
+            return [(result_name, result_subj)]
         return None

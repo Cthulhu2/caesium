@@ -429,6 +429,29 @@ def prerender(tokens, width, height=None):
     return y + 1  #
 
 
+@dataclass
+class RangeLines:
+    start: int
+    end: int
+
+
+def token_line_map(tokens):
+    # type: (List[Token]) -> List[RangeLines]
+    # token index to line number range
+    t2l = []  # type: List[RangeLines]
+    #
+    line_num = 0
+    token_line_num = 0
+    for i, t in enumerate(tokens):
+        if t.line_num > token_line_num:
+            token_line_num = t.line_num
+            line_num += 1
+        #
+        t2l.append(RangeLines(line_num, line_num + len(t.render) - 1))
+        line_num += len(t.render) - 1
+    return t2l
+
+
 def render_chunks(token, line, x, width, word):
     chunk = word[0:width - x]
     word = word[width - x:]

@@ -8,6 +8,7 @@ import itertools
 import locale
 import os
 import pickle
+import re
 import subprocess
 import sys
 import textwrap
@@ -332,7 +333,7 @@ def draw_echo_selector(win, start, cursor, archive, search_):
         win.addstr(y, w - 2 - m - len(unread), unread)
         if show_desc:
             win.addstr(y, max(w - m - 1, w - 1 - len(echo.desc)),
-                       echo.desc[0:w-38])
+                       echo.desc[0:w - 38])
         #
         if search_ and echoN in search_.result:
             idx = search_.result.index(echoN)
@@ -404,7 +405,8 @@ def show_echo_selector_screen():
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
         scroll.ensure_visible(cursor, center=True)
 
-    def on_search_item(pattern, echo):
+    # noinspection PyUnusedLocal
+    def on_search_item(sidx, pattern, echo):
         result = []
         p = 0
         while match := pattern.search(echo.name, p):
@@ -412,7 +414,7 @@ def show_echo_selector_screen():
                 break
             result.append(match)
             p = match.end()
-        return result
+        return [result] if result else None
 
     go = True
     while go:
@@ -436,9 +438,10 @@ def show_echo_selector_screen():
                 search_ = None
                 curses.curs_set(0)
             else:
-                cursor = search_.on_key_pressed_search(
-                    key, ks, scroll, cursor, ui.WIDTH - len(ui.version) - 12)
+                search_.on_key_pressed_search(
+                    key, ks, scroll, ui.WIDTH - len(ui.version) - 12)
                 if search_.result:
+                    cursor = search_.result[search_.idx]
                     if key in keys.s_npage:
                         scroll.pos = cursor
                     elif key in keys.s_ppage:
@@ -728,6 +731,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     repto = False
     stack = []
     msgid = None  # non-current-echo message id, navigated by ii-link
+    search_ = None  # type: Optional[search.Search]
 
     def read_cur_msg():  # type: () -> (List[str], int)
         nonlocal msgid
@@ -750,20 +754,21 @@ def echo_reader(echo: config.Echo, msgn, archive):
         tokens = parser.tokenize(msgbody)
         view = ui.HEIGHT - 5 - 1  # screen ui.HEIGHT - header - status line
         body_height = parser.prerender(tokens, ui.WIDTH, view)
-        return tokens, ui.ScrollCalc(body_height, view, pos)
+        t2l_ = parser.token_line_map(tokens)
+        return tokens, ui.ScrollCalc(body_height, view, pos), t2l_
 
     def prerender_msg_or_quit():
-        nonlocal msgn, msg, size, go, body_tokens, scroll
+        nonlocal msgn, msg, size, go, body_tokens, scroll, t2l
         if msgids:
             msgn = min(msgn, len(msgids) - 1)
             msg, size = read_cur_msg()
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         else:
             go = False
 
     def open_link(token):  # type: (parser.Token) -> None
         link = token.url
-        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll
+        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll, t2l
         global next_echoarea
         if token.filename:
             if token.filedata:
@@ -793,15 +798,46 @@ def echo_reader(echo: config.Echo, msgn, archive):
         else:
             msg, size = api.find_msg(link[5:])
             msgid = link[5:]
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
             if not stack or stack[-1] != msgn:
                 stack.append(msgn)
+
+    def on_search_item(sidx, p, token):
+        # type: (int, re.Pattern, parser.Token) -> List
+        matches = []
+        for offset, line in enumerate(token.render):
+            pos = 0
+            while match := p.search(line, pos):
+                if match.end() > len(line):
+                    break
+                matches.append((offset, match))
+                pos = match.end()
+        if matches:
+            token.search_idx = sidx
+            token.search_matches = matches
+        else:
+            token.search_idx = None
+            token.search_matches = None
+        return matches
+
+    def pager():
+        tn, _ = parser.find_visible_token(body_tokens, scroll.pos)
+
+        def prev_before():
+            tn_, _ = parser.find_visible_token(body_tokens, scroll.pos - 1)
+            return tn_
+
+        def next_after():
+            tn_, _ = parser.find_visible_token(body_tokens, scroll.pos + scroll.view)
+            return tn_
+
+        return search.Pager(tn, next_after, prev_before)
 
     if msgids:
         read_msg_skip_twit(-1)
         if msgn < 0:
             next_echoarea = True
-    body_tokens, scroll = prerender(msg[8:])
+    body_tokens, scroll, t2l = prerender(msg[8:])
 
     while go:
         if msgids:
@@ -829,16 +865,42 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            ui.render_body(ui.stdscr, body_tokens, scroll.pos)
+            ui.render_body(ui.stdscr, body_tokens, scroll.pos, search_)
             if scroll.is_scrollable:
                 ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, scroll)
         else:
             draw_reader(echo.name, "", out)
-        key = ui.stdscr.getch()
+        if search_:
+            search_.draw(ui.stdscr, ui.HEIGHT - 1,
+                         len(ui.version) + 2,
+                         ui.WIDTH - len(ui.version) - 12,
+                         get_color(UI_STATUS))
+        ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
-            body_tokens, scroll = prerender(msg[8:], scroll.pos)
+            body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
             ui.stdscr.clear()
+            if search_:
+                search_.items = body_tokens
+                tnum, _ = parser.find_visible_token(body_tokens, scroll.pos)
+                search_.search(search_.query, tnum)
+        elif search_:
+            if key in keys.s_csearch:
+                search_ = None
+                curses.curs_set(0)
+            else:
+                search_.on_key_pressed_search(key, ks, pager())
+                if search_.result:
+                    tidx = search_.result[search_.idx]
+                    off, _ = search_.matches[search_.idx]
+                    if key in keys.s_home or key in keys.s_end:
+                        scroll.ensure_visible(t2l[tidx].start + off, center=True)
+                    elif key in keys.s_npage:
+                        scroll.ensure_visible(t2l[tidx].start + off + scroll.view - 1)
+                    elif key in keys.s_ppage:
+                        scroll.ensure_visible(t2l[tidx].start + off - scroll.view)
+                    else:
+                        scroll.ensure_visible(t2l[tidx].start + off)
         elif key in keys.r_prev and msgn > 0 and msgids:
             msgn = msgn - 1
             stack.clear()
@@ -846,7 +908,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             read_msg_skip_twit(-1)
             if msgn < 0:
                 msgn = tmp + 1
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_next and msgn < len(msgids) - 1 and msgids:
             msgn = msgn + 1
             stack.clear()
@@ -854,7 +916,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             if msgn >= len(msgids):
                 go = False
                 next_echoarea = True
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
             next_echoarea = True
@@ -863,11 +925,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 stack.append(msgn)
                 msgn = msgids.index(repto)
                 msg, size = read_cur_msg()
-                body_tokens, scroll = prerender(msg[8:])
+                body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_nrep and len(stack) > 0:
             msgn = stack.pop()
             msg, size = read_cur_msg()
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_up and msgids:
             scroll.pos -= 1
         elif key in keys.r_ppage and msgids:
@@ -887,7 +949,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     msgn = msgn + 1
                     stack.clear()
                     msg, size = read_cur_msg()
-                    body_tokens, scroll = prerender(msg[8:])
+                    body_tokens, scroll, t2l = prerender(msg[8:])
             else:
                 scroll.pos += scroll.view
         elif key in keys.r_down and msgids:
@@ -896,12 +958,12 @@ def echo_reader(echo: config.Echo, msgn, archive):
             msgn = 0
             stack.clear()
             msg, size = read_cur_msg()
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_end and msgids:
             msgn = len(msgids) - 1
             stack.clear()
             msg, size = read_cur_msg()
-            body_tokens, scroll = prerender(msg[8:])
+            body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_ins and not any((archive, out, favorites, carbonarea)):
             with open("template.txt", "r") as t:
                 with open("temp", "w") as f:
@@ -957,7 +1019,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 get_counts(True)
                 ui.stdscr.clear()
                 msg, size = api.find_msg(msgid)
-                body_tokens, scroll = prerender(msg[8:])
+                body_tokens, scroll, t2l = prerender(msg[8:])
             except Exception as ex:
                 ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
                 ui.stdscr.clear()
@@ -972,7 +1034,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                     links)))
                 i = win.show()
                 if win.resized:
-                    body_tokens, scroll = prerender(msg[8:], scroll.pos)
+                    body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
                 if i:
                     open_link(links[i - 1])
             ui.stdscr.clear()
@@ -991,15 +1053,19 @@ def echo_reader(echo: config.Echo, msgn, archive):
             win = ui.MsgListScreen(echo.name, data, msgn)
             selected_msgn = win.show()
             if win.resized:
-                body_tokens, scroll = prerender(msg[8:], scroll.pos)
+                body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
             if selected_msgn > -1:
                 msgn = selected_msgn
                 stack.clear()
                 msg, size = read_cur_msg()
-                body_tokens, scroll = prerender(msg[8:])
+                body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
-            body_tokens, scroll = prerender(msg[8:], scroll.pos)
+            body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
+        elif key in keys.s_osearch:
+            curses.curs_set(1)
+            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+            search_ = search.Search(body_tokens, on_search_item)
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
