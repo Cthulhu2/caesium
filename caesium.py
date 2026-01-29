@@ -911,7 +911,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_save and not out:
             save_message_to_file(msgid or msgids[msgn], msg[1])
         elif key in keys.r_favorites and not out:
-            saved = api.save_to_favorites(msgids[msgn], msg)
+            saved = api.save_to_favorites(msgid or msgids[msgn], msg)
             ui.draw_message_box("Подождите", False)
             get_counts(False)
             if saved:
@@ -919,13 +919,13 @@ def echo_reader(echo: config.Echo, msgn, archive):
             else:
                 ui.show_message_box("Сообщение уже есть в избранных")
         elif key in keys.r_quote and not any((archive, out)) and msgids:
-            quote_msg(msgids[msgn], msg)
+            quote_msg(msgid or msgids[msgn], msg)
             call_editor()
         elif key in keys.r_info:
             subj = textwrap.fill(msg[6], ui.WIDTH * 0.75,
                                  subsequent_indent="      ")
             ui.show_message_box("id:   %s\naddr: %s\nsubj: %s"
-                                % (msgids[msgn], msg[4], subj))
+                                % (msgid or msgids[msgn], msg[4], subj))
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
