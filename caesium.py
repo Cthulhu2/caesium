@@ -534,8 +534,8 @@ def show_echo_selector_screen():
             node = 0
             reload_echoareas()
         elif key in keys.s_osearch:
-            curses.curs_set(1)
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+            curses.curs_set(1)
             search_ = search.Search(echoareas, on_search_item)
         elif key in keys.g_quit:
             go = False
@@ -808,7 +808,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         for offset, line in enumerate(token.render):
             pos = 0
             while match := p.search(line, pos):
-                if match.end() > len(line):
+                if pos >= len(line):
                     break
                 matches.append((offset, match))
                 pos = match.end()
@@ -1063,8 +1063,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
             body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
         elif key in keys.s_osearch:
-            curses.curs_set(1)
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+            curses.curs_set(1)
             search_ = search.Search(body_tokens, on_search_item)
         elif key in keys.r_quit:
             go = False

@@ -482,8 +482,8 @@ class MsgListScreen:
         elif key in keys.s_end:
             self.cursor = scroll.content - 1
         elif key in keys.s_osearch:
-            curses.curs_set(1)
             stdscr.move(HEIGHT - 1, len(version) + 2)
+            curses.curs_set(1)
             self.search_ = search.Search(self.data, self.on_search_item)
 
     # noinspection PyUnusedLocal
