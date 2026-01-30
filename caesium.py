@@ -38,8 +38,6 @@ if os.path.exists("blacklist.txt"):
     with open("blacklist.txt", "r") as bl:
         blacklist = list(filter(None, map(lambda it: it.strip(),
                                           bl.readlines())))
-counts = []
-counts_rescan = True
 echo_counts = {}
 next_echoarea = False
 node = 0
@@ -284,9 +282,8 @@ def rescan_counts(echoareas):
     return counts_
 
 
-def draw_echo_selector(win, start, cursor, archive, qs):
-    # type: (curses.window, int, int, bool, search.QuickSearch) -> None
-    global counts, counts_rescan
+def draw_echo_selector(win, start, cursor, archive, qs, counts):
+    # type: (curses.window, int, int, bool, search.QuickSearch, List[List[str]]) -> None
     h, w = win.getmaxyx()
     color = get_color(UI_BORDER)
     win.addstr(0, 0, "─" * w, color)
@@ -297,9 +294,6 @@ def draw_echo_selector(win, start, cursor, archive, qs):
     else:
         echoareas = cur_node.echoareas
         ui.draw_title(win, 0, 0, "Конференция")
-    if counts_rescan:
-        counts = rescan_counts(echoareas)
-        counts_rescan = False
     #
     m = min(w - 38, max(map(lambda e: len(e.desc), echoareas)))
     count = "Сообщений"
@@ -345,7 +339,8 @@ def draw_echo_selector(win, start, cursor, archive, qs):
     ui.draw_status_bar(win, text=cur_node.nodename)
 
 
-def find_new(cursor):
+def find_new(cursor, counts):
+    # type: (int, List[List[str]]) -> int
     ret = cursor
     n = 0
     lock = False
@@ -368,28 +363,27 @@ def edit_config():
 
 
 def show_echo_selector_screen():
-    global echo_cursor, archive_cursor, counts, counts_rescan, next_echoarea, node
+    global echo_cursor, archive_cursor, next_echoarea, node
     archive = False
     echoareas = cfg.nodes[node].echoareas
     cursor = echo_cursor
     scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
     scroll.ensure_visible(cursor, center=True)
     qs = None  # type: Optional[search.QuickSearch]
+    counts = rescan_counts(echoareas)
 
     def reload_echoareas():
-        global counts_rescan
         nonlocal archive, echoareas, cursor, scroll
         archive = False
         echoareas = cfg.nodes[node].echoareas
         ui.draw_message_box("Подождите", False)
         get_counts()
         ui.stdscr.clear()
-        counts_rescan = True
         cursor = 0
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
 
     def toggle_archive():
-        global echo_cursor, archive_cursor, counts_rescan
+        global echo_cursor, archive_cursor
         nonlocal cursor, echoareas, archive, scroll
         archive = not archive
         if not archive:
@@ -401,7 +395,6 @@ def show_echo_selector_screen():
             cursor = archive_cursor
             echoareas = cfg.nodes[node].archive
         ui.stdscr.clear()
-        counts_rescan = True
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
         scroll.ensure_visible(cursor, center=True)
 
@@ -419,7 +412,7 @@ def show_echo_selector_screen():
     go = True
     while go:
         scroll.ensure_visible(cursor)
-        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, qs)
+        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, qs, counts)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
         if qs:
@@ -475,9 +468,10 @@ def show_echo_selector_screen():
             get_counts(True)
             ui.stdscr.clear()
             counts = rescan_counts(echoareas)
-            cursor = find_new(0)
+            cursor = find_new(0, counts)
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             toggle_archive()
+            counts = rescan_counts(echoareas)
         elif key in keys.s_enter:
             ui.draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -495,10 +489,9 @@ def show_echo_selector_screen():
             if last >= echo_length:
                 last = echo_length
             go = not echo_reader(echoareas[cursor], last, archive)
-            counts_rescan = True
+            counts = rescan_counts(echoareas)
             if next_echoarea and isinstance(next_echoarea, bool):
-                counts = rescan_counts(echoareas)
-                cursor = find_new(cursor)
+                cursor = find_new(cursor, counts)
                 next_echoarea = False
             elif next_echoarea and isinstance(next_echoarea, str):
                 cur_node = cfg.nodes[node]
@@ -506,6 +499,7 @@ def show_echo_selector_screen():
                         or (archive and (next_echoarea in cur_node.echoareas
                                          or next_echoarea in cur_node.stat))):
                     toggle_archive()
+                    counts = rescan_counts(echoareas)
                 # noinspection PyTypeChecker
                 cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
                 next_echoarea = False
@@ -523,16 +517,19 @@ def show_echo_selector_screen():
             if node == len(cfg.nodes):
                 node = 0
             reload_echoareas()
+            counts = rescan_counts(echoareas)
         elif key in keys.s_pnode:
             node = node - 1
             if node == -1:
                 node = len(cfg.nodes) - 1
             reload_echoareas()
+            counts = rescan_counts(echoareas)
         elif key in keys.s_config:
             edit_config()
             config.load_colors(cfg.theme)
             node = 0
             reload_echoareas()
+            counts = rescan_counts(echoareas)
         elif key in keys.s_osearch:
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
             curses.curs_set(1)
