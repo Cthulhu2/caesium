@@ -425,6 +425,7 @@ def show_echo_selector_screen():
         if qs:
             qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
                     get_color(UI_STATUS))
+            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + qs.cursor)
         ui.stdscr.refresh()
         ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
@@ -873,6 +874,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         if qs:
             qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
                     get_color(UI_STATUS))
+            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + qs.cursor)
         ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()

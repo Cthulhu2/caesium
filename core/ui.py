@@ -386,14 +386,13 @@ class MsgListScreen:
             if self.qs:
                 self.qs.draw(stdscr, HEIGHT - 1, len(version) + 2,
                              get_color(UI_STATUS))
+                stdscr.move(HEIGHT - 1, len(version) + 2 + self.qs.cursor)
             #
             ks, key, _ = get_keystroke()
             #
             if key == curses.KEY_RESIZE:
                 set_term_size()
-                stdscr.clear()
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-                self.draw_title(stdscr, self.echo)
                 self.resized = True
                 if self.qs:
                     self.qs.width = WIDTH - len(version) - 12

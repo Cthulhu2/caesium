@@ -26,6 +26,7 @@ class QuickSearch:
     def __init__(self, items, matcher, width=0):
         self.items = items
         self.query = ""
+        self.cursor = 0
         self.matches = []
         self.result = []
         self.idx = 0
@@ -95,12 +96,24 @@ class QuickSearch:
             self.next_after(self._next_page_top_pos(pager))
         elif key in keys.s_ppage:
             self.prev_before(self._prev_page_bottom_pos(pager))
+        elif key == curses.KEY_LEFT:
+            self.cursor = max(0, self.cursor - 1)
+        elif key == curses.KEY_RIGHT:
+            self.cursor = min(len(self.query), self.cursor + 1)
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
-            self.search(self.query[0:-1], pager.pos)
+            self.search(self.query[0:max(0, self.cursor - 1)]
+                        + self.query[self.cursor:], pager.pos)
+            self.cursor = max(0, self.cursor - 1)
+        elif key == curses.KEY_DC:  # DEL
+            self.search(self.query[0:max(0, self.cursor)]
+                        + self.query[self.cursor + 1:], pager.pos)
         elif len(keystroke) == 1 and (not self.width
                                       or len(self.query) < self.width):
-            self.search(self.query + keystroke, pager.pos)
+            self.search(self.query[0:self.cursor]
+                        + keystroke
+                        + self.query[self.cursor:], pager.pos)
+            self.cursor = min(len(self.query), self.cursor + 1)
 
     def home(self):
         self.idx = 0
