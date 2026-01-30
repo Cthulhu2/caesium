@@ -22,8 +22,8 @@ class Pager:
         pass
 
 
-class Search:
-    def __init__(self, items, matcher):
+class QuickSearch:
+    def __init__(self, items, matcher, width=0):
         self.items = items
         self.query = ""
         self.matches = []
@@ -31,15 +31,15 @@ class Search:
         self.idx = 0
         self.err = ""
         self.matcher = matcher
+        self.width = width
 
-    def draw(self, win, y, x, w, color,):
-        # type: (curses.window, int, int, int, int) -> None
-        win.addstr(y, x, " " * w, color)
+    def draw(self, win, y, x, color):
+        # type: (curses.window, int, int, int) -> None
+        win.addstr(y, x, " " * (self.width or len(self.query)), color)
         if self.query:
             idx = self.idx + 1 if self.result else 0
-            win.addnstr(y, x, "%s  (%s%d / %d)"
-                        % (self.query, self.err, idx, len(self.result)),
-                        w, color)
+            line = "%s  (%s%d / %d)" % (self.query, self.err, idx, len(self.result))
+            win.addnstr(y, x, line, self.width or len(line), color)
         else:
             win.addstr(y, x, LABEL_SEARCH, color)
         win.move(y, x + len(self.query))
@@ -80,7 +80,7 @@ class Search:
             return pager.pos
         return pager.prev_before()
 
-    def on_key_pressed_search(self, key, keystroke, pager, w=0):
+    def on_key_pressed_search(self, key, keystroke, pager):
         if "Space" == keystroke:
             keystroke = " "
         if key in keys.s_home:
@@ -98,7 +98,8 @@ class Search:
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
             self.search(self.query[0:-1], pager.pos)
-        elif len(keystroke) == 1 and (not w or len(self.query) < w):
+        elif len(keystroke) == 1 and (not self.width
+                                      or len(self.query) < self.width):
             self.search(self.query + keystroke, pager.pos)
 
     def home(self):

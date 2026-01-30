@@ -288,8 +288,8 @@ class SelectWindow:
 
 
 # region Render Body
-def render_body(scr, tokens, scroll, search_=None):
-    # type: (curses.window, List[parser.Token], int, search.Search) -> None
+def render_body(scr, tokens, scroll, qs=None):
+    # type: (curses.window, List[parser.Token], int, search.QuickSearch) -> None
     h, w = scr.getmaxyx()
     tnum, offset = parser.find_visible_token(tokens, scroll)
     line_num = tokens[tnum].line_num
@@ -314,7 +314,7 @@ def render_body(scr, tokens, scroll, search_=None):
         #
         text_attr = apply_attribute(token, text_attr)
         #
-        y, x = render_token(scr, token, y, x, h, offset, text_attr, search_)
+        y, x = render_token(scr, token, y, x, h, offset, text_attr, qs)
         offset = 0  # required in the first partial multiline token only
 
 
@@ -336,10 +336,10 @@ def apply_attribute(token, text_attr):
     return text_attr
 
 
-def render_token(scr, token: parser.Token, y, x, h, offset, text_attr, search_=None):
+def render_token(scr, token: parser.Token, y, x, h, offset, text_attr, qs=None):
     matches = []
     # noinspection PyUnresolvedReferences
-    if (search_ and search_.result
+    if (qs and qs.result
             and hasattr(token, 'search_idx')
             and token.search_idx is not None):
         # noinspection PyUnresolvedReferences
@@ -375,7 +375,7 @@ class MsgListScreen:
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
-        self.search_ = None  # type: Optional[search.Search]
+        self.qs = None  # type: Optional[search.QuickSearch]
 
     def show(self):  # type: () -> int
         stdscr.clear()
@@ -383,11 +383,9 @@ class MsgListScreen:
         while True:
             self.scroll.ensure_visible(self.cursor)
             self.draw(stdscr, self.data, self.cursor, self.scroll)
-            if self.search_:
-                self.search_.draw(stdscr, HEIGHT - 1,
-                                  len(version) + 2,
-                                  WIDTH - len(version) - 12,
-                                  get_color(UI_STATUS))
+            if self.qs:
+                self.qs.draw(stdscr, HEIGHT - 1, len(version) + 2,
+                             get_color(UI_STATUS))
             #
             ks, key, _ = get_keystroke()
             #
@@ -397,15 +395,16 @@ class MsgListScreen:
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
                 self.draw_title(stdscr, self.echo)
                 self.resized = True
-            elif self.search_:
+                if self.qs:
+                    self.qs.width = WIDTH - len(version) - 12
+            elif self.qs:
                 if key in keys.s_csearch:
-                    self.search_ = None
+                    self.qs = None
                     curses.curs_set(0)
                 else:
-                    self.search_.on_key_pressed_search(
-                        key, ks, self.scroll, WIDTH - len(version) - 12)
-                    if self.search_.result:
-                        self.cursor = self.search_.result[self.search_.idx]
+                    self.qs.on_key_pressed_search(key, ks, self.scroll)
+                    if self.qs.result:
+                        self.cursor = self.qs.result[self.qs.idx]
                         if key in keys.s_npage:
                             self.scroll.pos = self.cursor
                         elif key in keys.s_ppage:
@@ -443,9 +442,9 @@ class MsgListScreen:
             win.addstr(i, 16, msg[2][:w - 27], color)
             win.addstr(i, w - 11, msg[3], color)
             #
-            if self.search_ and pos in self.search_.result:
-                idx = self.search_.result.index(pos)
-                m_name, m_subj = self.search_.matches[idx]
+            if self.qs and pos in self.qs.result:
+                idx = self.qs.result.index(pos)
+                m_name, m_subj = self.qs.matches[idx]
                 for m in m_name:
                     win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
                                color | curses.A_REVERSE)
@@ -484,7 +483,8 @@ class MsgListScreen:
         elif key in keys.s_osearch:
             stdscr.move(HEIGHT - 1, len(version) + 2)
             curses.curs_set(1)
-            self.search_ = search.Search(self.data, self.on_search_item)
+            self.qs = search.QuickSearch(self.data, self.on_search_item,
+                                         WIDTH - len(version) - 12)
 
     # noinspection PyUnusedLocal
     @staticmethod

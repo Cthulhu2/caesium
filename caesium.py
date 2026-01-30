@@ -284,8 +284,8 @@ def rescan_counts(echoareas):
     return counts_
 
 
-def draw_echo_selector(win, start, cursor, archive, search_):
-    # type: (curses.window, int, int, bool, search.Search) -> None
+def draw_echo_selector(win, start, cursor, archive, qs):
+    # type: (curses.window, int, int, bool, search.QuickSearch) -> None
     global counts, counts_rescan
     h, w = win.getmaxyx()
     color = get_color(UI_BORDER)
@@ -335,9 +335,9 @@ def draw_echo_selector(win, start, cursor, archive, search_):
             win.addstr(y, max(w - m - 1, w - 1 - len(echo.desc)),
                        echo.desc[0:w - 38])
         #
-        if search_ and echoN in search_.result:
-            idx = search_.result.index(echoN)
-            for match in search_.matches[idx]:
+        if qs and echoN in qs.result:
+            idx = qs.result.index(echoN)
+            for match in qs.matches[idx]:
                 win.addstr(y, 2 + match.start(),
                            echo.name[match.start():match.end()],
                            color | curses.A_REVERSE)
@@ -374,7 +374,7 @@ def show_echo_selector_screen():
     cursor = echo_cursor
     scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
     scroll.ensure_visible(cursor, center=True)
-    search_ = None  # type: Optional[search.Search]
+    qs = None  # type: Optional[search.QuickSearch]
 
     def reload_echoareas():
         global counts_rescan
@@ -419,29 +419,28 @@ def show_echo_selector_screen():
     go = True
     while go:
         scroll.ensure_visible(cursor)
-        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, search_)
+        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, qs)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
-        if search_:
-            search_.draw(ui.stdscr, ui.HEIGHT - 1,
-                         len(ui.version) + 2,
-                         ui.WIDTH - len(ui.version) - 12,
-                         get_color(UI_STATUS))
+        if qs:
+            qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
+                    get_color(UI_STATUS))
         ui.stdscr.refresh()
         ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
             scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2, cursor)
             ui.stdscr.clear()
-        elif search_:
+            if qs:
+                qs.width = ui.WIDTH - len(ui.version) - 12
+        elif qs:
             if key in keys.s_csearch:
-                search_ = None
+                qs = None
                 curses.curs_set(0)
             else:
-                search_.on_key_pressed_search(
-                    key, ks, scroll, ui.WIDTH - len(ui.version) - 12)
-                if search_.result:
-                    cursor = search_.result[search_.idx]
+                qs.on_key_pressed_search(key, ks, scroll)
+                if qs.result:
+                    cursor = qs.result[qs.idx]
                     if key in keys.s_npage:
                         scroll.pos = cursor
                     elif key in keys.s_ppage:
@@ -536,7 +535,8 @@ def show_echo_selector_screen():
         elif key in keys.s_osearch:
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
             curses.curs_set(1)
-            search_ = search.Search(echoareas, on_search_item)
+            qs = search.QuickSearch(echoareas, on_search_item,
+                                    ui.WIDTH - len(ui.version) - 12)
         elif key in keys.g_quit:
             go = False
     if archive:
@@ -731,7 +731,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     repto = False
     stack = []
     msgid = None  # non-current-echo message id, navigated by ii-link
-    search_ = None  # type: Optional[search.Search]
+    qs = None  # type: Optional[search.QuickSearch]
 
     def read_cur_msg():  # type: () -> (List[str], int)
         nonlocal msgid
@@ -865,34 +865,33 @@ def echo_reader(echo: config.Echo, msgn, archive):
                 ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + repto)
             else:
                 repto = False
-            ui.render_body(ui.stdscr, body_tokens, scroll.pos, search_)
+            ui.render_body(ui.stdscr, body_tokens, scroll.pos, qs)
             if scroll.is_scrollable:
                 ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, scroll)
         else:
             draw_reader(echo.name, "", out)
-        if search_:
-            search_.draw(ui.stdscr, ui.HEIGHT - 1,
-                         len(ui.version) + 2,
-                         ui.WIDTH - len(ui.version) - 12,
-                         get_color(UI_STATUS))
+        if qs:
+            qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
+                    get_color(UI_STATUS))
         ks, key, _ = ui.get_keystroke()
         if key == curses.KEY_RESIZE:
             ui.set_term_size()
             body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
             ui.stdscr.clear()
-            if search_:
-                search_.items = body_tokens
+            if qs:
+                qs.items = body_tokens
+                qs.width = ui.WIDTH - len(ui.version) - 12
                 tnum, _ = parser.find_visible_token(body_tokens, scroll.pos)
-                search_.search(search_.query, tnum)
-        elif search_:
+                qs.search(qs.query, tnum)
+        elif qs:
             if key in keys.s_csearch:
-                search_ = None
+                qs = None
                 curses.curs_set(0)
             else:
-                search_.on_key_pressed_search(key, ks, pager())
-                if search_.result:
-                    tidx = search_.result[search_.idx]
-                    off, _ = search_.matches[search_.idx]
+                qs.on_key_pressed_search(key, ks, pager())
+                if qs.result:
+                    tidx = qs.result[qs.idx]
+                    off, _ = qs.matches[qs.idx]
                     if key in keys.s_home or key in keys.s_end:
                         scroll.ensure_visible(t2l[tidx].start + off, center=True)
                     elif key in keys.s_npage:
@@ -1065,7 +1064,8 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.s_osearch:
             ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
             curses.curs_set(1)
-            search_ = search.Search(body_tokens, on_search_item)
+            qs = search.QuickSearch(body_tokens, on_search_item,
+                                    ui.WIDTH - len(ui.version) - 12)
         elif key in keys.r_quit:
             go = False
             next_echoarea = False
