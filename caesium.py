@@ -249,10 +249,7 @@ def fetch_mail(node_):  # type: (config.Node) -> None
 #
 def get_counts(new=False):
     for echo in cfg.nodes[node].echoareas:  # type: config.Echo
-        if not new:
-            if echo.name not in echo_counts:
-                echo_counts[echo.name] = api.get_echo_length(echo.name)
-        else:
+        if new or echo.name not in echo_counts:
             echo_counts[echo.name] = api.get_echo_length(echo.name)
     for echo in cfg.nodes[node].archive:  # type: config.Echo
         if echo.name not in echo_counts:
@@ -337,15 +334,10 @@ def draw_echo_selector(win, start, cursor, archive, qs, counts):
 
 def find_new(cursor, counts):
     # type: (int, List[List[str]]) -> int
-    ret = cursor
-    n = 0
-    lock = False
-    for i in counts:
-        n = n + 1
-        if n > cursor and not lock and int(i[1]) > 0:
-            ret = n - 1
-            lock = True
-    return ret
+    for n, (_, unread) in enumerate(counts):
+        if n >= cursor and int(unread) > 0:
+            return n
+    return cursor
 
 
 def edit_config():
