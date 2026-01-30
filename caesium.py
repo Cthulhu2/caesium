@@ -247,10 +247,6 @@ def fetch_mail(node_):  # type: (config.Node) -> None
 #
 # Пользовательский интерфейс
 #
-echo_cursor = 0
-archive_cursor = 0
-
-
 def get_counts(new=False):
     for echo in cfg.nodes[node].echoareas:  # type: config.Echo
         if not new:
@@ -363,9 +359,11 @@ def edit_config():
 
 
 def show_echo_selector_screen():
-    global echo_cursor, archive_cursor, next_echoarea, node
+    global next_echoarea, node
     archive = False
     echoareas = cfg.nodes[node].echoareas
+    echo_cursor = 0
+    archive_cursor = 0
     cursor = echo_cursor
     scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
     scroll.ensure_visible(cursor, center=True)
@@ -383,20 +381,20 @@ def show_echo_selector_screen():
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
 
     def toggle_archive():
-        global echo_cursor, archive_cursor
-        nonlocal cursor, echoareas, archive, scroll
+        nonlocal cursor, echoareas, archive, scroll, echo_cursor, archive_cursor, counts
         archive = not archive
-        if not archive:
-            archive_cursor = cursor
-            cursor = echo_cursor
-            echoareas = cfg.nodes[node].echoareas
-        else:
+        if archive:
             echo_cursor = cursor
             cursor = archive_cursor
             echoareas = cfg.nodes[node].archive
+        else:
+            archive_cursor = cursor
+            cursor = echo_cursor
+            echoareas = cfg.nodes[node].echoareas
         ui.stdscr.clear()
         scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
         scroll.ensure_visible(cursor, center=True)
+        counts = rescan_counts(echoareas)
 
     # noinspection PyUnusedLocal
     def on_search_item(sidx, pattern, echo):
@@ -471,7 +469,6 @@ def show_echo_selector_screen():
             cursor = find_new(0, counts)
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             toggle_archive()
-            counts = rescan_counts(echoareas)
         elif key in keys.s_enter:
             ui.draw_message_box("Подождите", False)
             if echoareas[cursor].name in lasts:
@@ -499,7 +496,6 @@ def show_echo_selector_screen():
                         or (archive and (next_echoarea in cur_node.echoareas
                                          or next_echoarea in cur_node.stat))):
                     toggle_archive()
-                    counts = rescan_counts(echoareas)
                 # noinspection PyTypeChecker
                 cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
                 next_echoarea = False
@@ -537,10 +533,6 @@ def show_echo_selector_screen():
                                     ui.WIDTH - len(ui.version) - 12)
         elif key in keys.g_quit:
             go = False
-    if archive:
-        archive_cursor = cursor
-    else:
-        echo_cursor = cursor
 
 
 def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
