@@ -154,3 +154,13 @@ class QuickSearch:
             if self.idx == init:
                 self.home()
                 break  #
+
+    def ensure_cursor_visible(self, key, cursor, scroll):
+        if self.result:
+            cursor = self.result[self.idx]
+            if key in keys.s_npage:
+                scroll.pos = cursor
+            elif key in keys.s_ppage:
+                scroll.pos = cursor - scroll.view + 1
+            scroll.ensure_visible(cursor, center=True)
+        return cursor

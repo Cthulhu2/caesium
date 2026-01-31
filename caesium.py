@@ -295,12 +295,11 @@ def edit_config():
 
 class EchoSelectorScreen:
     def __init__(self):
-        global node
         self.archive = False
         self.echoareas = cfg.nodes[node].echoareas
         self.echo_cursor = 0
         self.archive_cursor = 0
-        self.cursor = self.echo_cursor
+        self.cursor = 0
         self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.qs = None  # type: Optional[search.QuickSearch]
@@ -315,6 +314,7 @@ class EchoSelectorScreen:
         ui.stdscr.clear()
         self.cursor = 0
         self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
+        self.counts = rescan_counts(self.echoareas)
 
     def toggle_archive(self):
         self.archive = not self.archive
@@ -362,13 +362,8 @@ class EchoSelectorScreen:
                     curses.curs_set(0)
                 else:
                     self.qs.on_key_pressed_search(key, ks, self.scroll)
-                    if self.qs.result:
-                        self.cursor = self.qs.result[self.qs.idx]
-                        if key in keys.s_npage:
-                            self.scroll.pos = self.cursor
-                        elif key in keys.s_ppage:
-                            self.scroll.pos = self.cursor - self.scroll.view + 1
-                        self.scroll.ensure_visible(self.cursor, center=True)
+                    self.cursor = self.qs.ensure_cursor_visible(
+                        key, self.cursor, self.scroll)
             elif key in keys.s_osearch:
                 ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
                 curses.curs_set(1)
@@ -525,19 +520,16 @@ class EchoSelectorScreen:
             if node == len(cfg.nodes):
                 node = 0
             self.reload_echoareas()
-            self.counts = rescan_counts(self.echoareas)
         elif key in keys.s_pnode:
             node = node - 1
             if node == -1:
                 node = len(cfg.nodes) - 1
             self.reload_echoareas()
-            self.counts = rescan_counts(self.echoareas)
         elif key in keys.s_config:
             edit_config()
             config.load_colors(cfg.theme)
             node = 0
             self.reload_echoareas()
-            self.counts = rescan_counts(self.echoareas)
 
 
 def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
