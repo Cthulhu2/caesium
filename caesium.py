@@ -491,9 +491,9 @@ class EchoSelectorScreen:
             if last >= echo_length:
                 last = echo_length
             self.go = not echo_reader(self.echoareas[self.cursor], last, self.archive)
-            counts = rescan_counts(self.echoareas)
+            self.counts = rescan_counts(self.echoareas)
             if next_echoarea and isinstance(next_echoarea, bool):
-                self.cursor = find_new(self.cursor, counts)
+                self.cursor = find_new(self.cursor, self.counts)
                 next_echoarea = False
             elif next_echoarea and isinstance(next_echoarea, str):
                 cur_node = cfg.nodes[node]
