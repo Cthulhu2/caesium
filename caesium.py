@@ -990,7 +990,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             ui.draw_message_box("Подождите", False)
             api.remove_from_favorites(msgids[msgn])
             get_counts(False)
-            msgids = api.get_echo_msgids(echo.name)
+            msgids = api.get_favorites_list()
             prerender_msg_or_quit()
         elif key in keys.f_delete and drafts and msgids:
             if ui.SelectWindow("Удалить черновик '%s'?" % msgids[msgn],
