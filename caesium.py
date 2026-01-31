@@ -39,7 +39,6 @@ if os.path.exists("blacklist.txt"):
         blacklist = list(filter(None, map(lambda it: it.strip(),
                                           bl.readlines())))
 echo_counts = {}
-next_echoarea = False
 node = 0
 cfg = config.Config()
 
@@ -305,6 +304,7 @@ class EchoSelectorScreen:
         self.qs = None  # type: Optional[search.QuickSearch]
         self.counts = rescan_counts(self.echoareas)
         self.go = True
+        self.next_echo = False
 
     def reload_echoareas(self):
         self.archive = False
@@ -442,7 +442,7 @@ class EchoSelectorScreen:
         ui.draw_status_bar(win, text=cur_node.nodename)
 
     def on_key_pressed(self, key):
-        global next_echoarea, node
+        global node
         if key in keys.s_up:
             self.cursor = max(0, self.cursor - 1)
         elif key in keys.s_down:
@@ -490,31 +490,31 @@ class EchoSelectorScreen:
                 last = last + 1
             if last >= echo_length:
                 last = echo_length
-            self.go = not echo_reader(self.echoareas[self.cursor], last, self.archive)
+            self.go, self.next_echo = echo_reader(self.echoareas[self.cursor], last, self.archive)
             self.counts = rescan_counts(self.echoareas)
-            if next_echoarea and isinstance(next_echoarea, bool):
+            if self.next_echo and isinstance(self.next_echo, bool):
                 self.cursor = find_new(self.cursor, self.counts)
-                next_echoarea = False
-            elif next_echoarea and isinstance(next_echoarea, str):
+                self.next_echo = False
+            elif self.next_echo and isinstance(self.next_echo, str):
                 cur_node = cfg.nodes[node]
-                if ((not self.archive and next_echoarea in cur_node.archive)
-                        or (self.archive and (next_echoarea in cur_node.echoareas
-                                              or next_echoarea in cur_node.stat))):
+                if ((not self.archive and self.next_echo in cur_node.archive)
+                        or (self.archive and (self.next_echo in cur_node.echoareas
+                                              or self.next_echo in cur_node.stat))):
                     self.toggle_archive()
                 # noinspection PyTypeChecker
-                self.cursor = (self.echoareas.index(next_echoarea)
-                               if next_echoarea in self.echoareas else
+                self.cursor = (self.echoareas.index(self.next_echo)
+                               if self.next_echo in self.echoareas else
                                0)
-                next_echoarea = False
+                self.next_echo = False
 
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
-                self.go = not echo_reader(config.ECHO_OUT, out_length, self.archive)
+                self.go, self.next_echo = echo_reader(config.ECHO_OUT, out_length, self.archive)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                self.go = not echo_reader(config.ECHO_DRAFTS, out_length, self.archive)
+                self.go, self.next_echo = echo_reader(config.ECHO_DRAFTS, out_length, self.archive)
         elif key in keys.s_nnode:
             node = node + 1
             if node == len(cfg.nodes):
@@ -694,7 +694,6 @@ def save_attachment(token):  # type: (parser.Token) -> None
 
 
 def echo_reader(echo: config.Echo, msgn, archive):
-    global next_echoarea
     ui.stdscr.clear()
     ui.stdscr.attrset(get_color(UI_BORDER))
     out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
@@ -719,6 +718,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     stack = []
     msgid = None  # non-current-echo message id, navigated by ii-link
     qs = None  # type: Optional[search.QuickSearch]
+    next_echo = False
 
     def read_cur_msg():  # type: () -> (List[str], int)
         nonlocal msgid
@@ -755,8 +755,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
 
     def open_link(token):  # type: (parser.Token) -> None
         link = token.url
-        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll, t2l
-        global next_echoarea
+        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll, t2l, next_echo
         if token.filename:
             if token.filedata:
                 save_attachment(token)
@@ -773,7 +772,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             elif (link[5:] in cur_node.echoareas
                   or link[5:] in cur_node.archive
                   or link[5:] in cur_node.stat):
-                next_echoarea = link[5:]
+                next_echo = link[5:]
                 go = False
             else:
                 ui.show_message_box("Конференция отсутствует в БД ноды")
@@ -823,7 +822,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     if msgids:
         read_msg_skip_twit(-1)
         if msgn < 0:
-            next_echoarea = True
+            next_echo = True
     body_tokens, scroll, t2l = prerender(msg[8:])
 
     while go:
@@ -902,11 +901,11 @@ def echo_reader(echo: config.Echo, msgn, archive):
             read_msg_skip_twit(+1)
             if msgn >= len(msgids):
                 go = False
-                next_echoarea = True
+                next_echo = True
             body_tokens, scroll, t2l = prerender(msg[8:])
         elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
             go = False
-            next_echoarea = True
+            next_echo = True
         elif key in keys.r_prep and not any((favorites, carbonarea, out)) and repto:
             if repto in msgids:
                 stack.append(msgn)
@@ -930,7 +929,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_ukeys:
             if not msgids or scroll.pos >= scroll.content - scroll.view:
                 if msgn == len(msgids) - 1 or not msgids:
-                    next_echoarea = True
+                    next_echo = True
                     go = False
                 else:
                     msgn = msgn + 1
@@ -1056,7 +1055,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
                                     ui.WIDTH - len(ui.version) - 12)
         elif key in keys.r_quit:
             go = False
-            next_echoarea = False
+            next_echo = False
         elif key in keys.g_quit:
             go = False
             done = True
@@ -1064,7 +1063,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
     with open("lasts.lst", "wb") as f:
         pickle.dump(lasts, f)
     ui.stdscr.clear()
-    return done
+    return not done, next_echo
 
 
 if sys.version_info >= (3, 11):
