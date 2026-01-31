@@ -275,63 +275,6 @@ def rescan_counts(echoareas):
     return counts_
 
 
-def draw_echo_selector(win, start, cursor, archive, qs, counts):
-    # type: (curses.window, int, int, bool, search.QuickSearch, List[List[str]]) -> None
-    h, w = win.getmaxyx()
-    color = get_color(UI_BORDER)
-    win.addstr(0, 0, "─" * w, color)
-    cur_node = cfg.nodes[node]
-    if archive:
-        echoareas = cur_node.archive
-        ui.draw_title(win, 0, 0, "Архив")
-    else:
-        echoareas = cur_node.echoareas
-        ui.draw_title(win, 0, 0, "Конференция")
-    #
-    m = min(w - 38, max(map(lambda e: len(e.desc), echoareas)))
-    count = "Сообщений"
-    unread = "Не прочитано"
-    description = "Описание"
-    show_desc = (w >= 80) and m > 0
-    if w < 80 or m == 0:
-        m = len(unread) - 7
-    ui.draw_title(win, 0, w + 2 - m - len(count) - len(unread) - 1, count)
-    ui.draw_title(win, 0, w - 8 - m - 1, unread)
-    if show_desc:
-        ui.draw_title(win, 0, w - len(description) - 2, description)
-
-    for y in range(1, h - 1):
-        echoN = y - 1 + start
-        if echoN == cursor:
-            color = get_color(UI_CURSOR)
-        else:
-            color = get_color(UI_TEXT)
-        win.addstr(y, 0, " " * w, color)
-        if echoN >= len(echoareas):
-            continue  #
-        #
-        win.attrset(color)
-        echo = echoareas[echoN]
-        total, unread = counts[echoN]
-        if int(unread) > 0:
-            win.addstr(y, 0, "+")
-        win.addstr(y, 2, echo.name)
-        win.addstr(y, w - 10 - m - len(total), total)
-        win.addstr(y, w - 2 - m - len(unread), unread)
-        if show_desc:
-            win.addstr(y, max(w - m - 1, w - 1 - len(echo.desc)),
-                       echo.desc[0:w - 38])
-        #
-        if qs and echoN in qs.result:
-            idx = qs.result.index(echoN)
-            for match in qs.matches[idx]:
-                win.addstr(y, 2 + match.start(),
-                           echo.name[match.start():match.end()],
-                           color | curses.A_REVERSE)
-
-    ui.draw_status_bar(win, text=cur_node.nodename)
-
-
 def find_new(cursor, counts):
     # type: (int, List[List[str]]) -> int
     for n, (_, unread) in enumerate(counts):
@@ -350,45 +293,46 @@ def edit_config():
     ui.initialize_curses()
 
 
-def show_echo_selector_screen():
-    global next_echoarea, node
-    archive = False
-    echoareas = cfg.nodes[node].echoareas
-    echo_cursor = 0
-    archive_cursor = 0
-    cursor = echo_cursor
-    scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
-    scroll.ensure_visible(cursor, center=True)
-    qs = None  # type: Optional[search.QuickSearch]
-    counts = rescan_counts(echoareas)
+class EchoSelectorScreen:
+    def __init__(self):
+        global node
+        self.archive = False
+        self.echoareas = cfg.nodes[node].echoareas
+        self.echo_cursor = 0
+        self.archive_cursor = 0
+        self.cursor = self.echo_cursor
+        self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
+        self.scroll.ensure_visible(self.cursor, center=True)
+        self.qs = None  # type: Optional[search.QuickSearch]
+        self.counts = rescan_counts(self.echoareas)
+        self.go = True
 
-    def reload_echoareas():
-        nonlocal archive, echoareas, cursor, scroll
-        archive = False
-        echoareas = cfg.nodes[node].echoareas
+    def reload_echoareas(self):
+        self.archive = False
+        self.echoareas = cfg.nodes[node].echoareas
         ui.draw_message_box("Подождите", False)
         get_counts()
         ui.stdscr.clear()
-        cursor = 0
-        scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
+        self.cursor = 0
+        self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
 
-    def toggle_archive():
-        nonlocal cursor, echoareas, archive, scroll, echo_cursor, archive_cursor, counts
-        archive = not archive
-        if archive:
-            echo_cursor = cursor
-            cursor = archive_cursor
-            echoareas = cfg.nodes[node].archive
+    def toggle_archive(self):
+        self.archive = not self.archive
+        if self.archive:
+            self.echo_cursor = self.cursor
+            self.cursor = self.archive_cursor
+            self.echoareas = cfg.nodes[node].archive
         else:
-            archive_cursor = cursor
-            cursor = echo_cursor
-            echoareas = cfg.nodes[node].echoareas
+            self.archive_cursor = self.cursor
+            self.cursor = self.echo_cursor
+            self.echoareas = cfg.nodes[node].echoareas
         ui.stdscr.clear()
-        scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2)
-        scroll.ensure_visible(cursor, center=True)
-        counts = rescan_counts(echoareas)
+        self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
+        self.scroll.ensure_visible(self.cursor, center=True)
+        self.counts = rescan_counts(self.echoareas)
 
     # noinspection PyUnusedLocal
+    @staticmethod
     def on_search_item(sidx, pattern, echo):
         result = []
         p = 0
@@ -399,56 +343,130 @@ def show_echo_selector_screen():
             p = match.end()
         return [result] if result else None
 
-    go = True
-    while go:
-        scroll.ensure_visible(cursor)
-        draw_echo_selector(ui.stdscr, scroll.pos, cursor, archive, qs, counts)
+    def show(self):
+        while self.go:
+            self.scroll.ensure_visible(self.cursor)
+            self.draw(ui.stdscr, self.cursor, self.scroll, self.qs, self.counts)
+            #
+            ks, key, _ = ui.get_keystroke()
+            #
+            if key == curses.KEY_RESIZE:
+                ui.set_term_size()
+                self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2, self.cursor)
+                ui.stdscr.clear()
+                if self.qs:
+                    self.qs.width = ui.WIDTH - len(ui.version) - 12
+            elif self.qs:
+                if key in keys.s_csearch:
+                    self.qs = None
+                    curses.curs_set(0)
+                else:
+                    self.qs.on_key_pressed_search(key, ks, self.scroll)
+                    if self.qs.result:
+                        self.cursor = self.qs.result[self.qs.idx]
+                        if key in keys.s_npage:
+                            self.scroll.pos = self.cursor
+                        elif key in keys.s_ppage:
+                            self.scroll.pos = self.cursor - self.scroll.view + 1
+                        self.scroll.ensure_visible(self.cursor, center=True)
+            elif key in keys.s_osearch:
+                ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+                curses.curs_set(1)
+                self.qs = search.QuickSearch(self.echoareas, self.on_search_item,
+                                             ui.WIDTH - len(ui.version) - 12)
+            elif key in keys.g_quit:
+                self.go = False
+            else:
+                self.on_key_pressed(key)
+
+    def draw(self, win, cursor, scroll, qs, counts):
+        h, w = win.getmaxyx()
+        self.draw_echo_selector(win, scroll.pos, cursor, self.archive, qs, counts)
         if scroll.is_scrollable:
-            ui.draw_scrollbarV(ui.stdscr, 1, ui.WIDTH - 1, scroll)
+            ui.draw_scrollbarV(win, 1, w - 1, scroll)
         if qs:
-            qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
-                    get_color(UI_STATUS))
-            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + qs.cursor)
-        ui.stdscr.refresh()
-        ks, key, _ = ui.get_keystroke()
-        if key == curses.KEY_RESIZE:
-            ui.set_term_size()
-            scroll = ui.ScrollCalc(len(echoareas), ui.HEIGHT - 2, cursor)
-            ui.stdscr.clear()
-            if qs:
-                qs.width = ui.WIDTH - len(ui.version) - 12
-        elif qs:
-            if key in keys.s_csearch:
-                qs = None
-                curses.curs_set(0)
+            qs.draw(win, h - 1, len(ui.version) + 2, get_color(UI_STATUS))
+            win.move(h - 1, len(ui.version) + 2 + self.qs.cursor)
+        win.refresh()
+
+    @staticmethod
+    def draw_echo_selector(win, start, cursor, archive, qs, counts):
+        # type: (curses.window, int, int, bool, search.QuickSearch, List[List[str]]) -> None
+        h, w = win.getmaxyx()
+        color = get_color(UI_BORDER)
+        win.addstr(0, 0, "─" * w, color)
+        cur_node = cfg.nodes[node]
+        if archive:
+            echoareas = cur_node.archive
+            ui.draw_title(win, 0, 0, "Архив")
+        else:
+            echoareas = cur_node.echoareas
+            ui.draw_title(win, 0, 0, "Конференция")
+        #
+        m = min(w - 38, max(map(lambda e: len(e.desc), echoareas)))
+        count = "Сообщений"
+        unread = "Не прочитано"
+        description = "Описание"
+        show_desc = (w >= 80) and m > 0
+        if w < 80 or m == 0:
+            m = len(unread) - 7
+        ui.draw_title(win, 0, w + 2 - m - len(count) - len(unread) - 1, count)
+        ui.draw_title(win, 0, w - 8 - m - 1, unread)
+        if show_desc:
+            ui.draw_title(win, 0, w - len(description) - 2, description)
+
+        for y in range(1, h - 1):
+            echoN = y - 1 + start
+            if echoN == cursor:
+                color = get_color(UI_CURSOR)
             else:
-                qs.on_key_pressed_search(key, ks, scroll)
-                if qs.result:
-                    cursor = qs.result[qs.idx]
-                    if key in keys.s_npage:
-                        scroll.pos = cursor
-                    elif key in keys.s_ppage:
-                        scroll.pos = cursor - scroll.view + 1
-                    scroll.ensure_visible(cursor, center=True)
-        elif key in keys.s_up:
-            cursor = max(0, cursor - 1)
+                color = get_color(UI_TEXT)
+            win.addstr(y, 0, " " * w, color)
+            if echoN >= len(echoareas):
+                continue  #
+            #
+            win.attrset(color)
+            echo = echoareas[echoN]
+            total, unread = counts[echoN]
+            if int(unread) > 0:
+                win.addstr(y, 0, "+")
+            win.addstr(y, 2, echo.name)
+            win.addstr(y, w - 10 - m - len(total), total)
+            win.addstr(y, w - 2 - m - len(unread), unread)
+            if show_desc:
+                win.addstr(y, max(w - m - 1, w - 1 - len(echo.desc)),
+                           echo.desc[0:w - 38])
+            #
+            if qs and echoN in qs.result:
+                idx = qs.result.index(echoN)
+                for match in qs.matches[idx]:
+                    win.addstr(y, 2 + match.start(),
+                               echo.name[match.start():match.end()],
+                               color | curses.A_REVERSE)
+
+        ui.draw_status_bar(win, text=cur_node.nodename)
+
+    def on_key_pressed(self, key):
+        global next_echoarea, node
+        if key in keys.s_up:
+            self.cursor = max(0, self.cursor - 1)
         elif key in keys.s_down:
-            cursor = min(scroll.content - 1, cursor + 1)
+            self.cursor = min(self.scroll.content - 1, self.cursor + 1)
         elif key in keys.s_ppage:
-            if cursor > scroll.pos:
-                cursor = scroll.pos
+            if self.cursor > self.scroll.pos:
+                self.cursor = self.scroll.pos
             else:
-                cursor = max(0, cursor - scroll.view)
+                self.cursor = max(0, self.cursor - self.scroll.view)
         elif key in keys.s_npage:
-            page_bottom = scroll.pos_bottom()
-            if cursor < page_bottom:
-                cursor = page_bottom
+            page_bottom = self.scroll.pos_bottom()
+            if self.cursor < page_bottom:
+                self.cursor = page_bottom
             else:
-                cursor = min(scroll.content - 1, page_bottom + scroll.view)
+                self.cursor = min(self.scroll.content - 1, page_bottom + self.scroll.view)
         elif key in keys.s_home:
-            cursor = 0
+            self.cursor = 0
         elif key in keys.s_end:
-            cursor = scroll.content - 1
+            self.cursor = self.scroll.content - 1
         elif key in keys.s_get:
             ui.terminate_curses()
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -457,74 +475,69 @@ def show_echo_selector_screen():
             ui.draw_message_box("Подождите", False)
             get_counts(True)
             ui.stdscr.clear()
-            counts = rescan_counts(echoareas)
-            cursor = find_new(0, counts)
+            self.counts = rescan_counts(self.echoareas)
+            self.cursor = find_new(0, self.counts)
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
-            toggle_archive()
+            self.toggle_archive()
         elif key in keys.s_enter:
             ui.draw_message_box("Подождите", False)
-            if echoareas[cursor].name in lasts:
-                last = lasts[echoareas[cursor].name]
+            if self.echoareas[self.cursor].name in lasts:
+                last = lasts[self.echoareas[self.cursor].name]
             else:
                 last = 0
-            if echoareas[cursor] == config.ECHO_FAVORITES:
+            if self.echoareas[self.cursor] == config.ECHO_FAVORITES:
                 echo_length = len(api.get_favorites_list())
-            elif echoareas[cursor] == config.ECHO_CARBON:
+            elif self.echoareas[self.cursor] == config.ECHO_CARBON:
                 echo_length = len(api.get_carbonarea())
             else:
-                echo_length = api.get_echo_length(echoareas[cursor].name)
+                echo_length = api.get_echo_length(self.echoareas[self.cursor].name)
             if 0 < last < echo_length:
                 last = last + 1
             if last >= echo_length:
                 last = echo_length
-            go = not echo_reader(echoareas[cursor], last, archive)
-            counts = rescan_counts(echoareas)
+            self.go = not echo_reader(self.echoareas[self.cursor], last, self.archive)
+            counts = rescan_counts(self.echoareas)
             if next_echoarea and isinstance(next_echoarea, bool):
-                cursor = find_new(cursor, counts)
+                self.cursor = find_new(self.cursor, counts)
                 next_echoarea = False
             elif next_echoarea and isinstance(next_echoarea, str):
                 cur_node = cfg.nodes[node]
-                if ((not archive and next_echoarea in cur_node.archive)
-                        or (archive and (next_echoarea in cur_node.echoareas
-                                         or next_echoarea in cur_node.stat))):
-                    toggle_archive()
+                if ((not self.archive and next_echoarea in cur_node.archive)
+                        or (self.archive and (next_echoarea in cur_node.echoareas
+                                              or next_echoarea in cur_node.stat))):
+                    self.toggle_archive()
                 # noinspection PyTypeChecker
-                cursor = echoareas.index(next_echoarea) if next_echoarea in echoareas else 0
+                self.cursor = (self.echoareas.index(next_echoarea)
+                               if next_echoarea in self.echoareas else
+                               0)
                 next_echoarea = False
 
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_OUT, out_length, archive)
+                self.go = not echo_reader(config.ECHO_OUT, out_length, self.archive)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                go = not echo_reader(config.ECHO_DRAFTS, out_length, archive)
+                self.go = not echo_reader(config.ECHO_DRAFTS, out_length, self.archive)
         elif key in keys.s_nnode:
             node = node + 1
             if node == len(cfg.nodes):
                 node = 0
-            reload_echoareas()
-            counts = rescan_counts(echoareas)
+            self.reload_echoareas()
+            self.counts = rescan_counts(self.echoareas)
         elif key in keys.s_pnode:
             node = node - 1
             if node == -1:
                 node = len(cfg.nodes) - 1
-            reload_echoareas()
-            counts = rescan_counts(echoareas)
+            self.reload_echoareas()
+            self.counts = rescan_counts(self.echoareas)
         elif key in keys.s_config:
             edit_config()
             config.load_colors(cfg.theme)
             node = 0
-            reload_echoareas()
-            counts = rescan_counts(echoareas)
-        elif key in keys.s_osearch:
-            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
-            curses.curs_set(1)
-            qs = search.QuickSearch(echoareas, on_search_item,
-                                    ui.WIDTH - len(ui.version) - 12)
-        elif key in keys.g_quit:
-            go = False
+            self.reload_echoareas()
+            self.counts = rescan_counts(self.echoareas)
 
 
 def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
@@ -1114,6 +1127,6 @@ try:
     ui.draw_message_box("Подождите", False)
     get_counts()
     ui.stdscr.clear()
-    show_echo_selector_screen()
+    EchoSelectorScreen().show()
 finally:
     ui.terminate_curses()
