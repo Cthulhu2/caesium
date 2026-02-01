@@ -29,16 +29,11 @@ from core.config import (
 # socks.set_default_proxy(socks.SOCKS5, '127.0.0.1', 8081)
 # socket.socket = socks.socksocket
 
-lasts = {}
-if os.path.exists("lasts.lst"):
-    with open("lasts.lst", "rb") as f_lasts:
-        lasts = pickle.load(f_lasts)
 blacklist = []
 if os.path.exists("blacklist.txt"):
     with open("blacklist.txt", "r") as bl:
         blacklist = list(filter(None, map(lambda it: it.strip(),
                                           bl.readlines())))
-echo_counts = {}
 node = 0
 cfg = config.Config()
 
@@ -246,40 +241,49 @@ def fetch_mail(node_):  # type: (config.Node) -> None
 #
 # Пользовательский интерфейс
 #
-def get_counts(new=False):
-    for echo in cfg.nodes[node].echoareas:  # type: config.Echo
-        if new or echo.name not in echo_counts:
-            echo_counts[echo.name] = api.get_echo_length(echo.name)
-    for echo in cfg.nodes[node].archive:  # type: config.Echo
-        if echo.name not in echo_counts:
-            echo_counts[echo.name] = api.get_echo_length(echo.name)
-    echo_counts[config.ECHO_CARBON.name] = len(api.get_carbonarea())
-    echo_counts[config.ECHO_FAVORITES.name] = len(api.get_favorites_list())
+class Counts:
+    total: dict[str, int]
+    lasts: dict[str, int]
+    counts: List[List[str]]
 
+    def __init__(self):
+        self.total = {}
+        self.lasts = {}
+        if os.path.exists("lasts.lst"):
+            with open("lasts.lst", "rb") as f:
+                self.lasts = pickle.load(f)
 
-def rescan_counts(echoareas):
-    counts_ = []
-    for echo in echoareas:
-        echocount = echo_counts[echo.name]
-        if echo.name in lasts:
-            last = echocount - lasts[echo.name]
-            if echocount == 0 and lasts[echo.name] == 0:
+    def get_counts(self, node_, new=False):
+        for echo in node_.echoareas:  # type: config.Echo
+            if new or echo.name not in self.total:
+                self.total[echo.name] = api.get_echo_length(echo.name)
+        for echo in node_.archive:  # type: config.Echo
+            if echo.name not in self.total:
+                self.total[echo.name] = api.get_echo_length(echo.name)
+        self.total[config.ECHO_CARBON.name] = len(api.get_carbonarea())
+        self.total[config.ECHO_FAVORITES.name] = len(api.get_favorites_list())
+
+    def rescan_counts(self, echoareas):
+        self.counts = []
+        for echo in echoareas:
+            total = self.total[echo.name]
+            if echo.name in self.lasts:
+                last = total - self.lasts[echo.name]
+                if total == 0 and self.lasts[echo.name] == 0:
+                    last = 1
+            else:
+                last = total + 1
+
+            if last - 1 < 0:
                 last = 1
-        else:
-            last = echocount + 1
+            self.counts.append([str(total), str(last - 1)])
+        return self.counts
 
-        if last - 1 < 0:
-            last = 1
-        counts_.append([str(echocount), str(last - 1)])
-    return counts_
-
-
-def find_new(cursor, counts):
-    # type: (int, List[List[str]]) -> int
-    for n, (_, unread) in enumerate(counts):
-        if n >= cursor and int(unread) > 0:
-            return n
-    return cursor
+    def find_new(self, cursor):
+        for n, (_, unread) in enumerate(self.counts):
+            if n >= cursor and int(unread) > 0:
+                return n
+        return cursor
 
 
 def edit_config():
@@ -293,28 +297,30 @@ def edit_config():
 
 
 class EchoSelectorScreen:
+    echo_cursor: int = 0
+    archive_cursor: int = 0
+    next_echo: bool = False
+    archive: bool = False
+    cursor: int = 0
+    echoareas: List[config.Echo] = None
+    scroll: ui.ScrollCalc = None
+    qs: Optional[search.QuickSearch] = None
+    go: bool = True
+
     def __init__(self):
-        self.archive = False
-        self.echoareas = cfg.nodes[node].echoareas
-        self.echo_cursor = 0
-        self.archive_cursor = 0
-        self.cursor = 0
-        self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
-        self.scroll.ensure_visible(self.cursor, center=True)
-        self.qs = None  # type: Optional[search.QuickSearch]
-        self.counts = rescan_counts(self.echoareas)
-        self.go = True
-        self.next_echo = False
+        self.counts = Counts()
+        self.reload_echoareas()
 
     def reload_echoareas(self):
         self.archive = False
         self.echoareas = cfg.nodes[node].echoareas
         ui.draw_message_box("Подождите", False)
-        get_counts()
+        self.counts.get_counts(cfg.nodes[node], False)
+        self.counts.rescan_counts(self.echoareas)
         ui.stdscr.clear()
         self.cursor = 0
         self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
-        self.counts = rescan_counts(self.echoareas)
+        self.scroll.ensure_visible(self.cursor, center=True)
 
     def toggle_archive(self):
         self.archive = not self.archive
@@ -329,7 +335,7 @@ class EchoSelectorScreen:
         ui.stdscr.clear()
         self.scroll = ui.ScrollCalc(len(self.echoareas), ui.HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
-        self.counts = rescan_counts(self.echoareas)
+        self.counts.rescan_counts(self.echoareas)
 
     # noinspection PyUnusedLocal
     @staticmethod
@@ -346,7 +352,7 @@ class EchoSelectorScreen:
     def show(self):
         while self.go:
             self.scroll.ensure_visible(self.cursor)
-            self.draw(ui.stdscr, self.cursor, self.scroll, self.qs, self.counts)
+            self.draw(ui.stdscr, self.cursor, self.scroll, self.qs)
             #
             ks, key, _ = ui.get_keystroke()
             #
@@ -374,9 +380,10 @@ class EchoSelectorScreen:
             else:
                 self.on_key_pressed(key)
 
-    def draw(self, win, cursor, scroll, qs, counts):
+    def draw(self, win, cursor, scroll, qs):
         h, w = win.getmaxyx()
-        self.draw_echo_selector(win, scroll.pos, cursor, self.archive, qs, counts)
+        self.draw_echo_selector(win, scroll.pos, cursor, self.archive, qs,
+                                self.counts.counts)
         if scroll.is_scrollable:
             ui.draw_scrollbarV(win, 1, w - 1, scroll)
         if qs:
@@ -468,32 +475,24 @@ class EchoSelectorScreen:
             fetch_mail(cfg.nodes[node])
             ui.initialize_curses()
             ui.draw_message_box("Подождите", False)
-            get_counts(True)
+            self.counts.get_counts(cfg.nodes[node], True)
+            self.counts.rescan_counts(self.echoareas)
             ui.stdscr.clear()
-            self.counts = rescan_counts(self.echoareas)
-            self.cursor = find_new(0, self.counts)
+            self.cursor = self.counts.find_new(0)
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             self.toggle_archive()
         elif key in keys.s_enter:
             ui.draw_message_box("Подождите", False)
-            if self.echoareas[self.cursor].name in lasts:
-                last = lasts[self.echoareas[self.cursor].name]
-            else:
-                last = 0
-            if self.echoareas[self.cursor] == config.ECHO_FAVORITES:
-                echo_length = len(api.get_favorites_list())
-            elif self.echoareas[self.cursor] == config.ECHO_CARBON:
-                echo_length = len(api.get_carbonarea())
-            else:
-                echo_length = api.get_echo_length(self.echoareas[self.cursor].name)
-            if 0 < last < echo_length:
-                last = last + 1
-            if last >= echo_length:
-                last = echo_length
-            self.go, self.next_echo = echo_reader(self.echoareas[self.cursor], last, self.archive)
-            self.counts = rescan_counts(self.echoareas)
+            last = 0
+            cur_echo = self.echoareas[self.cursor]
+            if cur_echo.name in self.counts.lasts:
+                last = self.counts.lasts[cur_echo.name]
+            last = min(self.counts.total[cur_echo.name], last + 1)
+            self.go, self.next_echo = echo_reader(
+                cur_echo, last, self.archive, self.counts)
+            self.counts.rescan_counts(self.echoareas)
             if self.next_echo and isinstance(self.next_echo, bool):
-                self.cursor = find_new(self.cursor, self.counts)
+                self.cursor = self.counts.find_new(self.cursor)
                 self.next_echo = False
             elif self.next_echo and isinstance(self.next_echo, str):
                 cur_node = cfg.nodes[node]
@@ -510,11 +509,13 @@ class EchoSelectorScreen:
         elif key in keys.s_out:
             out_length = get_out_length(drafts=False)
             if out_length > -1:
-                self.go, self.next_echo = echo_reader(config.ECHO_OUT, out_length, self.archive)
+                self.go, self.next_echo = echo_reader(
+                    config.ECHO_OUT, out_length, self.archive, self.counts)
         elif key in keys.s_drafts:
             out_length = get_out_length(drafts=True)
             if out_length > -1:
-                self.go, self.next_echo = echo_reader(config.ECHO_DRAFTS, out_length, self.archive)
+                self.go, self.next_echo = echo_reader(
+                    config.ECHO_DRAFTS, out_length, self.archive, self.counts)
         elif key in keys.s_nnode:
             node = node + 1
             if node == len(cfg.nodes):
@@ -693,7 +694,7 @@ def save_attachment(token):  # type: (parser.Token) -> None
         utils.open_file(filepath)
 
 
-def echo_reader(echo: config.Echo, msgn, archive):
+def echo_reader(echo: config.Echo, msgn, archive, counts):
     ui.stdscr.clear()
     ui.stdscr.attrset(get_color(UI_BORDER))
     out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
@@ -964,7 +965,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgid or msgids[msgn], msg)
             ui.draw_message_box("Подождите", False)
-            get_counts(False)
+            counts.get_counts(cur_node, False)
             if saved:
                 ui.show_message_box("Сообщение добавлено в избранные")
             else:
@@ -989,7 +990,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.f_delete and favorites and msgids:
             ui.draw_message_box("Подождите", False)
             api.remove_from_favorites(msgids[msgn])
-            get_counts(False)
+            counts.get_counts(cur_node, False)
             msgids = api.get_favorites_list()
             prerender_msg_or_quit()
         elif key in keys.f_delete and drafts and msgids:
@@ -1002,7 +1003,7 @@ def echo_reader(echo: config.Echo, msgn, archive):
             try:
                 ui.draw_message_box("Подождите", False)
                 get_msg(msgid)
-                get_counts(True)
+                counts.get_counts(cur_node, True)
                 ui.stdscr.clear()
                 msg, size = api.find_msg(msgid)
                 body_tokens, scroll, t2l = prerender(msg[8:])
@@ -1059,9 +1060,9 @@ def echo_reader(echo: config.Echo, msgn, archive):
         elif key in keys.g_quit:
             go = False
             done = True
-    lasts[echo.name] = msgn
+    counts.lasts[echo.name] = msgn
     with open("lasts.lst", "wb") as f:
-        pickle.dump(lasts, f)
+        pickle.dump(counts.lasts, f)
     ui.stdscr.clear()
     return not done, next_echo
 
@@ -1115,9 +1116,6 @@ try:
         ui.draw_splash(ui.stdscr, splash)
         curses.napms(2000)
         ui.stdscr.clear()
-    ui.draw_message_box("Подождите", False)
-    get_counts()
-    ui.stdscr.clear()
     EchoSelectorScreen().show()
 finally:
     ui.terminate_curses()
