@@ -268,15 +268,11 @@ class Counts:
         for echo in echoareas:
             total = self.total[echo.name]
             if echo.name in self.lasts:
-                last = total - self.lasts[echo.name]
-                if total == 0 and self.lasts[echo.name] == 0:
-                    last = 1
+                unread = total - self.lasts[echo.name]
             else:
-                last = total + 1
-
-            if last - 1 < 0:
-                last = 1
-            self.counts.append([str(total), str(last - 1)])
+                unread = total + 1
+            unread = max(1, unread)
+            self.counts.append([str(total), str(unread - 1)])
         return self.counts
 
     def find_new(self, cursor):
