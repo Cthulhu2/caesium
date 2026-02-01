@@ -2,7 +2,6 @@ import curses
 import re
 
 import keys.default as keys
-from core import ui
 
 LABEL_SEARCH = "<введите regex для поиска>"
 
@@ -10,15 +9,15 @@ LABEL_SEARCH = "<введите regex для поиска>"
 class Pager:
     pos: int = 0
 
-    def __init__(self, pos, next_after, prev_before):
+    def __init__(self, pos, next_page_top, prev_page_bottom):
         self.pos = pos
-        self.next_after = next_after
-        self.prev_before = prev_before
+        self.next_page_top = next_page_top
+        self.prev_page_bottom = prev_page_bottom
 
-    def next_after(self):
+    def next_page_top(self):
         pass
 
-    def prev_before(self):
+    def prev_page_bottom(self):
         pass
 
 
@@ -69,18 +68,6 @@ class QuickSearch:
                     if self.idx == -1 and i >= pos:
                         self.idx = len(self.result) - 1
 
-    @staticmethod
-    def _next_page_top_pos(pager):
-        if isinstance(pager, ui.ScrollCalc):
-            return pager.pos + pager.view
-        return pager.next_after()
-
-    @staticmethod
-    def _prev_page_bottom_pos(pager):
-        if isinstance(pager, ui.ScrollCalc):
-            return pager.pos
-        return pager.prev_before()
-
     def on_key_pressed_search(self, key, keystroke, pager):
         if "Space" == keystroke:
             keystroke = " "
@@ -93,9 +80,9 @@ class QuickSearch:
         elif key in keys.s_up:
             self.prev()
         elif key in keys.s_npage:
-            self.next_after(self._next_page_top_pos(pager))
+            self.next_after(pager.next_page_top())
         elif key in keys.s_ppage:
-            self.prev_before(self._prev_page_bottom_pos(pager))
+            self.prev_before(pager.prev_page_bottom())
         elif key == curses.KEY_LEFT:
             self.cursor = max(0, self.cursor - 1)
         elif key == curses.KEY_RIGHT:
@@ -134,24 +121,18 @@ class QuickSearch:
     def next_after(self, pos):
         if not self.result:
             return  #
-        init = self.idx
         while self.result[self.idx] < pos:
             self.idx += 1
             if self.idx >= len(self.result):
-                self.idx = 0
-            if self.idx == init:
                 self.end()
                 break  #
 
     def prev_before(self, pos):
         if not self.result:
             return  #
-        init = self.idx
         while self.result[self.idx] > pos:
             self.idx -= 1
             if self.idx < 0:
-                self.idx = len(self.result) - 1
-            if self.idx == init:
                 self.home()
                 break  #
 
@@ -161,6 +142,6 @@ class QuickSearch:
             if key in keys.s_npage:
                 scroll.pos = cursor
             elif key in keys.s_ppage:
-                scroll.pos = cursor - scroll.view + 1
-            scroll.ensure_visible(cursor, center=True)
+                scroll.pos = cursor - scroll.view
+            scroll.ensure_visible(cursor)
         return cursor

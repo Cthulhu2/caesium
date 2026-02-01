@@ -184,6 +184,14 @@ class ScrollCalc:
             if center:
                 self.pos += self.view // 2
 
+    # region search.Pager implementation
+    def next_page_top(self):
+        return self.pos + self.view
+
+    def prev_page_bottom(self):
+        return self.pos - 1
+    # endregion implementation
+
 
 class SelectWindow:
     scroll: ScrollCalc

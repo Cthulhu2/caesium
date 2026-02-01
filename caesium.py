@@ -49,7 +49,7 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "           Cthulhu Fhtagn"]
 
 
-def check_directories(storage_api):
+def check_directories():
     if not os.path.exists("downloads"):
         os.mkdir("downloads")
     if not os.path.exists("out"):
@@ -57,7 +57,6 @@ def check_directories(storage_api):
     for n in cfg.nodes:
         if not os.path.exists("out/" + n.nodename):
             os.mkdir("out/" + n.nodename)
-    storage_api.init()
 
 
 #
@@ -803,18 +802,11 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
             token.search_matches = None
         return matches
 
-    def pager():
-        tn, _ = parser.find_visible_token(body_tokens, scroll.pos)
+    def prev_page_bottom():
+        return parser.find_visible_token(body_tokens, scroll.pos)[0] - 1
 
-        def prev_before():
-            tn_, _ = parser.find_visible_token(body_tokens, scroll.pos - 1)
-            return tn_
-
-        def next_after():
-            tn_, _ = parser.find_visible_token(body_tokens, scroll.pos + scroll.view)
-            return tn_
-
-        return search.Pager(tn, next_after, prev_before)
+    def next_page_top():
+        return parser.find_visible_token(body_tokens, scroll.pos + scroll.view)[0]
 
     if msgids:
         read_msg_skip_twit(-1)
@@ -872,7 +864,9 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                 qs = None
                 curses.curs_set(0)
             else:
-                qs.on_key_pressed_search(key, ks, pager())
+                tnum, _ = parser.find_visible_token(body_tokens, scroll.pos)
+                pager = search.Pager(tnum,  next_page_top, prev_page_bottom)
+                qs.on_key_pressed_search(key, ks, pager)
                 if qs.result:
                     tidx = qs.result[qs.idx]
                     off, _ = qs.matches[qs.idx]
@@ -881,7 +875,7 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                     elif key in keys.s_npage:
                         scroll.ensure_visible(t2l[tidx].start + off + scroll.view - 1)
                     elif key in keys.s_ppage:
-                        scroll.ensure_visible(t2l[tidx].start + off - scroll.view)
+                        scroll.ensure_visible(t2l[tidx].start + off - scroll.view + 1)
                     else:
                         scroll.ensure_visible(t2l[tidx].start + off)
         elif key in keys.r_prev and msgn > 0 and msgids:
@@ -1082,7 +1076,8 @@ elif cfg.db == "sqlite":
     import api.sqlite as api
 else:
     raise Exception("Unsupported DB API :: " + cfg.db)
-check_directories(api)
+api.init()
+check_directories()
 if cfg.keys == "default":
     import keys.default as keys
 elif cfg.keys == "android":
