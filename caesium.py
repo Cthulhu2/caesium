@@ -696,14 +696,17 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
     drafts = (echo == config.ECHO_DRAFTS)
     favorites = (echo == config.ECHO_FAVORITES)
     carbonarea = (echo == config.ECHO_CARBON)
-    if out:
-        msgids = get_out_msgids(drafts)
-    elif favorites:
-        msgids = api.get_favorites_list()
-    elif carbonarea:
-        msgids = api.get_carbonarea()
-    else:
-        msgids = api.get_echo_msgids(echo.name)
+
+    def get_msgids():
+        if out:
+            return get_out_msgids(drafts)
+        elif favorites:
+            return api.get_favorites_list()
+        elif carbonarea:
+            return api.get_carbonarea()
+        else:
+            return api.get_echo_msgids(echo.name)
+    msgids = get_msgids()
     msgn = min(msgn, len(msgids) - 1)
     cur_node = cfg.nodes[node]  # type: config.Node
     msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
@@ -802,12 +805,6 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
             token.search_matches = None
         return matches
 
-    def prev_page_bottom():
-        return parser.find_visible_token(body_tokens, scroll.pos)[0] - 1
-
-    def next_page_top():
-        return parser.find_visible_token(body_tokens, scroll.pos + scroll.view)[0]
-
     if msgids:
         read_msg_skip_twit(-1)
         if msgn < 0:
@@ -864,8 +861,10 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                 qs = None
                 curses.curs_set(0)
             else:
-                tnum, _ = parser.find_visible_token(body_tokens, scroll.pos)
-                pager = search.Pager(tnum,  next_page_top, prev_page_bottom)
+                pager = search.Pager(
+                    parser.find_visible_token(body_tokens, scroll.pos)[0],
+                    lambda: parser.find_visible_token(body_tokens, scroll.pos + scroll.view)[0],
+                    lambda: parser.find_visible_token(body_tokens, scroll.pos)[0] - 1)
                 qs.on_key_pressed_search(key, ks, pager)
                 if qs.result:
                     tidx = qs.result[qs.idx]
@@ -972,7 +971,7 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
                 copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
                 call_editor(msgids[msgn])
-                msgids = get_out_msgids(drafts)
+                msgids = get_msgids()
                 prerender_msg_or_quit()
             else:
                 ui.show_message_box("Сообщение уже отправлено")
@@ -981,13 +980,13 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
             ui.draw_message_box("Подождите", False)
             api.remove_from_favorites(msgids[msgn])
             counts.get_counts(cur_node, False)
-            msgids = api.get_favorites_list()
+            msgids = get_msgids()
             prerender_msg_or_quit()
         elif key in keys.f_delete and drafts and msgids:
             if ui.SelectWindow("Удалить черновик '%s'?" % msgids[msgn],
                                ["Нет", "Да"]).show() == 2:
                 os.remove("out/" + cur_node.nodename + "/" + msgids[msgn])
-                msgids = get_out_msgids(drafts)
+                msgids = get_msgids()
                 prerender_msg_or_quit()
         elif key in keys.r_getmsg and size == 0 and msgid:
             try:
@@ -1018,12 +1017,12 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
         elif key in keys.r_to_out and drafts:
             draft_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
             os.rename(draft_msg, draft_msg.replace(".draft", ".out"))
-            msgids = get_out_msgids(drafts)
+            msgids = get_msgids()
             prerender_msg_or_quit()
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
             out_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
             os.rename(out_msg, out_msg.replace(".out", ".draft"))
-            msgids = get_out_msgids(drafts)
+            msgids = get_msgids()
             prerender_msg_or_quit()
         elif key in keys.r_list and not out and not drafts:
             data = api.get_msg_list_data(echo.name)
