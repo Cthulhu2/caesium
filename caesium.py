@@ -14,7 +14,7 @@ import sys
 import textwrap
 import traceback
 from shutil import copyfile
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from core import (
     __version__, parser, client, config, ui, utils, search, outgoing,
@@ -466,27 +466,28 @@ class EchoSelectorScreen:
             self.reload_echoareas()
 
 
-def draw_reader(echo: str, msgid, out, status_text=None):
+def draw_reader(scr, echo: str, msgid, out, status_text=None):
+    h, w = scr.getmaxyx()
     color = get_color(UI_BORDER)
-    ui.stdscr.addstr(0, 0, "─" * ui.WIDTH, color)
-    ui.stdscr.addstr(4, 0, "─" * ui.WIDTH, color)
+    scr.addstr(0, 0, "─" * w, color)
+    scr.addstr(4, 0, "─" * w, color)
     if out:
-        ui.draw_title(ui.stdscr, 0, 0, echo)
+        ui.draw_title(scr, 0, 0, echo)
         if msgid.endswith(".out"):
             ns = "не отправлено"
-            ui.draw_title(ui.stdscr, 4, ui.WIDTH - len(ns) - 2, ns)
+            ui.draw_title(scr, 4, w - len(ns) - 2, ns)
     else:
-        if ui.WIDTH >= 80:
-            ui.draw_title(ui.stdscr, 0, 0, echo + " / " + msgid)
+        if w >= 80:
+            ui.draw_title(scr, 0, 0, echo + " / " + msgid)
         else:
-            ui.draw_title(ui.stdscr, 0, 0, echo)
+            ui.draw_title(scr, 0, 0, echo)
     for i in range(1, 4):
-        ui.stdscr.addstr(i, 0, " " * ui.WIDTH, 1)
+        scr.addstr(i, 0, " " * w, 1)
     color = get_color(UI_TITLES)
-    ui.stdscr.addstr(1, 1, "От:   ", color)
-    ui.stdscr.addstr(2, 1, "Кому: ", color)
-    ui.stdscr.addstr(3, 1, "Тема: ", color)
-    ui.draw_status_bar(ui.stdscr, text=status_text)
+    scr.addstr(1, 1, "От:   ", color)
+    scr.addstr(2, 1, "Кому: ", color)
+    scr.addstr(3, 1, "Тема: ", color)
+    ui.draw_status_bar(scr, text=status_text)
 
 
 def call_editor(node_, out=''):
@@ -592,6 +593,12 @@ class EchoReader:
     tokens: List[parser.Token]  # message bode tokens
     scroll: ui.ScrollCalc  # message body scroll calculator
     t2l: List[parser.RangeLines]  # tokens rendered lines range
+    _msgid: Optional[str] = None  # non-current-echo message id, navigated by ii-link
+    qs: Optional[search.QuickSearch] = None  # quick search helper
+    #
+    go: bool = True  # show reader
+    done: bool = False  # close app
+    next_echo: Union[str, bool] = False  # jump to next echo after reader closed
 
     def __init__(self, echo: config.Echo, msgn, archive, counts):
         self.echo = echo
@@ -604,13 +611,8 @@ class EchoReader:
         self.cur_node = cfg.nodes[node]  # type: config.Node
         self.msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
         self.size = 0
-        self.go = True
-        self.done = False
         self.repto = ""
         self.stack = []
-        self.msgid = None  # non-current-echo message id, navigated by ii-link
-        self.qs = None  # type: Optional[search.QuickSearch]
-        self.next_echo = False
         self.msgids = self.get_msgids()
         self.msgn = min(msgn, len(self.msgids) - 1)
         if self.msgids:
@@ -618,6 +620,9 @@ class EchoReader:
             if self.msgn < 0:
                 self.next_echo = True
         self.prerender()
+
+    def msgid(self):
+        return self._msgid or self.msgids[self.msgn]
 
     def get_msgids(self):
         if self.out:
@@ -630,11 +635,11 @@ class EchoReader:
             return api.get_echo_msgids(self.echo.name)
 
     def read_cur_msg(self):  # type: () -> (List[str], int)
-        self.msgid = None
+        self._msgid = None
         if self.out:
-            self.msg, self.size = outgoing.read_out_msg(self.msgids[self.msgn], self.cur_node)
+            self.msg, self.size = outgoing.read_out_msg(self.msgid(), self.cur_node)
         else:
-            self.msg, self.size = api.read_msg(self.msgids[self.msgn], self.echo.name)
+            self.msg, self.size = api.read_msg(self.msgid(), self.echo.name)
 
     def read_msg_skip_twit(self, increment):
         self.read_cur_msg()
@@ -688,7 +693,7 @@ class EchoReader:
             self.prerender_msg_or_quit()
         else:
             self.msg, self.size = api.find_msg(link[5:])
-            self.msgid = link[5:]
+            self._msgid = link[5:]
             self.prerender()
             if not self.stack or self.stack[-1] != self.msgn:
                 self.stack.append(self.msgn)
@@ -715,35 +720,9 @@ class EchoReader:
     def show(self):
         while self.go:
             if self.msgids:
-                draw_reader(self.msg[1], self.msgid or self.msgids[self.msgn], self.out,
-                            status_text=utils.msgn_status(self.msgids, self.msgn, ui.WIDTH))
-                if self.echo.desc and ui.WIDTH >= 80:
-                    ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(self.echo.desc), self.echo.desc)
-                color = get_color(UI_TEXT)
-                if not self.out:
-                    if ui.WIDTH >= 80:
-                        ui.stdscr.addstr(1, 7, self.msg[3] + " (" + self.msg[4] + ")", color)
-                    else:
-                        ui.stdscr.addstr(1, 7, self.msg[3], color)
-                    msgtime = utils.msg_strftime(self.msg[2], ui.WIDTH)
-                    ui.stdscr.addstr(1, ui.WIDTH - len(msgtime) - 1, msgtime, color)
-                elif self.cur_node.to:
-                    ui.stdscr.addstr(1, 7, self.cur_node.to[0], color)
-                ui.stdscr.addstr(2, 7, self.msg[5], color)
-                ui.stdscr.addstr(3, 7, self.msg[6][:ui.WIDTH - 8], color)
-                s_size = utils.msg_strfsize(self.size)
-                ui.draw_title(ui.stdscr, 4, 0, s_size)
-                tags = self.msg[0].split("/")
-                if "repto" in tags and 36 + len(s_size) < ui.WIDTH:
-                    self.repto = tags[tags.index("repto") + 1].strip()
-                    ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + self.repto)
-                else:
-                    self.repto = ""
-                ui.render_body(ui.stdscr, self.tokens, self.scroll.pos, self.qs)
-                if self.scroll.is_scrollable:
-                    ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, self.scroll)
+                self.draw(ui.stdscr)
             else:
-                draw_reader(self.echo.name, "", self.out)
+                draw_reader(ui.stdscr, self.echo.name, "", self.out)
             if self.qs:
                 self.qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
                              get_color(UI_STATUS))
@@ -761,26 +740,7 @@ class EchoReader:
                     tnum, _ = parser.find_visible_token(self.tokens, self.scroll.pos)
                     self.qs.search(self.qs.query, tnum)
             elif self.qs:
-                if key in keys.s_csearch:
-                    self.qs = None
-                    curses.curs_set(0)
-                else:
-                    pager = search.Pager(
-                        parser.find_visible_token(self.tokens, self.scroll.pos)[0],
-                        lambda: parser.find_visible_token(self.tokens, self.scroll.pos + self.scroll.view)[0],
-                        lambda: parser.find_visible_token(self.tokens, self.scroll.pos)[0] - 1)
-                    self.qs.on_key_pressed_search(key, ks, pager)
-                    if self.qs.result:
-                        tidx = self.qs.result[self.qs.idx]
-                        off, _ = self.qs.matches[self.qs.idx]
-                        if key in keys.s_home or key in keys.s_end:
-                            self.scroll.ensure_visible(self.t2l[tidx].start + off, center=True)
-                        elif key in keys.s_npage:
-                            self.scroll.ensure_visible(self.t2l[tidx].start + off + self.scroll.view - 1)
-                        elif key in keys.s_ppage:
-                            self.scroll.ensure_visible(self.t2l[tidx].start + off - self.scroll.view + 1)
-                        else:
-                            self.scroll.ensure_visible(self.t2l[tidx].start + off)
+                self.on_key_pressed_qs(ks, key)
             elif key in keys.s_osearch:
                 ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
                 curses.curs_set(1)
@@ -800,6 +760,59 @@ class EchoReader:
             pickle.dump(self.counts.lasts, f)
         ui.stdscr.clear()
         return not self.done, self.next_echo
+
+    def draw(self, scr):
+        h, w = scr.getmaxyx()
+        draw_reader(scr, self.msg[1], self.msgid(), self.out,
+                    status_text=utils.msgn_status(self.msgids, self.msgn, w))
+        if self.echo.desc and w >= 80:
+            ui.draw_title(scr, 0, w - 2 - len(self.echo.desc), self.echo.desc)
+        color = get_color(UI_TEXT)
+        if not self.out:
+            if w >= 80:
+                scr.addstr(1, 7, self.msg[3] + " (" + self.msg[4] + ")", color)
+            else:
+                scr.addstr(1, 7, self.msg[3], color)
+            msgtime = utils.msg_strftime(self.msg[2], w)
+            scr.addstr(1, w - len(msgtime) - 1, msgtime, color)
+        elif self.cur_node.to:
+            scr.addstr(1, 7, self.cur_node.to[0], color)
+        scr.addstr(2, 7, self.msg[5], color)
+        scr.addstr(3, 7, self.msg[6][:w - 8], color)
+        s_size = utils.msg_strfsize(self.size)
+        ui.draw_title(scr, 4, 0, s_size)
+        tags = self.msg[0].split("/")
+        if "repto" in tags and 36 + len(s_size) < w:
+            self.repto = tags[tags.index("repto") + 1].strip()
+            ui.draw_title(scr, 4, len(s_size) + 3, "Ответ на " + self.repto)
+        else:
+            self.repto = ""
+        ui.render_body(scr, self.tokens, self.scroll.pos, self.qs)
+        if self.scroll.is_scrollable:
+            ui.draw_scrollbarV(scr, 5, w - 1, self.scroll)
+
+    def on_key_pressed_qs(self, ks, key):
+        if key in keys.s_csearch:
+            self.qs = None
+            curses.curs_set(0)
+            return
+        #
+        pager = search.Pager(
+            parser.find_visible_token(self.tokens, self.scroll.pos)[0],
+            lambda: parser.find_visible_token(self.tokens, self.scroll.pos + self.scroll.view)[0],
+            lambda: parser.find_visible_token(self.tokens, self.scroll.pos)[0] - 1)
+        self.qs.on_key_pressed_search(key, ks, pager)
+        if self.qs.result:
+            tidx = self.qs.result[self.qs.idx]
+            off, _ = self.qs.matches[self.qs.idx]
+            if key in keys.s_home or key in keys.s_end:
+                self.scroll.ensure_visible(self.t2l[tidx].start + off, center=True)
+            elif key in keys.s_npage:
+                self.scroll.ensure_visible(self.t2l[tidx].start + off + self.scroll.view - 1)
+            elif key in keys.s_ppage:
+                self.scroll.ensure_visible(self.t2l[tidx].start + off - self.scroll.view + 1)
+            else:
+                self.scroll.ensure_visible(self.t2l[tidx].start + off)
 
     def on_key_pressed(self, key):
         if key in keys.r_prev and self.msgn > 0 and self.msgids:
@@ -874,15 +887,15 @@ class EchoReader:
                     f.write(t.read())
             call_editor(self.cur_node)
         elif key in keys.r_save and not self.out:
-            save_message_to_file(self.msgid or self.msgids[self.msgn], self.msg[1])
+            save_message_to_file(self.msgid(), self.msg[1])
         elif key in keys.r_favorites and not self.out:
-            saved = api.save_to_favorites(self.msgid or self.msgids[self.msgn], self.msg)
+            saved = api.save_to_favorites(self.msgid(), self.msg)
             ui.draw_message_box("Подождите", False)
             self.counts.get_counts(self.cur_node, False)
             ui.show_message_box("Сообщение добавлено в избранные" if saved else
                                 "Сообщение уже есть в избранных")
         elif key in keys.r_quote and not any((self.archive, self.out)) and self.msgids:
-            quote_msg(self.msgid or self.msgids[self.msgn], self.msg)
+            quote_msg(self.msgid(), self.msg)
             call_editor(self.cur_node)
         elif key in keys.r_info:
             subj = textwrap.fill(self.msg[6], ui.WIDTH * 0.75,
@@ -910,12 +923,12 @@ class EchoReader:
                 os.remove(outgoing.directory(self.cur_node) + self.msgids[self.msgn])
                 self.msgids = self.get_msgids()
                 self.prerender_msg_or_quit()
-        elif key in keys.r_getmsg and self.size == 0 and self.msgid:
+        elif key in keys.r_getmsg and self.size == 0 and self._msgid:
             try:
                 ui.draw_message_box("Подождите", False)
-                get_msg(self.msgid)
+                get_msg(self._msgid)
                 self.counts.get_counts(self.cur_node, True)
-                api.find_msg(self.msgid)
+                self.msg, self.size = api.find_msg(self._msgid)
                 self.prerender()
             except Exception as ex:
                 ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
