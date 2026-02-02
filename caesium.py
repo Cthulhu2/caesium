@@ -17,7 +17,8 @@ from shutil import copyfile
 from typing import List, Optional
 
 from core import (
-    __version__, parser, client, config, ui, utils, FEAT_X_C, FEAT_U_E, search
+    __version__, parser, client, config, ui, utils, search, outgoing,
+    FEAT_X_C, FEAT_U_E,
 )
 from core.config import (
     get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
@@ -49,85 +50,32 @@ splash = ["▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
           "           Cthulhu Fhtagn"]
 
 
-def check_directories():
-    if not os.path.exists("downloads"):
-        os.mkdir("downloads")
-    if not os.path.exists("out"):
-        os.mkdir("out")
-    for n in cfg.nodes:
-        if not os.path.exists("out/" + n.nodename):
-            os.mkdir("out/" + n.nodename)
-
-
 #
 # Взаимодействие с нодой
 #
-def save_out(extension):
-    with codecs.open("temp", "r", "utf-8") as f:
-        new = f.read().strip().replace("\r", "").split("\n")
-    if len(new) <= 1:
-        os.remove("temp")
-    else:
-        with codecs.open(outcount() + extension, "w", "utf-8") as f:
-            f.write("\n".join(new))
-        os.remove("temp")
-
-
-def resave_out(filename):
-    with codecs.open("temp", "r", "utf-8") as f:
-        new = f.read().strip().replace("\r", "").split("\n")
-    if len(new) <= 1:
-        os.remove("temp")
-    else:
-        out_dir = "out/" + cfg.nodes[node].nodename + "/"
-        with codecs.open(out_dir + filename, "w", "utf-8") as f:
-            f.write("\n".join(new))
-        os.remove("temp")
-
-
-def outcount():
-    outpath = "out/" + cfg.nodes[node].nodename
-    num = 0
-    for x in os.listdir(outpath):
-        s_num = x.split(".", maxsplit=1)[0]
-        if s_num.isdigit():
-            num = max(num, int(s_num))
-    return outpath + "/%s" % str(num + 1).zfill(5)
-
-
-def get_out_length(drafts=False):
-    node_dir = "out/" + cfg.nodes[node].nodename
-    if drafts:
-        return len([f for f in sorted(os.listdir(node_dir))
-                    if f.endswith(".draft")]) - 1
-    else:
-        return len([f for f in sorted(os.listdir(node_dir))
-                    if f.endswith(".out") or f.endswith(".outmsg")]) - 1
-
-
 def make_toss(node_):  # type: (config.Node) -> None
-    node_dir = "out/" + node_.nodename
+    node_dir = outgoing.directory(node_)
     lst = [x for x in os.listdir(node_dir)
            if x.endswith(".out")]
     for msg in lst:
-        with codecs.open(node_dir + "/%s" % msg, "r", "utf-8") as f:
+        with codecs.open(node_dir + "%s" % msg, "r", "utf-8") as f:
             text_raw = f.read()
         text_b64 = base64.b64encode(text_raw.encode("utf-8")).decode("utf-8")
-        with codecs.open(node_dir + "/%s.toss" % msg, "w", "utf-8") as f:
+        with codecs.open(node_dir + "%s.toss" % msg, "w", "utf-8") as f:
             f.write(text_b64)
-        os.rename(node_dir + "/%s" % msg,
-                  node_dir + "/%s%s" % (msg, "msg"))
+        os.rename(node_dir + "%s" % msg,
+                  node_dir + "%s%s" % (msg, "msg"))
 
 
 def send_mail(node_):  # type: (config.Node) -> None
-    lst = [x for x in sorted(os.listdir("out/" + node_.nodename))
+    node_dir = outgoing.directory(node_)
+    lst = [x for x in sorted(os.listdir(node_dir))
            if x.endswith(".toss")]
     total = str(len(lst))
     try:
-        node_dir = "out/" + node_.nodename
         for n, msg in enumerate(lst, start=1):
             print("\rОтправка сообщения: " + str(n) + "/" + total, end="")
-            msg_toss = node_dir + "/%s" % msg
+            msg_toss = node_dir + msg
             with codecs.open(msg_toss, "r", "utf-8") as f:
                 text = f.read()
             #
@@ -492,12 +440,12 @@ class EchoSelectorScreen:
                 self.next_echo = False
 
         elif key in keys.s_out:
-            out_length = get_out_length(drafts=False)
+            out_length = outgoing.get_out_length(cfg.nodes[node], drafts=False)
             if out_length > -1:
                 self.go, self.next_echo = echo_reader(
                     config.ECHO_OUT, out_length, self.archive, self.counts)
         elif key in keys.s_drafts:
-            out_length = get_out_length(drafts=True)
+            out_length = outgoing.get_out_length(cfg.nodes[node], drafts=True)
             if out_length > -1:
                 self.go, self.next_echo = echo_reader(
                     config.ECHO_DRAFTS, out_length, self.archive, self.counts)
@@ -516,26 +464,6 @@ class EchoSelectorScreen:
             config.load_colors(cfg.theme)
             node = 0
             self.reload_echoareas()
-
-
-def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
-    node_dir = "out/" + node_.nodename
-    with open(node_dir + "/" + msgid, "r") as f:
-        temp = f.read().splitlines()
-    if len(temp) < 8:
-        temp += [""] * (8 - len(temp))
-    msg = ["",
-           temp[0],
-           "",
-           "",
-           "",
-           temp[1],
-           temp[2]]
-    for line in temp[3:]:
-        if not (line.startswith("@repto:")):
-            msg.append(line)
-    size = os.stat(node_dir + "/" + msgid).st_size
-    return msg, size
 
 
 def draw_reader(echo: str, msgid, out, status_text=None):
@@ -561,7 +489,7 @@ def draw_reader(echo: str, msgid, out, status_text=None):
     ui.draw_status_bar(ui.stdscr, text=status_text)
 
 
-def call_editor(out=''):
+def call_editor(node_, out=''):
     ui.terminate_curses()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
     p = subprocess.Popen(cfg.editor + " ./temp", shell=True)
@@ -573,18 +501,18 @@ def call_editor(out=''):
                             ).show()
         if d == 2:  # "Сохранить как черновик"
             if not out:
-                save_out(extension=".draft")
+                outgoing.save_out(node_, extension=".draft")
             else:
-                resave_out(out.replace(".out", ".draft"))
+                outgoing.resave_out(node_, out.replace(".out", ".draft"))
                 if out.endswith(".out"):
-                    os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
+                    os.remove(outgoing.directory(node_) + out)
         elif d == 1:  # "Сохранить в исходящие"
             if not out:
-                save_out(extension=".out")
+                outgoing.save_out(node_, extension=".out")
             else:
-                resave_out(out.replace(".draft", ".out"))
+                outgoing.resave_out(node_, out.replace(".draft", ".out"))
                 if out.endswith(".draft"):
-                    os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
+                    os.remove(outgoing.directory(node_) + out)
     else:
         os.remove("temp")
 
@@ -599,19 +527,6 @@ def save_message_to_file(msgid, echoarea):
         f.write("Тема: " + msg[6] + "\n")
         f.write("\n".join(msg[7:]))
     ui.show_message_box("Сообщение сохранено в файл\n" + filepath)
-
-
-def get_out_msgids(drafts=False):
-    msgids = []
-    node_dir = "out/" + cfg.nodes[node].nodename
-    if os.path.exists(node_dir):
-        if drafts:
-            msgids = [f for f in sorted(os.listdir(node_dir))
-                      if f.endswith(".draft")]
-        else:
-            msgids = [f for f in sorted(os.listdir(node_dir))
-                      if f.endswith(".out") or f.endswith(".outmsg")]
-    return msgids
 
 
 def quote_msg(msgid, msg):
@@ -680,19 +595,20 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
     drafts = (echo == config.ECHO_DRAFTS)
     favorites = (echo == config.ECHO_FAVORITES)
     carbonarea = (echo == config.ECHO_CARBON)
+    cur_node = cfg.nodes[node]  # type: config.Node
 
     def get_msgids():
         if out:
-            return get_out_msgids(drafts)
+            return outgoing.get_out_msgids(cur_node, drafts)
         elif favorites:
             return api.get_favorites_list()
         elif carbonarea:
             return api.get_carbonarea()
         else:
             return api.get_echo_msgids(echo.name)
+
     msgids = get_msgids()
     msgn = min(msgn, len(msgids) - 1)
-    cur_node = cfg.nodes[node]  # type: config.Node
     msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
     size = 0
     go = True
@@ -707,7 +623,7 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
         nonlocal msgid
         msgid = None
         if out:
-            return read_out_msg(msgids[msgn], cur_node)
+            return outgoing.read_out_msg(msgids[msgn], cur_node)
         else:
             return api.read_msg(msgids[msgn], echo.name)
 
@@ -931,20 +847,18 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                     f.write("All\n")
                     f.write("No subject\n\n")
                     f.write(t.read())
-            call_editor()
+            call_editor(cur_node)
         elif key in keys.r_save and not out:
             save_message_to_file(msgid or msgids[msgn], msg[1])
         elif key in keys.r_favorites and not out:
             saved = api.save_to_favorites(msgid or msgids[msgn], msg)
             ui.draw_message_box("Подождите", False)
             counts.get_counts(cur_node, False)
-            if saved:
-                ui.show_message_box("Сообщение добавлено в избранные")
-            else:
-                ui.show_message_box("Сообщение уже есть в избранных")
+            ui.show_message_box("Сообщение добавлено в избранные" if saved else
+                                "Сообщение уже есть в избранных")
         elif key in keys.r_quote and not any((archive, out)) and msgids:
             quote_msg(msgid or msgids[msgn], msg)
-            call_editor()
+            call_editor(cur_node)
         elif key in keys.r_info:
             subj = textwrap.fill(msg[6], ui.WIDTH * 0.75,
                                  subsequent_indent="      ")
@@ -952,8 +866,8 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                                 % (msgid or msgids[msgn], msg[4], subj))
         elif key in keys.o_edit and out:
             if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
-                copyfile("out/" + cur_node.nodename + "/" + msgids[msgn], "temp")
-                call_editor(msgids[msgn])
+                copyfile(outgoing.directory(cur_node) + msgids[msgn], "temp")
+                call_editor(cur_node, msgids[msgn])
                 msgids = get_msgids()
                 prerender_msg_or_quit()
             else:
@@ -968,7 +882,7 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
         elif key in keys.f_delete and drafts and msgids:
             if ui.SelectWindow("Удалить черновик '%s'?" % msgids[msgn],
                                ["Нет", "Да"]).show() == 2:
-                os.remove("out/" + cur_node.nodename + "/" + msgids[msgn])
+                os.remove(outgoing.directory(cur_node) + msgids[msgn])
                 msgids = get_msgids()
                 prerender_msg_or_quit()
         elif key in keys.r_getmsg and size == 0 and msgid:
@@ -998,12 +912,12 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                     open_link(links[i - 1])
             ui.stdscr.clear()
         elif key in keys.r_to_out and drafts:
-            draft_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
+            draft_msg = outgoing.directory(cur_node) + msgids[msgn]
             os.rename(draft_msg, draft_msg.replace(".draft", ".out"))
             msgids = get_msgids()
             prerender_msg_or_quit()
         elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            out_msg = "out/" + cur_node.nodename + "/" + msgids[msgn]
+            out_msg = outgoing.directory(cur_node) + msgids[msgn]
             os.rename(out_msg, out_msg.replace(".out", ".draft"))
             msgids = get_msgids()
             prerender_msg_or_quit()
@@ -1058,8 +972,12 @@ elif cfg.db == "sqlite":
     import api.sqlite as api
 else:
     raise Exception("Unsupported DB API :: " + cfg.db)
+# create directories
 api.init()
-check_directories()
+if not os.path.exists("downloads"):
+    os.mkdir("downloads")
+outgoing.init(cfg)
+#
 if cfg.keys == "default":
     import keys.default as keys
 elif cfg.keys == "android":
