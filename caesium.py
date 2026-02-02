@@ -552,7 +552,7 @@ def quote_msg(msgid, msg):
                 qq = parser.quote_template.match(line)
                 if qq:
                     quoter = ">"
-                    if line[qq.span()[1]] != " ":
+                    if len(line) > qq.span()[1] and line[qq.span()[1]] != " ":
                         quoter += " "
                     f.write("\n" + line[:qq.span()[1]]
                             + quoter
