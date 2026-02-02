@@ -131,6 +131,30 @@ def draw_status_bar(scr, text=None):  # type: (curses.window, str) -> None
         scr.addstr(h - 1, w - 10, "~", color)
 
 
+def draw_reader(scr, echo: str, msgid, out, status_text=None):
+    h, w = scr.getmaxyx()
+    color = get_color(UI_BORDER)
+    scr.addstr(0, 0, "─" * w, color)
+    scr.addstr(4, 0, "─" * w, color)
+    if out:
+        draw_title(scr, 0, 0, echo)
+        if msgid.endswith(".out"):
+            ns = "не отправлено"
+            draw_title(scr, 4, w - len(ns) - 2, ns)
+    else:
+        if w >= 80:
+            draw_title(scr, 0, 0, echo + " / " + msgid)
+        else:
+            draw_title(scr, 0, 0, echo)
+    for i in range(1, 4):
+        scr.addstr(i, 0, " " * w, 1)
+    color = get_color(UI_TITLES)
+    scr.addstr(1, 1, "От:   ", color)
+    scr.addstr(2, 1, "Кому: ", color)
+    scr.addstr(3, 1, "Тема: ", color)
+    draw_status_bar(scr, text=status_text)
+
+
 class ScrollCalc:
     content: int  # scrollable content length
     view: int  # scroll view length

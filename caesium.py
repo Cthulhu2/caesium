@@ -21,7 +21,7 @@ from core import (
     FEAT_X_C, FEAT_U_E,
 )
 from core.config import (
-    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS, UI_TITLES
+    get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS
 )
 
 # TODO: Add http/https/socks proxy support
@@ -466,30 +466,6 @@ class EchoSelectorScreen:
             self.reload_echoareas()
 
 
-def draw_reader(scr, echo: str, msgid, out, status_text=None):
-    h, w = scr.getmaxyx()
-    color = get_color(UI_BORDER)
-    scr.addstr(0, 0, "─" * w, color)
-    scr.addstr(4, 0, "─" * w, color)
-    if out:
-        ui.draw_title(scr, 0, 0, echo)
-        if msgid.endswith(".out"):
-            ns = "не отправлено"
-            ui.draw_title(scr, 4, w - len(ns) - 2, ns)
-    else:
-        if w >= 80:
-            ui.draw_title(scr, 0, 0, echo + " / " + msgid)
-        else:
-            ui.draw_title(scr, 0, 0, echo)
-    for i in range(1, 4):
-        scr.addstr(i, 0, " " * w, 1)
-    color = get_color(UI_TITLES)
-    scr.addstr(1, 1, "От:   ", color)
-    scr.addstr(2, 1, "Кому: ", color)
-    scr.addstr(3, 1, "Тема: ", color)
-    ui.draw_status_bar(scr, text=status_text)
-
-
 def call_editor(node_, out=''):
     ui.terminate_curses()
     h = hashlib.sha1(str.encode(open("temp", "r", ).read())).hexdigest()
@@ -528,39 +504,6 @@ def save_message_to_file(msgid, echoarea):
         f.write("Тема: " + msg[6] + "\n")
         f.write("\n".join(msg[7:]))
     ui.show_message_box("Сообщение сохранено в файл\n" + filepath)
-
-
-def quote_msg(msgid, msg):
-    with open("template.txt", "r") as t:
-        with open("temp", "w") as f:
-            subj = msg[6]
-            if not msg[6].startswith("Re:"):
-                subj = "Re: " + subj
-            f.write(msg[1] + "\n")
-            f.write(msg[3] + "\n")
-            f.write(subj + "\n\n")
-            f.write("@repto:" + msgid + "\n")
-            #
-            if cfg.oldquote:
-                author = ""
-            elif " " not in msg[3]:
-                author = msg[3]
-            else:
-                author = "".join(map(lambda word: word[0], msg[3].split(" ")))
-            for line in msg[8:]:
-                if line.startswith("+++") or not line.strip():
-                    continue  # skip sign and empty lines
-                qq = parser.quote_template.match(line)
-                if qq:
-                    quoter = ">"
-                    if len(line) > qq.span()[1] and line[qq.span()[1]] != " ":
-                        quoter += " "
-                    f.write("\n" + line[:qq.span()[1]]
-                            + quoter
-                            + line[qq.span()[1]:])
-                else:
-                    f.write("\n" + author + "> " + line)
-            f.write(t.read())
 
 
 def get_msg(msgid):
@@ -657,12 +600,27 @@ class EchoReader:
         self.scroll = ui.ScrollCalc(height, view, pos)
 
     def prerender_msg_or_quit(self):
+        self.msgids = self.get_msgids()
         if self.msgids:
             self.msgn = min(self.msgn, len(self.msgids) - 1)
             self.read_cur_msg()
             self.prerender()
         else:
             self.go = False
+
+    def show_open_link_dialog(self, tokens):
+        links = list(filter(lambda it: it.type == parser.TT.URL, tokens))
+        if len(links) == 1:
+            self.open_link(links[0])
+        elif links:
+            win = ui.SelectWindow("Выберите ссылку", list(map(
+                lambda it: (it.url + " " + (it.title or "")).strip(),
+                links)))
+            i = win.show()
+            if win.resized:
+                self.prerender(self.scroll.pos)
+            if i:
+                self.open_link(links[i - 1])
 
     def open_link(self, token):  # type: (parser.Token) -> None
         link = token.url
@@ -719,10 +677,11 @@ class EchoReader:
 
     def show(self):
         while self.go:
+            ui.stdscr.clear()
             if self.msgids:
                 self.draw(ui.stdscr)
             else:
-                draw_reader(ui.stdscr, self.echo.name, "", self.out)
+                ui.draw_reader(ui.stdscr, self.echo.name, "", self.out)
             if self.qs:
                 self.qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
                              get_color(UI_STATUS))
@@ -763,8 +722,8 @@ class EchoReader:
 
     def draw(self, scr):
         h, w = scr.getmaxyx()
-        draw_reader(scr, self.msg[1], self.msgid(), self.out,
-                    status_text=utils.msgn_status(self.msgids, self.msgn, w))
+        ui.draw_reader(scr, self.msg[1], self.msgid(), self.out,
+                       status_text=utils.msgn_status(self.msgids, self.msgn, w))
         if self.echo.desc and w >= 80:
             ui.draw_title(scr, 0, w - 2 - len(self.echo.desc), self.echo.desc)
         color = get_color(UI_TEXT)
@@ -844,15 +803,15 @@ class EchoReader:
             self.msgn = self.stack.pop()
             self.read_cur_msg()
             self.prerender()
-        elif key in keys.r_up and self.msgids:
+        elif key in keys.r_up:
             self.scroll.pos -= 1
-        elif key in keys.r_ppage and self.msgids:
+        elif key in keys.r_ppage:
             self.scroll.pos -= self.scroll.view
-        elif key in keys.r_npage and self.msgids:
+        elif key in keys.r_npage:
             self.scroll.pos += self.scroll.view
-        elif key in keys.r_home and self.msgids:
+        elif key in keys.r_home:
             self.scroll.pos = 0
-        elif key in keys.r_mend and self.msgids:
+        elif key in keys.r_mend:
             self.scroll.pos = self.scroll.content - self.scroll.view
         elif key in keys.r_ukeys:
             if not self.msgids or self.scroll.pos >= self.scroll.content - self.scroll.view:
@@ -866,7 +825,7 @@ class EchoReader:
                     self.prerender()
             else:
                 self.scroll.pos += self.scroll.view
-        elif key in keys.r_down and self.msgids:
+        elif key in keys.r_down:
             self.scroll.pos += 1
         elif key in keys.r_begin and self.msgids:
             self.msgn = 0
@@ -879,12 +838,7 @@ class EchoReader:
             self.read_cur_msg()
             self.prerender()
         elif key in keys.r_ins and not any((self.archive, self.out, self.favorites, self.carbonarea)):
-            with open("template.txt", "r") as t:
-                with open("temp", "w") as f:
-                    f.write(self.echo.name + "\n")
-                    f.write("All\n")
-                    f.write("No subject\n\n")
-                    f.write(t.read())
+            outgoing.new_msg(self.echo.name)
             call_editor(self.cur_node)
         elif key in keys.r_save and not self.out:
             save_message_to_file(self.msgid(), self.msg[1])
@@ -895,33 +849,29 @@ class EchoReader:
             ui.show_message_box("Сообщение добавлено в избранные" if saved else
                                 "Сообщение уже есть в избранных")
         elif key in keys.r_quote and not any((self.archive, self.out)) and self.msgids:
-            quote_msg(self.msgid(), self.msg)
+            outgoing.quote_msg(self.msgid(), self.msg, cfg.oldquote)
             call_editor(self.cur_node)
         elif key in keys.r_info:
             subj = textwrap.fill(self.msg[6], ui.WIDTH * 0.75,
                                  subsequent_indent="      ")
             ui.show_message_box("id:   %s\naddr: %s\nsubj: %s"
-                                % (self.msgid or self.msgids[self.msgn], self.msg[4], subj))
+                                % (self.msgid(), self.msg[4], subj))
         elif key in keys.o_edit and self.out:
-            if self.msgids[self.msgn].endswith(".out") or self.msgids[self.msgn].endswith(".draft"):
-                copyfile(outgoing.directory(self.cur_node) + self.msgids[self.msgn], "temp")
-                call_editor(self.cur_node, self.msgids[self.msgn])
-                self.msgids = self.get_msgids()
+            if self.msgid().endswith(".out") or self.msgid().endswith(".draft"):
+                copyfile(outgoing.directory(self.cur_node) + self.msgid(), "temp")
+                call_editor(self.cur_node, self.msgid())
                 self.prerender_msg_or_quit()
             else:
                 ui.show_message_box("Сообщение уже отправлено")
-            ui.stdscr.clear()
         elif key in keys.f_delete and self.favorites and self.msgids:
             ui.draw_message_box("Подождите", False)
-            api.remove_from_favorites(self.msgids[self.msgn])
+            api.remove_from_favorites(self.msgid())
             self.counts.get_counts(self.cur_node, False)
-            self.msgids = self.get_msgids()
             self.prerender_msg_or_quit()
         elif key in keys.f_delete and self.drafts and self.msgids:
-            if ui.SelectWindow("Удалить черновик '%s'?" % self.msgids[self.msgn],
+            if ui.SelectWindow("Удалить черновик '%s'?" % self.msgid(),
                                ["Нет", "Да"]).show() == 2:
-                os.remove(outgoing.directory(self.cur_node) + self.msgids[self.msgn])
-                self.msgids = self.get_msgids()
+                os.remove(outgoing.directory(self.cur_node) + self.msgid())
                 self.prerender_msg_or_quit()
         elif key in keys.r_getmsg and self.size == 0 and self._msgid:
             try:
@@ -932,31 +882,15 @@ class EchoReader:
                 self.prerender()
             except Exception as ex:
                 ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
-            ui.stdscr.clear()
         elif key in keys.r_links:
-            links = list(filter(lambda it: it.type == parser.TT.URL,
-                                self.tokens))
-            if len(links) == 1:
-                self.open_link(links[0])
-            elif links:
-                win = ui.SelectWindow("Выберите ссылку", list(map(
-                    lambda it: (it.url + " " + (it.title or "")).strip(),
-                    links)))
-                i = win.show()
-                if win.resized:
-                    self.prerender(self.scroll.pos)
-                if i:
-                    self.open_link(links[i - 1])
-            ui.stdscr.clear()
+            self.show_open_link_dialog(self.tokens)
         elif key in keys.r_to_out and self.drafts:
-            draft_msg = outgoing.directory(self.cur_node) + self.msgids[self.msgn]
+            draft_msg = outgoing.directory(self.cur_node) + self.msgid()
             os.rename(draft_msg, draft_msg.replace(".draft", ".out"))
-            self.msgids = self.get_msgids()
             self.prerender_msg_or_quit()
-        elif key in keys.r_to_drafts and self.out and not self.drafts and self.msgids[self.msgn].endswith(".out"):
-            out_msg = outgoing.directory(self.cur_node) + self.msgids[self.msgn]
+        elif key in keys.r_to_drafts and self.out and not self.drafts and self.msgid().endswith(".out"):
+            out_msg = outgoing.directory(self.cur_node) + self.msgid()
             os.rename(out_msg, out_msg.replace(".out", ".draft"))
-            self.msgids = self.get_msgids()
             self.prerender_msg_or_quit()
         elif key in keys.r_list and not self.out and not self.drafts:
             data = api.get_msg_list_data(self.echo.name)

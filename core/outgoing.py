@@ -2,7 +2,7 @@ import codecs
 import os
 from typing import List
 
-from core import config
+from core import config, parser
 
 storage = ""
 
@@ -100,3 +100,45 @@ def get_out_length(node, drafts=False):
     else:
         return len([f for f in os.listdir(node_dir)
                     if f.endswith(".out") or f.endswith(".outmsg")]) - 1
+
+
+def new_msg(echo):
+    with open("template.txt", "r") as t:
+        with open("temp", "w") as f:
+            f.write(echo + "\n")
+            f.write("All\n")
+            f.write("No subject\n\n")
+            f.write(t.read())
+
+
+def quote_msg(msgid, msg, oldquote):
+    with open("template.txt", "r") as t:
+        with open("temp", "w") as f:
+            subj = msg[6]
+            if not msg[6].startswith("Re:"):
+                subj = "Re: " + subj
+            f.write(msg[1] + "\n")
+            f.write(msg[3] + "\n")
+            f.write(subj + "\n\n")
+            f.write("@repto:" + msgid + "\n")
+            #
+            if oldquote:
+                author = ""
+            elif " " not in msg[3]:
+                author = msg[3]
+            else:
+                author = "".join(map(lambda word: word[0], msg[3].split(" ")))
+            for line in msg[8:]:
+                if line.startswith("+++") or not line.strip():
+                    continue  # skip sign and empty lines
+                qq = parser.quote_template.match(line)
+                if qq:
+                    quoter = ">"
+                    if len(line) > qq.span()[1] and line[qq.span()[1]] != " ":
+                        quoter += " "
+                    f.write("\n" + line[:qq.span()[1]]
+                            + quoter
+                            + line[qq.span()[1]:])
+                else:
+                    f.write("\n" + author + "> " + line)
+            f.write(t.read())
