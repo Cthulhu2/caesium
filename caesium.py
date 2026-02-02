@@ -62,34 +62,24 @@ def check_directories():
 #
 # Взаимодействие с нодой
 #
-def save_out(draft=False):
+def save_out(extension):
     with codecs.open("temp", "r", "utf-8") as f:
         new = f.read().strip().replace("\r", "").split("\n")
     if len(new) <= 1:
         os.remove("temp")
     else:
-        header = new.index("")
-        if header == 3:
-            buf = new
-        elif header == 4:
-            buf = new[1:5] + ["@repto:%s" % new[0]] + new[5:]
-        else:
-            buf = ()
-        ext = ".draft" if draft else ".out"
-        with codecs.open(outcount() + ext, "w", "utf-8") as f:
-            f.write("\n".join(buf))
+        with codecs.open(outcount() + extension, "w", "utf-8") as f:
+            f.write("\n".join(new))
         os.remove("temp")
 
 
-def resave_out(filename, draft=False):
+def resave_out(filename):
     with codecs.open("temp", "r", "utf-8") as f:
-        new = f.read().strip().split("\n")
+        new = f.read().strip().replace("\r", "").split("\n")
     if len(new) <= 1:
         os.remove("temp")
     else:
         out_dir = "out/" + cfg.nodes[node].nodename + "/"
-        if draft:
-            filename = filename.replace(".out", ".draft")
         with codecs.open(out_dir + filename, "w", "utf-8") as f:
             f.write("\n".join(new))
         os.remove("temp")
@@ -532,6 +522,8 @@ def read_out_msg(msgid, node_):  # type: (str, config.Node) -> (List[str], int)
     node_dir = "out/" + node_.nodename
     with open(node_dir + "/" + msgid, "r") as f:
         temp = f.read().splitlines()
+    if len(temp) < 8:
+        temp += [""] * (8 - len(temp))
     msg = ["",
            temp[0],
            "",
@@ -579,28 +571,20 @@ def call_editor(out=''):
         d = ui.SelectWindow("Куда сохранить?", ["Сохранить в исходящие",
                                                 "Сохранить как черновик"]
                             ).show()
-        if d == 2:
+        if d == 2:  # "Сохранить как черновик"
             if not out:
-                save_out(True)
+                save_out(extension=".draft")
             else:
+                resave_out(out.replace(".out", ".draft"))
                 if out.endswith(".out"):
-                    # noinspection PyBroadException
-                    try:
-                        os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
-                    except Exception:
-                        pass
-                resave_out(out, draft=True)
-        elif d == 1:
+                    os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
+        elif d == 1:  # "Сохранить в исходящие"
             if not out:
-                save_out()
+                save_out(extension=".out")
             else:
-                if out.endswith(".draft"):
-                    # noinspection PyBroadException
-                    try:
-                        os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
-                    except Exception:
-                        pass
                 resave_out(out.replace(".draft", ".out"))
+                if out.endswith(".draft"):
+                    os.remove("out/" + cfg.nodes[node].nodename + "/" + out)
     else:
         os.remove("temp")
 
@@ -633,13 +617,13 @@ def get_out_msgids(drafts=False):
 def quote_msg(msgid, msg):
     with open("template.txt", "r") as t:
         with open("temp", "w") as f:
-            f.write(msgid + "\n")
-            f.write(msg[1] + "\n")
-            f.write(msg[3] + "\n")
             subj = msg[6]
             if not msg[6].startswith("Re:"):
                 subj = "Re: " + subj
-            f.write(subj + "\n")
+            f.write(msg[1] + "\n")
+            f.write(msg[3] + "\n")
+            f.write(subj + "\n\n")
+            f.write("@repto:" + msgid + "\n")
             #
             if cfg.oldquote:
                 author = ""
@@ -948,7 +932,6 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
                     f.write("No subject\n\n")
                     f.write(t.read())
             call_editor()
-            ui.stdscr.clear()
         elif key in keys.r_save and not out:
             save_message_to_file(msgid or msgids[msgn], msg[1])
         elif key in keys.r_favorites and not out:

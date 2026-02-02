@@ -482,6 +482,8 @@ def find_visible_token(tokens, scroll):
         if y >= scroll:
             return i, height - (y - scroll)  #
     #
+    if not tokens:
+        return 0, 0
     return len(tokens) - 1, len(tokens[-1].render) - 1
 
 

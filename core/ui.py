@@ -298,6 +298,8 @@ class SelectWindow:
 # region Render Body
 def render_body(scr, tokens, scroll, qs=None):
     # type: (curses.window, List[parser.Token], int, search.QuickSearch) -> None
+    if not tokens:
+        return
     h, w = scr.getmaxyx()
     tnum, offset = parser.find_visible_token(tokens, scroll)
     line_num = tokens[tnum].line_num
