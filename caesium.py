@@ -421,8 +421,8 @@ class EchoSelectorScreen:
             if cur_echo.name in self.counts.lasts:
                 last = self.counts.lasts[cur_echo.name]
             last = min(self.counts.total[cur_echo.name], last + 1)
-            self.go, self.next_echo = echo_reader(
-                cur_echo, last, self.archive, self.counts)
+            self.go, self.next_echo = EchoReader(
+                cur_echo, last, self.archive, self.counts).show()
             self.counts.rescan_counts(self.echoareas)
             if self.next_echo and isinstance(self.next_echo, bool):
                 self.cursor = self.counts.find_new(self.cursor)
@@ -442,13 +442,13 @@ class EchoSelectorScreen:
         elif key in keys.s_out:
             out_length = outgoing.get_out_length(cfg.nodes[node], drafts=False)
             if out_length > -1:
-                self.go, self.next_echo = echo_reader(
-                    config.ECHO_OUT, out_length, self.archive, self.counts)
+                self.go, self.next_echo = EchoReader(
+                    config.ECHO_OUT, out_length, self.archive, self.counts).show()
         elif key in keys.s_drafts:
             out_length = outgoing.get_out_length(cfg.nodes[node], drafts=True)
             if out_length > -1:
-                self.go, self.next_echo = echo_reader(
-                    config.ECHO_DRAFTS, out_length, self.archive, self.counts)
+                self.go, self.next_echo = EchoReader(
+                    config.ECHO_DRAFTS, out_length, self.archive, self.counts).show()
         elif key in keys.s_nnode:
             node = node + 1
             if node == len(cfg.nodes):
@@ -588,105 +588,112 @@ def save_attachment(token):  # type: (parser.Token) -> None
         utils.open_file(filepath)
 
 
-def echo_reader(echo: config.Echo, msgn, archive, counts):
-    ui.stdscr.clear()
-    ui.stdscr.attrset(get_color(UI_BORDER))
-    out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
-    drafts = (echo == config.ECHO_DRAFTS)
-    favorites = (echo == config.ECHO_FAVORITES)
-    carbonarea = (echo == config.ECHO_CARBON)
-    cur_node = cfg.nodes[node]  # type: config.Node
+class EchoReader:
+    tokens: List[parser.Token]  # message bode tokens
+    scroll: ui.ScrollCalc  # message body scroll calculator
+    t2l: List[parser.RangeLines]  # tokens rendered lines range
 
-    def get_msgids():
-        if out:
-            return outgoing.get_out_msgids(cur_node, drafts)
-        elif favorites:
+    def __init__(self, echo: config.Echo, msgn, archive, counts):
+        self.echo = echo
+        self.archive = archive
+        self.counts = counts
+        self.out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
+        self.drafts = (echo == config.ECHO_DRAFTS)
+        self.favorites = (echo == config.ECHO_FAVORITES)
+        self.carbonarea = (echo == config.ECHO_CARBON)
+        self.cur_node = cfg.nodes[node]  # type: config.Node
+        self.msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
+        self.size = 0
+        self.go = True
+        self.done = False
+        self.repto = ""
+        self.stack = []
+        self.msgid = None  # non-current-echo message id, navigated by ii-link
+        self.qs = None  # type: Optional[search.QuickSearch]
+        self.next_echo = False
+        self.msgids = self.get_msgids()
+        self.msgn = min(msgn, len(self.msgids) - 1)
+        if self.msgids:
+            self.read_msg_skip_twit(-1)
+            if self.msgn < 0:
+                self.next_echo = True
+        self.prerender()
+
+    def get_msgids(self):
+        if self.out:
+            return outgoing.get_out_msgids(self.cur_node, self.drafts)
+        elif self.favorites:
             return api.get_favorites_list()
-        elif carbonarea:
+        elif self.carbonarea:
             return api.get_carbonarea()
         else:
-            return api.get_echo_msgids(echo.name)
+            return api.get_echo_msgids(self.echo.name)
 
-    msgids = get_msgids()
-    msgn = min(msgn, len(msgids) - 1)
-    msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
-    size = 0
-    go = True
-    done = False
-    repto = False
-    stack = []
-    msgid = None  # non-current-echo message id, navigated by ii-link
-    qs = None  # type: Optional[search.QuickSearch]
-    next_echo = False
-
-    def read_cur_msg():  # type: () -> (List[str], int)
-        nonlocal msgid
-        msgid = None
-        if out:
-            return outgoing.read_out_msg(msgids[msgn], cur_node)
+    def read_cur_msg(self):  # type: () -> (List[str], int)
+        self.msgid = None
+        if self.out:
+            self.msg, self.size = outgoing.read_out_msg(self.msgids[self.msgn], self.cur_node)
         else:
-            return api.read_msg(msgids[msgn], echo.name)
+            self.msg, self.size = api.read_msg(self.msgids[self.msgn], self.echo.name)
 
-    def read_msg_skip_twit(increment):
-        nonlocal msg, msgn, size
-        msg, size = read_cur_msg()
-        while msg[3] in cfg.twit or msg[5] in cfg.twit:
-            msgn += increment
-            if msgn < 0 or len(msgids) <= msgn:
+    def read_msg_skip_twit(self, increment):
+        self.read_cur_msg()
+        while self.msg[3] in cfg.twit or self.msg[5] in cfg.twit:
+            self.msgn += increment
+            if self.msgn < 0 or len(self.msgids) <= self.msgn:
                 break
-            msg, size = api.read_msg(msgids[msgn], echo.name)
+            self.read_cur_msg()
 
-    def prerender(msgbody, pos=0):
-        tokens = parser.tokenize(msgbody)
+    def prerender(self, pos=0):
+        self.tokens = parser.tokenize(self.msg[8:])
         view = ui.HEIGHT - 5 - 1  # screen ui.HEIGHT - header - status line
-        body_height = parser.prerender(tokens, ui.WIDTH, view)
-        t2l_ = parser.token_line_map(tokens)
-        return tokens, ui.ScrollCalc(body_height, view, pos), t2l_
+        height = parser.prerender(self.tokens, ui.WIDTH, view)
+        self.t2l = parser.token_line_map(self.tokens)
+        self.scroll = ui.ScrollCalc(height, view, pos)
 
-    def prerender_msg_or_quit():
-        nonlocal msgn, msg, size, go, body_tokens, scroll, t2l
-        if msgids:
-            msgn = min(msgn, len(msgids) - 1)
-            msg, size = read_cur_msg()
-            body_tokens, scroll, t2l = prerender(msg[8:])
+    def prerender_msg_or_quit(self):
+        if self.msgids:
+            self.msgn = min(self.msgn, len(self.msgids) - 1)
+            self.read_cur_msg()
+            self.prerender()
         else:
-            go = False
+            self.go = False
 
-    def open_link(token):  # type: (parser.Token) -> None
+    def open_link(self, token):  # type: (parser.Token) -> None
         link = token.url
-        nonlocal msgid, msgn, msg, size, go, body_tokens, scroll, t2l, next_echo
         if token.filename:
             if token.filedata:
                 save_attachment(token)
         elif link.startswith("#"):  # markdown anchor?
-            pos = parser.find_pos_by_anchor(body_tokens, token)
+            pos = parser.find_pos_by_anchor(self.tokens, token)
             if pos != -1:
-                scroll.pos = pos
+                self.scroll.pos = pos
         elif not link.startswith("ii://"):
             if not cfg.browser.open(link):
                 ui.show_message_box("Не удалось запустить Интернет-браузер")
         elif parser.echo_template.match(link[5:]):  # echoarea
-            if echo.name == link[5:]:
+            if self.echo.name == link[5:]:
                 ui.show_message_box("Конференция уже открыта")
-            elif (link[5:] in cur_node.echoareas
-                  or link[5:] in cur_node.archive
-                  or link[5:] in cur_node.stat):
-                next_echo = link[5:]
-                go = False
+            elif (link[5:] in self.cur_node.echoareas
+                  or link[5:] in self.cur_node.archive
+                  or link[5:] in self.cur_node.stat):
+                self.next_echo = link[5:]
+                self.go = False
             else:
                 ui.show_message_box("Конференция отсутствует в БД ноды")
-        elif link[5:] in msgids:  # msgid in same echoarea
-            if not stack or stack[-1] != msgn:
-                stack.append(msgn)
-            msgn = msgids.index(link[5:])
-            prerender_msg_or_quit()
+        elif link[5:] in self.msgids:  # msgid in same echoarea
+            if not self.stack or self.stack[-1] != self.msgn:
+                self.stack.append(self.msgn)
+            self.msgn = self.msgids.index(link[5:])
+            self.prerender_msg_or_quit()
         else:
-            msg, size = api.find_msg(link[5:])
-            msgid = link[5:]
-            body_tokens, scroll, t2l = prerender(msg[8:])
-            if not stack or stack[-1] != msgn:
-                stack.append(msgn)
+            self.msg, self.size = api.find_msg(link[5:])
+            self.msgid = link[5:]
+            self.prerender()
+            if not self.stack or self.stack[-1] != self.msgn:
+                self.stack.append(self.msgn)
 
+    @staticmethod
     def on_search_item(sidx, p, token):
         # type: (int, re.Pattern, parser.Token) -> List
         matches = []
@@ -705,252 +712,253 @@ def echo_reader(echo: config.Echo, msgn, archive, counts):
             token.search_matches = None
         return matches
 
-    if msgids:
-        read_msg_skip_twit(-1)
-        if msgn < 0:
-            next_echo = True
-    body_tokens, scroll, t2l = prerender(msg[8:])
-
-    while go:
-        if msgids:
-            draw_reader(msg[1], msgid or msgids[msgn], out,
-                        status_text=utils.msgn_status(msgids, msgn, ui.WIDTH))
-            if echo.desc and ui.WIDTH >= 80:
-                ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(echo.desc), echo.desc)
-            color = get_color(UI_TEXT)
-            if not out:
-                if ui.WIDTH >= 80:
-                    ui.stdscr.addstr(1, 7, msg[3] + " (" + msg[4] + ")", color)
-                else:
-                    ui.stdscr.addstr(1, 7, msg[3], color)
-                msgtime = utils.msg_strftime(msg[2], ui.WIDTH)
-                ui.stdscr.addstr(1, ui.WIDTH - len(msgtime) - 1, msgtime, color)
-            elif cur_node.to:
-                ui.stdscr.addstr(1, 7, cur_node.to[0], color)
-            ui.stdscr.addstr(2, 7, msg[5], color)
-            ui.stdscr.addstr(3, 7, msg[6][:ui.WIDTH - 8], color)
-            s_size = utils.msg_strfsize(size)
-            ui.draw_title(ui.stdscr, 4, 0, s_size)
-            tags = msg[0].split("/")
-            if "repto" in tags and 36 + len(s_size) < ui.WIDTH:
-                repto = tags[tags.index("repto") + 1].strip()
-                ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + repto)
-            else:
-                repto = False
-            ui.render_body(ui.stdscr, body_tokens, scroll.pos, qs)
-            if scroll.is_scrollable:
-                ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, scroll)
-        else:
-            draw_reader(echo.name, "", out)
-        if qs:
-            qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
-                    get_color(UI_STATUS))
-            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + qs.cursor)
-        ks, key, _ = ui.get_keystroke()
-        if key == curses.KEY_RESIZE:
-            ui.set_term_size()
-            body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
-            ui.stdscr.clear()
-            if qs:
-                qs.items = body_tokens
-                qs.width = ui.WIDTH - len(ui.version) - 12
-                tnum, _ = parser.find_visible_token(body_tokens, scroll.pos)
-                qs.search(qs.query, tnum)
-        elif qs:
-            if key in keys.s_csearch:
-                qs = None
-                curses.curs_set(0)
-            else:
-                pager = search.Pager(
-                    parser.find_visible_token(body_tokens, scroll.pos)[0],
-                    lambda: parser.find_visible_token(body_tokens, scroll.pos + scroll.view)[0],
-                    lambda: parser.find_visible_token(body_tokens, scroll.pos)[0] - 1)
-                qs.on_key_pressed_search(key, ks, pager)
-                if qs.result:
-                    tidx = qs.result[qs.idx]
-                    off, _ = qs.matches[qs.idx]
-                    if key in keys.s_home or key in keys.s_end:
-                        scroll.ensure_visible(t2l[tidx].start + off, center=True)
-                    elif key in keys.s_npage:
-                        scroll.ensure_visible(t2l[tidx].start + off + scroll.view - 1)
-                    elif key in keys.s_ppage:
-                        scroll.ensure_visible(t2l[tidx].start + off - scroll.view + 1)
+    def show(self):
+        while self.go:
+            if self.msgids:
+                draw_reader(self.msg[1], self.msgid or self.msgids[self.msgn], self.out,
+                            status_text=utils.msgn_status(self.msgids, self.msgn, ui.WIDTH))
+                if self.echo.desc and ui.WIDTH >= 80:
+                    ui.draw_title(ui.stdscr, 0, ui.WIDTH - 2 - len(self.echo.desc), self.echo.desc)
+                color = get_color(UI_TEXT)
+                if not self.out:
+                    if ui.WIDTH >= 80:
+                        ui.stdscr.addstr(1, 7, self.msg[3] + " (" + self.msg[4] + ")", color)
                     else:
-                        scroll.ensure_visible(t2l[tidx].start + off)
-        elif key in keys.r_prev and msgn > 0 and msgids:
-            msgn = msgn - 1
-            stack.clear()
-            tmp = msgn
-            read_msg_skip_twit(-1)
-            if msgn < 0:
-                msgn = tmp + 1
-            body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_next and msgn < len(msgids) - 1 and msgids:
-            msgn = msgn + 1
-            stack.clear()
-            read_msg_skip_twit(+1)
-            if msgn >= len(msgids):
-                go = False
-                next_echo = True
-            body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_next and (msgn == len(msgids) - 1 or len(msgids) == 0):
-            go = False
-            next_echo = True
-        elif key in keys.r_prep and not any((favorites, carbonarea, out)) and repto:
-            if repto in msgids:
-                stack.append(msgn)
-                msgn = msgids.index(repto)
-                msg, size = read_cur_msg()
-                body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_nrep and len(stack) > 0:
-            msgn = stack.pop()
-            msg, size = read_cur_msg()
-            body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_up and msgids:
-            scroll.pos -= 1
-        elif key in keys.r_ppage and msgids:
-            scroll.pos -= scroll.view
-        elif key in keys.r_npage and msgids:
-            scroll.pos += scroll.view
-        elif key in keys.r_home and msgids:
-            scroll.pos = 0
-        elif key in keys.r_mend and msgids:
-            scroll.pos = scroll.content - scroll.view
-        elif key in keys.r_ukeys:
-            if not msgids or scroll.pos >= scroll.content - scroll.view:
-                if msgn == len(msgids) - 1 or not msgids:
-                    next_echo = True
-                    go = False
+                        ui.stdscr.addstr(1, 7, self.msg[3], color)
+                    msgtime = utils.msg_strftime(self.msg[2], ui.WIDTH)
+                    ui.stdscr.addstr(1, ui.WIDTH - len(msgtime) - 1, msgtime, color)
+                elif self.cur_node.to:
+                    ui.stdscr.addstr(1, 7, self.cur_node.to[0], color)
+                ui.stdscr.addstr(2, 7, self.msg[5], color)
+                ui.stdscr.addstr(3, 7, self.msg[6][:ui.WIDTH - 8], color)
+                s_size = utils.msg_strfsize(self.size)
+                ui.draw_title(ui.stdscr, 4, 0, s_size)
+                tags = self.msg[0].split("/")
+                if "repto" in tags and 36 + len(s_size) < ui.WIDTH:
+                    self.repto = tags[tags.index("repto") + 1].strip()
+                    ui.draw_title(ui.stdscr, 4, len(s_size) + 3, "Ответ на " + self.repto)
                 else:
-                    msgn = msgn + 1
-                    stack.clear()
-                    msg, size = read_cur_msg()
-                    body_tokens, scroll, t2l = prerender(msg[8:])
+                    self.repto = ""
+                ui.render_body(ui.stdscr, self.tokens, self.scroll.pos, self.qs)
+                if self.scroll.is_scrollable:
+                    ui.draw_scrollbarV(ui.stdscr, 5, ui.WIDTH - 1, self.scroll)
             else:
-                scroll.pos += scroll.view
-        elif key in keys.r_down and msgids:
-            scroll.pos += 1
-        elif key in keys.r_begin and msgids:
-            msgn = 0
-            stack.clear()
-            msg, size = read_cur_msg()
-            body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_end and msgids:
-            msgn = len(msgids) - 1
-            stack.clear()
-            msg, size = read_cur_msg()
-            body_tokens, scroll, t2l = prerender(msg[8:])
-        elif key in keys.r_ins and not any((archive, out, favorites, carbonarea)):
+                draw_reader(self.echo.name, "", self.out)
+            if self.qs:
+                self.qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
+                             get_color(UI_STATUS))
+                ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + self.qs.cursor)
+            #
+            ks, key, _ = ui.get_keystroke()
+            #
+            if key == curses.KEY_RESIZE:
+                ui.set_term_size()
+                self.prerender(self.scroll.pos)
+                ui.stdscr.clear()
+                if self.qs:
+                    self.qs.items = self.tokens
+                    self.qs.width = ui.WIDTH - len(ui.version) - 12
+                    tnum, _ = parser.find_visible_token(self.tokens, self.scroll.pos)
+                    self.qs.search(self.qs.query, tnum)
+            elif self.qs:
+                if key in keys.s_csearch:
+                    self.qs = None
+                    curses.curs_set(0)
+                else:
+                    pager = search.Pager(
+                        parser.find_visible_token(self.tokens, self.scroll.pos)[0],
+                        lambda: parser.find_visible_token(self.tokens, self.scroll.pos + self.scroll.view)[0],
+                        lambda: parser.find_visible_token(self.tokens, self.scroll.pos)[0] - 1)
+                    self.qs.on_key_pressed_search(key, ks, pager)
+                    if self.qs.result:
+                        tidx = self.qs.result[self.qs.idx]
+                        off, _ = self.qs.matches[self.qs.idx]
+                        if key in keys.s_home or key in keys.s_end:
+                            self.scroll.ensure_visible(self.t2l[tidx].start + off, center=True)
+                        elif key in keys.s_npage:
+                            self.scroll.ensure_visible(self.t2l[tidx].start + off + self.scroll.view - 1)
+                        elif key in keys.s_ppage:
+                            self.scroll.ensure_visible(self.t2l[tidx].start + off - self.scroll.view + 1)
+                        else:
+                            self.scroll.ensure_visible(self.t2l[tidx].start + off)
+            elif key in keys.s_osearch:
+                ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
+                curses.curs_set(1)
+                self.qs = search.QuickSearch(self.tokens, self.on_search_item,
+                                             ui.WIDTH - len(ui.version) - 12)
+            elif key in keys.r_quit:
+                self.go = False
+                self.next_echo = False
+            elif key in keys.g_quit:
+                self.go = False
+                self.done = True
+            else:
+                self.on_key_pressed(key)
+
+        self.counts.lasts[self.echo.name] = self.msgn
+        with open("lasts.lst", "wb") as f:
+            pickle.dump(self.counts.lasts, f)
+        ui.stdscr.clear()
+        return not self.done, self.next_echo
+
+    def on_key_pressed(self, key):
+        if key in keys.r_prev and self.msgn > 0 and self.msgids:
+            self.msgn -= 1
+            self.stack.clear()
+            tmp = self.msgn
+            self.read_msg_skip_twit(-1)
+            if self.msgn < 0:
+                self.msgn = tmp + 1
+            self.prerender()
+        elif key in keys.r_next and self.msgn < len(self.msgids) - 1 and self.msgids:
+            self.msgn += 1
+            self.stack.clear()
+            self.read_msg_skip_twit(+1)
+            if self.msgn >= len(self.msgids):
+                self.go = False
+                self.next_echo = True
+            self.prerender()
+        elif key in keys.r_next and (self.msgn == len(self.msgids) - 1 or len(self.msgids) == 0):
+            self.go = False
+            self.next_echo = True
+        elif key in keys.r_prep and not any((self.favorites, self.carbonarea, self.out)) and self.repto:
+            if self.repto in self.msgids:
+                self.stack.append(self.msgn)
+                self.msgn = self.msgids.index(self.repto)
+                self.read_cur_msg()
+                self.prerender()
+        elif key in keys.r_nrep and len(self.stack) > 0:
+            self.msgn = self.stack.pop()
+            self.read_cur_msg()
+            self.prerender()
+        elif key in keys.r_up and self.msgids:
+            self.scroll.pos -= 1
+        elif key in keys.r_ppage and self.msgids:
+            self.scroll.pos -= self.scroll.view
+        elif key in keys.r_npage and self.msgids:
+            self.scroll.pos += self.scroll.view
+        elif key in keys.r_home and self.msgids:
+            self.scroll.pos = 0
+        elif key in keys.r_mend and self.msgids:
+            self.scroll.pos = self.scroll.content - self.scroll.view
+        elif key in keys.r_ukeys:
+            if not self.msgids or self.scroll.pos >= self.scroll.content - self.scroll.view:
+                if self.msgn == len(self.msgids) - 1 or not self.msgids:
+                    self.next_echo = True
+                    self.go = False
+                else:
+                    self.msgn += 1
+                    self.stack.clear()
+                    self.read_cur_msg()
+                    self.prerender()
+            else:
+                self.scroll.pos += self.scroll.view
+        elif key in keys.r_down and self.msgids:
+            self.scroll.pos += 1
+        elif key in keys.r_begin and self.msgids:
+            self.msgn = 0
+            self.stack.clear()
+            self.read_cur_msg()
+            self.prerender()
+        elif key in keys.r_end and self.msgids:
+            self.msgn = len(self.msgids) - 1
+            self.stack.clear()
+            self.read_cur_msg()
+            self.prerender()
+        elif key in keys.r_ins and not any((self.archive, self.out, self.favorites, self.carbonarea)):
             with open("template.txt", "r") as t:
                 with open("temp", "w") as f:
-                    f.write(echo.name + "\n")
+                    f.write(self.echo.name + "\n")
                     f.write("All\n")
                     f.write("No subject\n\n")
                     f.write(t.read())
-            call_editor(cur_node)
-        elif key in keys.r_save and not out:
-            save_message_to_file(msgid or msgids[msgn], msg[1])
-        elif key in keys.r_favorites and not out:
-            saved = api.save_to_favorites(msgid or msgids[msgn], msg)
+            call_editor(self.cur_node)
+        elif key in keys.r_save and not self.out:
+            save_message_to_file(self.msgid or self.msgids[self.msgn], self.msg[1])
+        elif key in keys.r_favorites and not self.out:
+            saved = api.save_to_favorites(self.msgid or self.msgids[self.msgn], self.msg)
             ui.draw_message_box("Подождите", False)
-            counts.get_counts(cur_node, False)
+            self.counts.get_counts(self.cur_node, False)
             ui.show_message_box("Сообщение добавлено в избранные" if saved else
                                 "Сообщение уже есть в избранных")
-        elif key in keys.r_quote and not any((archive, out)) and msgids:
-            quote_msg(msgid or msgids[msgn], msg)
-            call_editor(cur_node)
+        elif key in keys.r_quote and not any((self.archive, self.out)) and self.msgids:
+            quote_msg(self.msgid or self.msgids[self.msgn], self.msg)
+            call_editor(self.cur_node)
         elif key in keys.r_info:
-            subj = textwrap.fill(msg[6], ui.WIDTH * 0.75,
+            subj = textwrap.fill(self.msg[6], ui.WIDTH * 0.75,
                                  subsequent_indent="      ")
             ui.show_message_box("id:   %s\naddr: %s\nsubj: %s"
-                                % (msgid or msgids[msgn], msg[4], subj))
-        elif key in keys.o_edit and out:
-            if msgids[msgn].endswith(".out") or msgids[msgn].endswith(".draft"):
-                copyfile(outgoing.directory(cur_node) + msgids[msgn], "temp")
-                call_editor(cur_node, msgids[msgn])
-                msgids = get_msgids()
-                prerender_msg_or_quit()
+                                % (self.msgid or self.msgids[self.msgn], self.msg[4], subj))
+        elif key in keys.o_edit and self.out:
+            if self.msgids[self.msgn].endswith(".out") or self.msgids[self.msgn].endswith(".draft"):
+                copyfile(outgoing.directory(self.cur_node) + self.msgids[self.msgn], "temp")
+                call_editor(self.cur_node, self.msgids[self.msgn])
+                self.msgids = self.get_msgids()
+                self.prerender_msg_or_quit()
             else:
                 ui.show_message_box("Сообщение уже отправлено")
             ui.stdscr.clear()
-        elif key in keys.f_delete and favorites and msgids:
+        elif key in keys.f_delete and self.favorites and self.msgids:
             ui.draw_message_box("Подождите", False)
-            api.remove_from_favorites(msgids[msgn])
-            counts.get_counts(cur_node, False)
-            msgids = get_msgids()
-            prerender_msg_or_quit()
-        elif key in keys.f_delete and drafts and msgids:
-            if ui.SelectWindow("Удалить черновик '%s'?" % msgids[msgn],
+            api.remove_from_favorites(self.msgids[self.msgn])
+            self.counts.get_counts(self.cur_node, False)
+            self.msgids = self.get_msgids()
+            self.prerender_msg_or_quit()
+        elif key in keys.f_delete and self.drafts and self.msgids:
+            if ui.SelectWindow("Удалить черновик '%s'?" % self.msgids[self.msgn],
                                ["Нет", "Да"]).show() == 2:
-                os.remove(outgoing.directory(cur_node) + msgids[msgn])
-                msgids = get_msgids()
-                prerender_msg_or_quit()
-        elif key in keys.r_getmsg and size == 0 and msgid:
+                os.remove(outgoing.directory(self.cur_node) + self.msgids[self.msgn])
+                self.msgids = self.get_msgids()
+                self.prerender_msg_or_quit()
+        elif key in keys.r_getmsg and self.size == 0 and self.msgid:
             try:
                 ui.draw_message_box("Подождите", False)
-                get_msg(msgid)
-                counts.get_counts(cur_node, True)
-                ui.stdscr.clear()
-                msg, size = api.find_msg(msgid)
-                body_tokens, scroll, t2l = prerender(msg[8:])
+                get_msg(self.msgid)
+                self.counts.get_counts(self.cur_node, True)
+                api.find_msg(self.msgid)
+                self.prerender()
             except Exception as ex:
                 ui.show_message_box("Не удалось определить msgid.\n" + str(ex))
-                ui.stdscr.clear()
+            ui.stdscr.clear()
         elif key in keys.r_links:
             links = list(filter(lambda it: it.type == parser.TT.URL,
-                                body_tokens))
+                                self.tokens))
             if len(links) == 1:
-                open_link(links[0])
+                self.open_link(links[0])
             elif links:
                 win = ui.SelectWindow("Выберите ссылку", list(map(
                     lambda it: (it.url + " " + (it.title or "")).strip(),
                     links)))
                 i = win.show()
                 if win.resized:
-                    body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
+                    self.prerender(self.scroll.pos)
                 if i:
-                    open_link(links[i - 1])
+                    self.open_link(links[i - 1])
             ui.stdscr.clear()
-        elif key in keys.r_to_out and drafts:
-            draft_msg = outgoing.directory(cur_node) + msgids[msgn]
+        elif key in keys.r_to_out and self.drafts:
+            draft_msg = outgoing.directory(self.cur_node) + self.msgids[self.msgn]
             os.rename(draft_msg, draft_msg.replace(".draft", ".out"))
-            msgids = get_msgids()
-            prerender_msg_or_quit()
-        elif key in keys.r_to_drafts and out and not drafts and msgids[msgn].endswith(".out"):
-            out_msg = outgoing.directory(cur_node) + msgids[msgn]
+            self.msgids = self.get_msgids()
+            self.prerender_msg_or_quit()
+        elif key in keys.r_to_drafts and self.out and not self.drafts and self.msgids[self.msgn].endswith(".out"):
+            out_msg = outgoing.directory(self.cur_node) + self.msgids[self.msgn]
             os.rename(out_msg, out_msg.replace(".out", ".draft"))
-            msgids = get_msgids()
-            prerender_msg_or_quit()
-        elif key in keys.r_list and not out and not drafts:
-            data = api.get_msg_list_data(echo.name)
-            win = ui.MsgListScreen(echo.name, data, msgn)
+            self.msgids = self.get_msgids()
+            self.prerender_msg_or_quit()
+        elif key in keys.r_list and not self.out and not self.drafts:
+            data = api.get_msg_list_data(self.echo.name)
+            win = ui.MsgListScreen(self.echo.name, data, self.msgn)
             selected_msgn = win.show()
             if win.resized:
-                body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
+                self.prerender(self.scroll.pos)
             if selected_msgn > -1:
-                msgn = selected_msgn
-                stack.clear()
-                msg, size = read_cur_msg()
-                body_tokens, scroll, t2l = prerender(msg[8:])
+                self.msgn = selected_msgn
+                self.stack.clear()
+                self.read_cur_msg()
+                self.prerender()
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
-            body_tokens, scroll, t2l = prerender(msg[8:], scroll.pos)
-        elif key in keys.s_osearch:
-            ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
-            curses.curs_set(1)
-            qs = search.QuickSearch(body_tokens, on_search_item,
-                                    ui.WIDTH - len(ui.version) - 12)
-        elif key in keys.r_quit:
-            go = False
-            next_echo = False
-        elif key in keys.g_quit:
-            go = False
-            done = True
-    counts.lasts[echo.name] = msgn
-    with open("lasts.lst", "wb") as f:
-        pickle.dump(counts.lasts, f)
-    ui.stdscr.clear()
-    return not done, next_echo
+            self.prerender(self.scroll.pos)
 
 
 if sys.version_info >= (3, 11):
