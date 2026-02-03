@@ -183,7 +183,7 @@ def find_msg(msgid):
     return read_msg(msgid, None)
 
 
-def find_thread_msgids(echoarea, subj):  # type: (str, str) -> List[str]
+def find_subj_msgids(echoarea, subj):  # type: (str, str) -> List[str]
     if subj.startswith("Re:"):
         subj = subj[3:].lstrip()
     subj = "%" + subj

@@ -236,13 +236,13 @@ def test_node_echo_counts(api):
 
 # noinspection PyTestParametrized
 @pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
-def test_find_thread_msgids(api):
+def test_find_subj_msgids(api):
     msg1 = ["ii/ok", "test.local", "0", "admin", "node,1", "All", "Subj", "", "Msg1", "Row2"]
     msg2 = ["ii/ok", "test.local", "1", "admin", "node,1", "user", "Re: Subj", "", "Msg2", "Row2"]
     msg3 = ["ii/ok", "test.local", "2", "admin", "node,1", "user", "Subj2", "", "Msg2", "Row2"]
     api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
 
-    data = api.find_thread_msgids("test.local", "Re: Subj")
+    data = api.find_subj_msgids("test.local", "Re: Subj")
     assert data == ["1" * 20, "2" * 20]
 
 

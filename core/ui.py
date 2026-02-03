@@ -1,7 +1,9 @@
 import curses
 from datetime import datetime
+from enum import Enum, auto
 from typing import Optional, List
 
+import api.ait as api
 import keys.default as keys
 from core import __version__, parser, utils, search, keystroke
 from core.config import (
@@ -16,6 +18,12 @@ WIDTH = 0
 
 stdscr = None  # type: Optional[curses.window]
 version = "Caesium/%s │" % __version__
+
+
+class ReaderMode(Enum):
+    ECHO = auto()  # Regular mode reading whole echo conference
+    SUBJ = auto()  # Read message with specified subject and answers (Re: )
+    FIND = auto()  # Read messages in find result list
 
 
 def set_term_size():
@@ -119,7 +127,8 @@ def draw_scrollbarV(scr, y, x, scroll):
         scr.addstr(i, x, "█", color)
 
 
-def draw_status_bar(scr, text=None):  # type: (curses.window, str) -> None
+def draw_status_bar(scr, mode=None, text=None):
+    # type: (curses.window, ReaderMode, str) -> None
     h, w = scr.getmaxyx()
     color = get_color(UI_STATUS)
     scr.insstr(h - 1, 0, " " * w, color)
@@ -129,9 +138,11 @@ def draw_status_bar(scr, text=None):  # type: (curses.window, str) -> None
         scr.addstr(h - 1, len(version) + 2, text, color)
     if parser.INLINE_STYLE_ENABLED:
         scr.addstr(h - 1, w - 10, "~", color)
+    if mode == ReaderMode.SUBJ:
+        scr.addstr(h - 1, w - 11, "!", color)
 
 
-def draw_reader(scr, echo: str, msgid, out, status_text=None):
+def draw_reader(scr, echo: str, msgid, out):
     h, w = scr.getmaxyx()
     color = get_color(UI_BORDER)
     scr.addstr(0, 0, "─" * w, color)
@@ -152,7 +163,6 @@ def draw_reader(scr, echo: str, msgid, out, status_text=None):
     scr.addstr(1, 1, "От:   ", color)
     scr.addstr(2, 1, "Кому: ", color)
     scr.addstr(3, 1, "Тема: ", color)
-    draw_status_bar(scr, text=status_text)
 
 
 class ScrollCalc:
@@ -401,15 +411,23 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr, qs=None):
 
 
 class MsgListScreen:
-    def __init__(self, echo, data, msgn):
-        # type: (str, List[List[str]], int) -> MsgListScreen
-        self.data = data
+    def __init__(self, echo, msgids, msgid, mode):
+        # type: (str, List[str], str, ReaderMode) -> MsgListScreen
         self.echo = echo
-        self.cursor = msgn
+        self.mode = mode
+        msgids = None if self.mode == ReaderMode.ECHO else msgids
+        self.data = api.get_msg_list_data(self.echo, msgids)
+        self.cursor = self.find_msgid_idx(msgid)
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
         self.qs = None  # type: Optional[search.QuickSearch]
+
+    def find_msgid_idx(self, msgid):
+        for i, d in enumerate(self.data):
+            if d[0] == msgid:
+                return i
+        return len(self.data) - 1
 
     def show(self):  # type: () -> int
         stdscr.clear()
@@ -486,10 +504,12 @@ class MsgListScreen:
         #
         if scroll.is_scrollable:
             draw_scrollbarV(win, 1, w - 1, scroll)
-        draw_status_bar(win, text=utils.msgn_status(data, cursor, w))
+        draw_status_bar(win, mode=self.mode, text=utils.msgn_status(data, cursor, w))
 
     def on_key_pressed(self, key, scroll):
-        if key in keys.s_up:
+        if key in keys.r_msubj:
+            self.toggle_mode(ReaderMode.SUBJ)
+        elif key in keys.s_up:
             self.cursor = max(0, self.cursor - 1)
         elif key in keys.s_down:
             self.cursor = min(scroll.content - 1, self.cursor + 1)
@@ -513,6 +533,28 @@ class MsgListScreen:
             curses.curs_set(1)
             self.qs = search.QuickSearch(self.data, self.on_search_item,
                                          WIDTH - len(version) - 12)
+
+    def toggle_mode(self, mode):
+        if mode == ReaderMode.SUBJ:
+            if self.mode == ReaderMode.SUBJ:
+                msgid = self.data[self.cursor][0]
+                self.data = api.get_msg_list_data(self.echo, None)
+                self.cursor = self.find_msgid_idx(msgid)
+                self.mode = ReaderMode.ECHO
+                self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
+                self.scroll.ensure_visible(self.cursor, center=True)
+            elif self.mode == ReaderMode.ECHO:
+                msgid = self.data[self.cursor][0]
+                subj = self.data[self.cursor][2]
+                msgids = api.find_subj_msgids(self.echo, subj)
+                self.data = api.get_msg_list_data(self.echo, msgids)
+                self.cursor = self.find_msgid_idx(msgid)
+                self.mode = ReaderMode.SUBJ
+                self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
+                self.scroll.ensure_visible(self.cursor, center=True)
+            return  #
+        else:
+            return  # TODO: ReaderMode.FIND
 
     # noinspection PyUnusedLocal
     @staticmethod

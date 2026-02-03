@@ -18,7 +18,7 @@ from typing import List, Optional, Union
 
 from core import (
     __version__, parser, client, config, ui, utils, search, outgoing,
-    FEAT_X_C, FEAT_U_E,
+    FEAT_X_C, FEAT_U_E
 )
 from core.config import (
     get_color, UI_BORDER, UI_TEXT, UI_CURSOR, UI_STATUS
@@ -545,12 +545,16 @@ class EchoReader:
 
     def __init__(self, echo: config.Echo, msgn, archive, counts):
         self.echo = echo
+        self.mode = ui.ReaderMode.ECHO
+        self.prev_mode_stack = []
         self.archive = archive
         self.counts = counts
+        #
         self.out = (echo in (config.ECHO_OUT, config.ECHO_DRAFTS))
         self.drafts = (echo == config.ECHO_DRAFTS)
         self.favorites = (echo == config.ECHO_FAVORITES)
         self.carbonarea = (echo == config.ECHO_CARBON)
+        #
         self.cur_node = cfg.nodes[node]  # type: config.Node
         self.msg = ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"]
         self.size = 0
@@ -678,10 +682,13 @@ class EchoReader:
     def show(self):
         while self.go:
             ui.stdscr.clear()
+            status = None
             if self.msgids:
                 self.draw(ui.stdscr)
+                status = utils.msgn_status(self.msgids, self.msgn, ui.WIDTH)
             else:
                 ui.draw_reader(ui.stdscr, self.echo.name, "", self.out)
+            ui.draw_status_bar(ui.stdscr, mode=self.mode, text=status)
             if self.qs:
                 self.qs.draw(ui.stdscr, ui.HEIGHT - 1, len(ui.version) + 2,
                              get_color(UI_STATUS))
@@ -714,16 +721,16 @@ class EchoReader:
             else:
                 self.on_key_pressed(key)
 
-        self.counts.lasts[self.echo.name] = self.msgn
-        with open("lasts.lst", "wb") as f:
-            pickle.dump(self.counts.lasts, f)
+        if self.mode == ui.ReaderMode.ECHO:
+            self.counts.lasts[self.echo.name] = self.msgn
+            with open("lasts.lst", "wb") as f:
+                pickle.dump(self.counts.lasts, f)
         ui.stdscr.clear()
         return not self.done, self.next_echo
 
     def draw(self, scr):
         h, w = scr.getmaxyx()
-        ui.draw_reader(scr, self.msg[1], self.msgid(), self.out,
-                       status_text=utils.msgn_status(self.msgids, self.msgn, w))
+        ui.draw_reader(scr, self.msg[1], self.msgid(), self.out)
         if self.echo.desc and w >= 80:
             ui.draw_title(scr, 0, w - 2 - len(self.echo.desc), self.echo.desc)
         color = get_color(UI_TEXT)
@@ -773,8 +780,29 @@ class EchoReader:
             else:
                 self.scroll.ensure_visible(self.t2l[tidx].start + off)
 
+    def toggle_mode(self, mode):
+        if self.mode == mode:
+            if self.prev_mode_stack:
+                msgid = self.msgids[self.msgn]
+                self.mode, self.msgids, self.msgn = self.prev_mode_stack.pop()
+                self.msgn = self.msgids.index(msgid)
+            return   #
+        msgid = self.msgids[self.msgn]
+        if mode == ui.ReaderMode.SUBJ:
+            self.prev_mode_stack.append((self.mode, self.msgids, self.msgn))
+            self.msgids = api.find_subj_msgids(self.msg[1], self.msg[6])
+        else:
+            return  # TODO: ReaderMode.FIND
+        self.msgn = self.msgids.index(msgid)
+        self.mode = mode
+
     def on_key_pressed(self, key):
-        if key in keys.r_prev and self.msgn > 0 and self.msgids:
+        if key in keys.r_msubj:
+            self.toggle_mode(ui.ReaderMode.SUBJ)
+            self.stack.clear()
+            self.read_cur_msg()
+            self.prerender()
+        elif key in keys.r_prev and self.msgn > 0 and self.msgids:
             self.msgn -= 1
             self.stack.clear()
             tmp = self.msgn
@@ -893,13 +921,17 @@ class EchoReader:
             os.rename(out_msg, out_msg.replace(".out", ".draft"))
             self.prerender_msg_or_quit()
         elif key in keys.r_list and not self.out and not self.drafts:
-            data = api.get_msg_list_data(self.echo.name)
-            win = ui.MsgListScreen(self.echo.name, data, self.msgn)
+            win = ui.MsgListScreen(self.echo.name, self.msgids,
+                                   self.msgids[self.msgn], self.mode)
             selected_msgn = win.show()
             if win.resized:
                 self.prerender(self.scroll.pos)
             if selected_msgn > -1:
+                if self.mode != win.mode:
+                    self.prev_mode_stack.append((self.mode, self.msgids, self.msgn))
+                self.msgids = list(map(lambda it: it[0], win.data))
                 self.msgn = selected_msgn
+                self.mode = win.mode
                 self.stack.clear()
                 self.read_cur_msg()
                 self.prerender()
@@ -929,6 +961,7 @@ else:
     raise Exception("Unsupported DB API :: " + cfg.db)
 # create directories
 api.init()
+ui.api = api
 if not os.path.exists("downloads"):
     os.mkdir("downloads")
 outgoing.init(cfg)
