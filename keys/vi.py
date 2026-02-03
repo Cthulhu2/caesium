@@ -19,7 +19,8 @@ s_pnode =   [ord(",")]                              # noqa: E222  предыду
 s_clone =   [ord("c"), ord("C")]                    # noqa: E222  клонировать эху
 s_config =  [ord("e"), ord("E")]                    # noqa: E222  редактировать конфиг
 s_osearch = [ord("s"), ord("S")]                    # noqa: E222  быстрый поиск
-s_csearch = [10, 27]                                # noqa: E222  закрыть поиск
+s_csearch = [27]                                    # noqa: E222  закрыть поиск
+s_asearch = [10]                                    # noqa: E222  закрыть поиск оставив найденные элементы
 
 # Клавиши для экрана чтения
 r_prev =    [curses.KEY_LEFT, ord("h"), ord("H")]   # noqa: E222  предыдущее сообщение

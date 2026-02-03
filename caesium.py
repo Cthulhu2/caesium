@@ -296,7 +296,7 @@ class EchoSelectorScreen:
                 if self.qs:
                     self.qs.width = ui.WIDTH - len(ui.version) - 12
             elif self.qs:
-                if key in keys.s_csearch:
+                if key in keys.s_csearch or key in keys.s_asearch:
                     self.qs = None
                     curses.curs_set(0)
                 else:
@@ -759,7 +759,7 @@ class EchoReader:
             ui.draw_scrollbarV(scr, 5, w - 1, self.scroll)
 
     def on_key_pressed_qs(self, ks, key):
-        if key in keys.s_csearch:
+        if key in keys.s_csearch or key in keys.s_asearch:
             self.qs = None
             curses.curs_set(0)
             return
@@ -787,13 +787,13 @@ class EchoReader:
                 msgid = self.msgids[self.msgn]
                 self.mode, self.msgids, self.msgn = self.prev_mode_stack.pop()
                 self.msgn = self.msgids.index(msgid)
-            return   #
+            return  #
         msgid = self.msgids[self.msgn]
         if mode == ui.ReaderMode.SUBJ:
             self.prev_mode_stack.append((self.mode, self.msgids, self.msgn))
             self.msgids = api.find_subj_msgids(self.msg[1], self.msg[6])
         else:
-            return  # TODO: ReaderMode.FIND
+            return  #
         self.msgn = self.msgids.index(msgid)
         self.mode = mode
 

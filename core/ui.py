@@ -140,6 +140,8 @@ def draw_status_bar(scr, mode=None, text=None):
         scr.addstr(h - 1, w - 10, "~", color)
     if mode == ReaderMode.SUBJ:
         scr.addstr(h - 1, w - 11, "!", color)
+    elif mode == ReaderMode.FIND:
+        scr.addstr(h - 1, w - 11, "@", color)
 
 
 def draw_reader(scr, echo: str, msgid, out):
@@ -416,6 +418,7 @@ class MsgListScreen:
         self.echo = echo
         self.mode = mode
         msgids = None if self.mode == ReaderMode.ECHO else msgids
+        draw_message_box("Подождите", False)
         self.data = api.get_msg_list_data(self.echo, msgids)
         self.cursor = self.find_msgid_idx(msgid)
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
@@ -452,10 +455,20 @@ class MsgListScreen:
                 if key in keys.s_csearch:
                     self.qs = None
                     curses.curs_set(0)
+                elif key in keys.s_asearch:
+                    if self.qs.result:
+                        self.toggle_mode(ReaderMode.FIND)
+                    self.qs = None
+                    curses.curs_set(0)
                 else:
                     self.qs.on_key_pressed_search(key, ks, self.scroll)
                     self.cursor = self.qs.ensure_cursor_visible(
                         key, self.cursor, self.scroll)
+            elif key in keys.s_osearch:
+                stdscr.move(HEIGHT - 1, len(version) + 2)
+                curses.curs_set(1)
+                self.qs = search.QuickSearch(self.data, self.on_search_item,
+                                             WIDTH - len(version) - 12)
             elif key in keys.s_enter:
                 return self.cursor  #
             elif key in keys.r_quit:
@@ -528,11 +541,6 @@ class MsgListScreen:
             self.cursor = 0
         elif key in keys.s_end:
             self.cursor = scroll.content - 1
-        elif key in keys.s_osearch:
-            stdscr.move(HEIGHT - 1, len(version) + 2)
-            curses.curs_set(1)
-            self.qs = search.QuickSearch(self.data, self.on_search_item,
-                                         WIDTH - len(version) - 12)
 
     def toggle_mode(self, mode):
         if mode == ReaderMode.SUBJ:
@@ -542,8 +550,7 @@ class MsgListScreen:
                 self.cursor = self.find_msgid_idx(msgid)
                 self.mode = ReaderMode.ECHO
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-                self.scroll.ensure_visible(self.cursor, center=True)
-            elif self.mode == ReaderMode.ECHO:
+            elif self.mode == ReaderMode.ECHO or self.mode == ReaderMode.FIND:
                 msgid = self.data[self.cursor][0]
                 subj = self.data[self.cursor][2]
                 msgids = api.find_subj_msgids(self.echo, subj)
@@ -551,10 +558,17 @@ class MsgListScreen:
                 self.cursor = self.find_msgid_idx(msgid)
                 self.mode = ReaderMode.SUBJ
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-                self.scroll.ensure_visible(self.cursor, center=True)
+            return  #
+        elif mode == ReaderMode.FIND:
+            self.mode = ReaderMode.FIND
+            msgid = self.data[self.cursor][0]
+            self.data = [self.data[idx]
+                         for idx in self.qs.result]
+            self.cursor = self.find_msgid_idx(msgid)
+            self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
             return  #
         else:
-            return  # TODO: ReaderMode.FIND
+            return  #
 
     # noinspection PyUnusedLocal
     @staticmethod
