@@ -178,15 +178,19 @@ def find_msg(msgid):
 
 def find_subj_msgids(echoarea, subj):
     # type: (str, str) -> List[str]
-    if subj.startswith("Re:"):
-        subj = subj[3:].lstrip()
+    if subj.startswith("Re: "):
+        subj = subj[4:]
+    elif subj.startswith("Re:"):
+        subj = subj[3:]
+    subjRe = "Re:" + subj
+    subjReSpace = "Re: " + subj
 
     echo_msgids = get_echo_msgids(echoarea)
     thread_msgids = []
     for msgid in echo_msgids:
         with open(storage + "msg/" + msgid, "r") as f:
             msg = f.read().split("\n")
-            if msg[6].endswith(subj):
+            if msg[6] in (subj, subjRe, subjReSpace):
                 thread_msgids.append(msgid)
     return thread_msgids
 

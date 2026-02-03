@@ -184,14 +184,18 @@ def find_msg(msgid):
 
 
 def find_subj_msgids(echoarea, subj):  # type: (str, str) -> List[str]
-    if subj.startswith("Re:"):
-        subj = subj[3:].lstrip()
-    subj = "%" + subj
+    if subj.startswith("Re: "):
+        subj = subj[4:]
+    elif subj.startswith("Re:"):
+        subj = subj[3:]
+    subjRe = "Re:" + subj
+    subjReSpace = "Re: " + subj
 
     rows = c.execute("SELECT msgid FROM msg"
-                     " WHERE echoarea = ? AND trim(subject) LIKE ?"
+                     " WHERE echoarea = ?"
+                     "   AND (subject = ? OR subject = ? OR subject = ?)"
                      " LIMIT 1000;",
-                     (echoarea, subj,))
+                     (echoarea, subj, subjRe, subjReSpace))
     return list(map(lambda r: r[0], rows))
 
 

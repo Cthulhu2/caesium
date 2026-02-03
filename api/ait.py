@@ -164,11 +164,15 @@ def find_msg(msgid):
 
 def find_subj_msgids(echoarea, subj):
     # type: (str, str) -> List[str]
-    if subj.startswith("Re:"):
-        subj = subj[3:].lstrip()
+    if subj.startswith("Re: "):
+        subj = subj[4:]
+    elif subj.startswith("Re:"):
+        subj = subj[3:]
+    subjRe = "Re:" + subj
+    subjReSpace = "Re: " + subj
     with codecs.open(storage + echoarea + ".mat", "r", "utf-8") as f:
         msgs = map(lambda i: i.split(chr(15)), filter(None, f.read().split("\n")))
-    thread_msgs = filter(lambda i: i[6].endswith(subj), msgs)
+    thread_msgs = filter(lambda i: i[6] in (subj, subjRe, subjReSpace), msgs)
     return list(map(lambda m: m[0].split(":", maxsplit=1)[0], thread_msgs))
 
 
