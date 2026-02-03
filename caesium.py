@@ -652,7 +652,8 @@ class EchoReader:
             if not self.stack or self.stack[-1] != self.msgn:
                 self.stack.append(self.msgn)
             self.msgn = self.msgids.index(link[5:])
-            self.prerender_msg_or_quit()
+            self.read_cur_msg()
+            self.prerender()
         else:
             self.msg, self.size = api.find_msg(link[5:])
             self._msgid = link[5:]
@@ -815,12 +816,16 @@ class EchoReader:
             self.stack.clear()
             self.read_msg_skip_twit(+1)
             if self.msgn >= len(self.msgids):
-                self.go = False
-                self.next_echo = True
+                if self.mode == ui.ReaderMode.ECHO:
+                    self.go = False
+                    self.next_echo = True
+                else:
+                    self.msgn = len(self.msgids) - 1
             self.prerender()
         elif key in keys.r_next and (self.msgn == len(self.msgids) - 1 or len(self.msgids) == 0):
-            self.go = False
-            self.next_echo = True
+            if self.mode == ui.ReaderMode.ECHO:
+                self.go = False
+                self.next_echo = True
         elif key in keys.r_prep and not any((self.favorites, self.carbonarea, self.out)) and self.repto:
             if self.repto in self.msgids:
                 self.stack.append(self.msgn)
@@ -844,8 +849,9 @@ class EchoReader:
         elif key in keys.r_ukeys:
             if not self.msgids or self.scroll.pos >= self.scroll.content - self.scroll.view:
                 if self.msgn == len(self.msgids) - 1 or not self.msgids:
-                    self.next_echo = True
-                    self.go = False
+                    if self.mode == ui.ReaderMode.ECHO:
+                        self.next_echo = True
+                        self.go = False
                 else:
                     self.msgn += 1
                     self.stack.clear()
