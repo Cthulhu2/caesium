@@ -64,6 +64,8 @@ def api(storage):
 
 def clean(api):
     api.remove_echoarea("test.local")
+    api.remove_echoarea("test2.local")
+    api.remove_echoarea("test3.local")
     api.remove_echoarea("carbonarea")
     api.remove_echoarea("favorites")
     api.remove_echoarea("idec.talks")
@@ -230,3 +232,41 @@ def test_node_echo_counts(api):
     api.save_node_echo_counts("node", {"echo.2": 2, "echo.3": 3})
     ec = api.get_node_echo_counts("node")
     assert ec == {"echo.2": 2, "echo.3": 3}
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_find_thread_msgids(api):
+    msg1 = ["ii/ok", "test.local", "0", "admin", "node,1", "All", "Subj", "", "Msg1", "Row2"]
+    msg2 = ["ii/ok", "test.local", "1", "admin", "node,1", "user", "Re: Subj", "", "Msg2", "Row2"]
+    msg3 = ["ii/ok", "test.local", "2", "admin", "node,1", "user", "Subj2", "", "Msg2", "Row2"]
+    api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
+
+    data = api.find_thread_msgids("test.local", "Re: Subj")
+    assert data == ["1" * 20, "2" * 20]
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_get_msg_list_data_by_ids_n_echo(api):
+    msg1 = ["ii/ok", "test.local", "0", "admin", "node,1", "All", "Subj", "", "Msg1", "Row2"]
+    msg2 = ["ii/ok", "test.local", "1", "admin", "node,1", "user", "Re: Subj", "", "Msg2", "Row2"]
+    msg3 = ["ii/ok", "test.local", "0", "admin", "node,1", "user", "Subj2", "", "Msg2", "Row2"]
+    api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
+
+    data = api.get_msg_list_data("test.local", ["2" * 20, "3" * 20])
+    assert data == [["2" * 20, "admin", "Re: Subj", "1970.01.01"],
+                    ["3" * 20, "admin", "Subj2", "1970.01.01"]]
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_get_msg_list_data_by_ids_only(api):
+    msg1 = ["ii/ok", "test2.local", "0", "admin", "node,1", "All", "Subj", "", "Msg1", "Row2"]
+    msg2 = ["ii/ok", "test3.local", "1", "admin", "node,1", "user", "Re: Subj", "", "Msg2", "Row2"]
+    msg3 = ["ii/ok", "test.local", "0", "admin", "node,1", "user", "Subj2", "", "Msg2", "Row2"]
+    api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
+
+    data = api.get_msg_list_data(None, ["1" * 20, "3" * 20])
+    assert data == [["3" * 20, "admin", "Subj2", "1970.01.01"],  # echo test.local
+                    ["1" * 20, "admin", "Subj", "1970.01.01"]]  # echo test2.local

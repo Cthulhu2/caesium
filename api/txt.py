@@ -2,6 +2,7 @@
 import codecs
 import os
 import time
+from collections import defaultdict
 from typing import Optional, List
 
 storage = "txt"
@@ -122,9 +123,9 @@ def remove_echoarea(echoarea):
         os.remove(f_echo)
 
 
-def get_msg_list_data(echoarea):
-    msgids = get_echo_msgids(echoarea)
-    lst = []
+def get_msg_list_data(echoarea, msgids=None):
+    msgids = msgids or get_echo_msgids(echoarea)
+    echo_msgs = defaultdict(list)
     for msgid in msgids:
         with codecs.open(storage + "msg/" + msgid, "r", "utf-8") as f:
             header = []
@@ -137,12 +138,17 @@ def get_msg_list_data(echoarea):
                     header.extend(lines[0:-1])
                 last_line = lines[-1]
             #
-            lst.append([
-                msgid,
-                header[3],
-                header[6],
-                time.strftime("%Y.%m.%d", time.gmtime(int(header[2]))),
-            ])
+            if (header[1] == echoarea
+                    or echoarea in (None, "carbonarea", "favorites")):
+                echo_msgs[header[1]].append([
+                    msgid,
+                    header[3],
+                    header[6],
+                    time.strftime("%Y.%m.%d", time.gmtime(int(header[2]))),
+                ])
+    lst = []
+    for k in sorted(echo_msgs.keys()):
+        lst += echo_msgs[k]
     return lst
 
 
@@ -168,6 +174,21 @@ def find_msg(msgid):
             if exists:
                 return read_msg(msgid, echo)
     return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
+
+
+def find_thread_msgids(echoarea, subj):
+    # type: (str, str) -> List[str]
+    if subj.startswith("Re:"):
+        subj = subj[3:].lstrip()
+
+    echo_msgids = get_echo_msgids(echoarea)
+    thread_msgids = []
+    for msgid in echo_msgids:
+        with open(storage + "msg/" + msgid, "r") as f:
+            msg = f.read().split("\n")
+            if msg[6].endswith(subj):
+                thread_msgids.append(msgid)
+    return thread_msgids
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

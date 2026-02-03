@@ -97,14 +97,25 @@ def remove_echoarea(echoarea):
         os.remove(storage + "%s.aio" % echoarea)
 
 
-def get_msg_list_data(echoarea):
-    with codecs.open(storage + "%s.aio" % echoarea, "r", "utf-8") as f:
-        lines = f.read().split("\n")
+def get_msg_list_data(echoarea, msgids=None):
+    if echoarea:
+        with codecs.open(storage + "%s.aio" % echoarea, "r", "utf-8") as f:
+            lines = filter(None, f.read().split("\n"))
+    else:
+        lines = []
+        for echo in sorted(os.listdir(storage)):
+            if not echo.endswith(".aio") or echo in ("favorites.aio", "carbonarea.aio"):
+                continue  #
+            with codecs.open(storage + echo, "r", "utf-8") as f:
+                lines += filter(None, f.read().split("\n"))
     lst = []
     for msg in filter(None, lines):
         rawmsg = msg.split(chr(15))
+        msgid = rawmsg[0].split(":")[0]
+        if msgids and msgid not in msgids:
+            continue
         lst.append([
-            rawmsg[0].split(":")[0],
+            msgid,
             rawmsg[3],
             rawmsg[6],
             time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2]))),
@@ -141,6 +152,16 @@ def find_msg(msgid):
             size = len("\n".join(msg).encode("utf-8"))
             return msg, size
     return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
+
+
+def find_thread_msgids(echoarea, subj):
+    # type: (str, str) -> List[str]
+    if subj.startswith("Re:"):
+        subj = subj[3:].lstrip()
+    with codecs.open(storage + echoarea + ".aio", "r", "utf-8") as f:
+        msgs = map(lambda i: i.split(chr(15)), filter(None, f.read().split("\n")))
+    thread_msgs = filter(lambda i: i[6].endswith(subj), msgs)
+    return list(map(lambda m: m[0].split(":", maxsplit=1)[0], thread_msgs))
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

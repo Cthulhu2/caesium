@@ -130,26 +130,39 @@ def remove_echoarea(echoarea):
     con.commit()
 
 
-def get_msg_list_data(echoarea):
-    lst = []
-    if echoarea == "favorites":
-        rows = c.execute("SELECT msgid, fr, subject, time"
-                         " FROM msg WHERE favorites = 1 ORDER BY id;")
-    elif echoarea == "carbonarea":
-        rows = c.execute("SELECT msgid, fr, subject, time"
-                         " FROM msg WHERE carbonarea = 1 ORDER BY id;")
+def get_msg_list_data(echoarea, msgids=None):
+    if not msgids:
+        if echoarea == "favorites":
+            rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
+                             " WHERE favorites = 1 ORDER BY id;")
+        elif echoarea == "carbonarea":
+            rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
+                             " WHERE carbonarea = 1 ORDER BY id;")
+        else:
+            rows = c.execute("SELECT msgid, fr, subject, time"
+                             " FROM msg WHERE echoarea = ? ORDER BY id;",
+                             (echoarea,))
     else:
-        rows = c.execute("SELECT msgid, fr, subject, time"
-                         " FROM msg WHERE echoarea = ? ORDER BY id;",
-                         (echoarea,))
-    for row in rows:
-        lst.append([
-            row[0],
-            row[1],
-            row[2],
-            time.strftime("%Y.%m.%d", time.gmtime(int(row[3]))),
-        ])
-    return lst
+        args = list(msgids)
+        echo_clause = ""
+        if echoarea == "favorites":
+            echo_clause = " AND favorites = 1 "
+        elif echoarea == "carbonarea":
+            echo_clause = " AND carbonarea = 1 "
+        elif echoarea:
+            echo_clause = " AND echoarea = ? "
+            args.append(echoarea)
+        echo_order = ""
+        if not echoarea:
+            echo_order = "echoarea, "
+        rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
+                         " WHERE msgid IN (%s) %s ORDER BY %s id;"
+                         % (",".join("?" * len(msgids)), echo_clause, echo_order),
+                         args)
+    return list(map(
+        lambda r: [r[0], r[1], r[2], time.strftime("%Y.%m.%d",
+                                                   time.gmtime(int(r[3])))],
+        rows))
 
 
 # noinspection PyUnusedLocal
@@ -168,6 +181,18 @@ def read_msg(msgid, echoarea):
 
 def find_msg(msgid):
     return read_msg(msgid, None)
+
+
+def find_thread_msgids(echoarea, subj):  # type: (str, str) -> List[str]
+    if subj.startswith("Re:"):
+        subj = subj[3:].lstrip()
+    subj = "%" + subj
+
+    rows = c.execute("SELECT msgid FROM msg"
+                     " WHERE echoarea = ? AND trim(subject) LIKE ?"
+                     " LIMIT 1000;",
+                     (echoarea, subj,))
+    return list(map(lambda r: r[0], rows))
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

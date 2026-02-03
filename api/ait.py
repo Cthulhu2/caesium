@@ -108,17 +108,28 @@ def remove_echoarea(echoarea):
         os.remove(storage + "%s.mat" % echoarea)
 
 
-def get_msg_list_data(echoarea):
+def get_msg_list_data(echoarea, msgids=None):
+    if echoarea:
+        echoareas = [echoarea + ".mat"]
+    else:
+        echoareas = sorted(list(filter(
+            lambda e: e.endswith(".mat") and e not in ("favorites.mat",
+                                                       "carbonarea.mat"),
+            os.listdir(storage))))
     lst = []
-    with codecs.open(storage + "%s.mat" % echoarea, "r", "utf-8") as f:
-        for msg in filter(None, f.read().split("\n")):
-            rawmsg = msg.split(chr(15))
-            lst.append([
-                rawmsg[0].split(":")[0],
-                rawmsg[3],
-                rawmsg[6],
-                time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2]))),
-            ])
+    for echo in echoareas:
+        with codecs.open(storage + echo, "r", "utf-8") as f:
+            for msg in filter(None, f.read().split("\n")):
+                rawmsg = msg.split(chr(15))
+                msgid = rawmsg[0].split(":")[0]
+                if msgids and msgid not in msgids:
+                    continue  # msg
+                lst.append([
+                    msgid,
+                    rawmsg[3],
+                    rawmsg[6],
+                    time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2]))),
+                ])
     return lst
 
 
@@ -149,6 +160,16 @@ def find_msg(msgid):
             if exists:
                 return read_msg(msgid, echo[0:-len(".iat")])
     return ["", "", "", "", "", "", "", "", "Сообщение отсутствует в базе"], 0
+
+
+def find_thread_msgids(echoarea, subj):
+    # type: (str, str) -> List[str]
+    if subj.startswith("Re:"):
+        subj = subj[3:].lstrip()
+    with codecs.open(storage + echoarea + ".mat", "r", "utf-8") as f:
+        msgs = map(lambda i: i.split(chr(15)), filter(None, f.read().split("\n")))
+    thread_msgs = filter(lambda i: i[6].endswith(subj), msgs)
+    return list(map(lambda m: m[0].split(":", maxsplit=1)[0], thread_msgs))
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]
