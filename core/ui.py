@@ -22,8 +22,9 @@ version = "Caesium/%s │" % __version__
 
 class ReaderMode(Enum):
     ECHO = auto()  # Regular mode reading whole echo conference
-    SUBJ = auto()  # Read message with specified subject and answers (Re: )
-    FIND = auto()  # Read messages in find result list
+    SUBJ = auto()  # Specified subject and answers (Re: )
+    SEARCH = auto()  # Quick Search results on MsgListScreen
+    FIND = auto()  # Find results
 
 
 def set_term_size():
@@ -140,7 +141,7 @@ def draw_status_bar(scr, mode=None, text=None):
         scr.addstr(h - 1, w - 10, "~", color)
     if mode == ReaderMode.SUBJ:
         scr.addstr(h - 1, w - 11, "!", color)
-    elif mode == ReaderMode.FIND:
+    elif mode == ReaderMode.SEARCH:
         scr.addstr(h - 1, w - 11, "@", color)
 
 
@@ -457,7 +458,7 @@ class MsgListScreen:
                     curses.curs_set(0)
                 elif key in keys.s_asearch:
                     if self.qs.result:
-                        self.toggle_mode(ReaderMode.FIND)
+                        self.toggle_mode(ReaderMode.SEARCH)
                     self.qs = None
                     curses.curs_set(0)
                 else:
@@ -550,7 +551,7 @@ class MsgListScreen:
                 self.cursor = self.find_msgid_idx(msgid)
                 self.mode = ReaderMode.ECHO
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-            elif self.mode == ReaderMode.ECHO or self.mode == ReaderMode.FIND:
+            elif self.mode == ReaderMode.ECHO or self.mode == ReaderMode.SEARCH:
                 msgid = self.data[self.cursor][0]
                 subj = self.data[self.cursor][2]
                 msgids = api.find_subj_msgids(self.echo, subj)
@@ -559,8 +560,8 @@ class MsgListScreen:
                 self.mode = ReaderMode.SUBJ
                 self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
             return  #
-        elif mode == ReaderMode.FIND:
-            self.mode = ReaderMode.FIND
+        elif mode == ReaderMode.SEARCH:
+            self.mode = ReaderMode.SEARCH
             msgid = self.data[self.cursor][0]
             self.data = [self.data[idx]
                          for idx in self.qs.result]
