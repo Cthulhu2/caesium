@@ -660,10 +660,11 @@ class LabelWidget(Widget):
         self.w = len(txt)
 
     def draw(self, win):  # type: (curses.window) -> None
-        h, w = win.getmaxyx()
-        w = min(w - self.x, self.w)
-        win.addnstr(self.y, self.x, " " * w, self.color)
-        win.addnstr(self.y, self.x, self.txt, w, self.color)
+        _, width = win.getmaxyx()
+        w = min(width - self.x, self.w)
+        if w > 0:  # android termux curses v6.5.20240832 crashes on addnstr w zero width
+            win.addstr(self.y, self.x, " " * w, self.color)
+            win.addnstr(self.y, self.x, self.txt, w, self.color)
 
 
 class CheckBoxWidget(Widget):
@@ -699,7 +700,8 @@ class CheckBoxWidget(Widget):
         self.color = self._color(focused)
 
     def draw(self, win):
-        win.addnstr(self.y, self.x, self.content, self.w, self.color)
+        if self.w > 0:
+            win.addnstr(self.y, self.x, self.content, self.w, self.color)
 
     def on_key_pressed(self, ks, key):
         if key == ord(" "):
@@ -741,7 +743,8 @@ class InputWidget(Widget):
     def draw(self, win):  # type: (curses.window) -> None
         win.addstr(self.y, self.x, " " * self.w, self.color)
         txt = self.txt if self.txt else self.placeholder
-        win.addnstr(self.y, self.x, "[" + txt, self.w - 2, self.color)
+        if self.w - 2 > 0:
+            win.addnstr(self.y, self.x, "[" + txt, self.w - 2, self.color)
         win.addstr(self.y, self.x + self.w - 1, "]", self.color)
 
     def on_key_pressed(self, ks, key):
