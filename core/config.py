@@ -44,6 +44,7 @@ ECHO_OUT = Echo("out", "Исходящие", False)
 ECHO_DRAFTS = Echo("out", "Черновики", False)
 ECHO_FAVORITES = Echo("favorites", "Избранные сообщения", False)
 ECHO_CARBON = Echo("carbonarea", "Карбонка", False)
+ECHO_FIND = Echo("<find-results>", "Результаты поиска", False)
 
 
 @dataclasses.dataclass
@@ -96,11 +97,14 @@ class Config:
             elif param[0] == "to":
                 node.to = " ".join(param[1:]).split(",")
             elif param[0] == "echo":
-                node.echoareas.append(Echo(param[1], "".join(param[2:]), True))
+                node.echoareas.append(Echo(sys.intern(param[1]),
+                                           "".join(param[2:]), True))
             elif param[0] == "stat":
-                node.echoareas.append(Echo(param[1], "".join(param[2:]), False))
+                node.echoareas.append(Echo(sys.intern(param[1]),
+                                           "".join(param[2:]), False))
             elif param[0] == "archive":
-                node.archive.append(Echo(param[1], "".join(param[2:]), False))
+                node.archive.append(Echo(sys.intern(param[1]),
+                                         "".join(param[2:]), False))
             #
             if param[0] == "editor":
                 self.editor = " ".join(param[1:])

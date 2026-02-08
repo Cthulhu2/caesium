@@ -2,7 +2,8 @@
 import codecs
 import os
 import time
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import Optional, List, Callable
 
 storage = "ait/"
 
@@ -170,10 +171,83 @@ def find_subj_msgids(echoarea, subj):
         subj = subj[3:]
     subjRe = "Re:" + subj
     subjReSpace = "Re: " + subj
-    with codecs.open(storage + echoarea + ".mat", "r", "utf-8") as f:
-        msgs = map(lambda i: i.split(chr(15)), filter(None, f.read().split("\n")))
-    thread_msgs = filter(lambda i: i[6] in (subj, subjRe, subjReSpace), msgs)
+
+    if echoarea:
+        echoareas = [echoarea + ".mat"]
+    else:
+        echoareas = sorted(list(filter(
+            lambda e: e.endswith(".mat") and e not in ("favorites.mat",
+                                                       "carbonarea.mat"),
+            os.listdir(storage))))
+
+    thread_msgs = []
+    for echo in echoareas:
+        with codecs.open(storage + echo, "r", "utf-8") as f:
+            msgs = map(lambda i: i.split(chr(15)),
+                       filter(None, f.read().split("\n")))
+        thread_msgs += list(filter(lambda i: i[6] in (subj, subjRe, subjReSpace),
+                                   msgs))
     return list(map(lambda m: m[0].split(":", maxsplit=1)[0], thread_msgs))
+
+
+FIND_CANCEL = 1
+FIND_OK = 0
+
+
+@dataclass
+class FindResult:
+    msgid: str
+    echo: str
+
+
+def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
+                      limit=1000, progress_handler=None):
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    query = query.lower()
+
+    def match(s):
+        return query in s.lower()
+
+    echoareas = sorted(list(filter(
+        lambda e: e.endswith(".mat") and e not in ("favorites.mat",
+                                                   "carbonarea.mat"),
+        os.listdir(storage))))
+
+    find_result = []
+    progress = 0
+    for echo in echoareas:
+        if echoarea and echoarea not in echo[0:-4]:
+            continue  #
+        with codecs.open(storage + echo, "r", "utf-8") as f:
+            echo_msgs = list(filter(None, f.read().split("\n")))
+
+        for msg in echo_msgs:
+            if len(find_result) >= limit:
+                return find_result  #
+            #
+            progress += 1
+            if progress_handler:
+                if progress_handler(progress) == FIND_CANCEL:
+                    return []
+            #
+            msg = msg.split(chr(15))
+            msgid_ = msg[0].split(":")[0]
+            if msgid and msgid_ == query:
+                find_result.append(FindResult(msgid_, echo[0:-4]))
+                continue  #
+            if body and match("\n".join(msg[7:])):
+                find_result.append(FindResult(msgid_, echo[0:-4]))
+                continue  #
+            if subj and match(msg[6]):
+                find_result.append(FindResult(msgid_, echo[0:-4]))
+                continue  #
+            if fr and match(msg[3]):
+                find_result.append(FindResult(msgid_, echo[0:-4]))
+                continue  #
+            if to and match(msg[5]):
+                find_result.append(FindResult(msgid_, echo[0:-4]))
+                continue  #
+    return find_result
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

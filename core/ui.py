@@ -1,18 +1,22 @@
 import curses
+import time
+from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum, auto
-from typing import Optional, List
+from enum import Enum
+from itertools import cycle
+from typing import Optional, List, Tuple
 
 import api.ait as api
 import keys.default as keys
-from core import __version__, parser, utils, search, keystroke
+from core import __version__, parser, utils, search, keystroke, config
 from core.config import (
     get_color, TOKEN2UI,
-    UI_BORDER, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
+    UI_BORDER, UI_COMMENT, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
 )
 
 LABEL_ANY_KEY = "Нажмите любую клавишу"
 LABEL_ESC = "Esc - отмена"
+LABEL_FIND = "Поиск"
 HEIGHT = 0
 WIDTH = 0
 
@@ -21,10 +25,10 @@ version = "Caesium/%s │" % __version__
 
 
 class ReaderMode(Enum):
-    ECHO = auto()  # Regular mode reading whole echo conference
-    SUBJ = auto()  # Specified subject and answers (Re: )
-    SEARCH = auto()  # Quick Search results on MsgListScreen
-    FIND = auto()  # Find results
+    ECHO = 'E'  # Regular mode reading whole echo conference
+    SUBJ = 'S'  # Specified subject and answers (Re: )
+    SEARCH = 'Q'  # Quick Search results on MsgListScreen
+    FIND = 'F'  # Find results
 
 
 def set_term_size():
@@ -54,9 +58,11 @@ def terminate_curses():
     curses.endwin()
 
 
-def get_keystroke():
-    stdscr.timeout(-1)
-    key = stdscr.getch()
+def get_keystroke(timeout=-1):
+    stdscr.timeout(timeout)
+    key = -1
+    if not keystroke.PENDING_KEYS:
+        key = stdscr.getch()
     stdscr.timeout(0)
     ks, key, _ = keystroke.getkeystroke(stdscr, key)
     stdscr.timeout(-1)
@@ -139,10 +145,8 @@ def draw_status_bar(scr, mode=None, text=None):
         scr.addstr(h - 1, len(version) + 2, text, color)
     if parser.INLINE_STYLE_ENABLED:
         scr.addstr(h - 1, w - 10, "~", color)
-    if mode == ReaderMode.SUBJ:
-        scr.addstr(h - 1, w - 11, "!", color)
-    elif mode == ReaderMode.SEARCH:
-        scr.addstr(h - 1, w - 11, "@", color)
+    if mode:
+        scr.addstr(h - 1, w - 11, mode.value, color)
 
 
 def draw_reader(scr, echo: str, msgid, out):
@@ -183,7 +187,7 @@ class ScrollCalc:
         self.content = content
         self.view = view
         self.thumb_sz = max(1, min(self.view, int(self.view * self.view
-                                                  / self.content + 0.5)))
+                                                  / max(1, content) + 0.5)))
         self.track = track or view
         self.is_scrollable = self.content > self.view
         self._pos = max(0, min(self.content - self.view, pos))
@@ -420,12 +424,15 @@ class MsgListScreen:
         self.mode = mode
         msgids = None if self.mode == ReaderMode.ECHO else msgids
         draw_message_box("Подождите", False)
-        self.data = api.get_msg_list_data(self.echo, msgids)
+        if echo == config.ECHO_FIND:
+            echo = None
+        self.data = api.get_msg_list_data(echo, msgids)
         self.cursor = self.find_msgid_idx(msgid)
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
         self.qs = None  # type: Optional[search.QuickSearch]
+        self.mode_stack = []  # type: List[Tuple[ReaderMode, List[str], str]]
 
     def find_msgid_idx(self, msgid):
         for i, d in enumerate(self.data):
@@ -458,18 +465,22 @@ class MsgListScreen:
                     curses.curs_set(0)
                 elif key in keys.s_asearch:
                     if self.qs.result:
-                        self.toggle_mode(ReaderMode.SEARCH)
+                        self.mode_search_on()
                     self.qs = None
                     curses.curs_set(0)
                 else:
                     self.qs.on_key_pressed_search(key, ks, self.scroll)
                     self.cursor = self.qs.ensure_cursor_visible(
                         key, self.cursor, self.scroll)
+            elif (key in keys.s_csearch
+                  and self.mode == ReaderMode.SEARCH
+                  and self.mode_stack):
+                self.apply_mode(*self.mode_stack.pop())
             elif key in keys.s_osearch:
                 stdscr.move(HEIGHT - 1, len(version) + 2)
                 curses.curs_set(1)
                 self.qs = search.QuickSearch(self.data, self.on_search_item,
-                                             WIDTH - len(version) - 12)
+                                             WIDTH - len(version) - 13)
             elif key in keys.s_enter:
                 return self.cursor  #
             elif key in keys.r_quit:
@@ -522,7 +533,10 @@ class MsgListScreen:
 
     def on_key_pressed(self, key, scroll):
         if key in keys.r_msubj:
-            self.toggle_mode(ReaderMode.SUBJ)
+            if self.mode != ReaderMode.SUBJ:
+                self.mode_subj_on()
+            elif self.mode_stack:
+                self.apply_mode(*self.mode_stack.pop())
         elif key in keys.s_up:
             self.cursor = max(0, self.cursor - 1)
         elif key in keys.s_down:
@@ -543,33 +557,35 @@ class MsgListScreen:
         elif key in keys.s_end:
             self.cursor = scroll.content - 1
 
-    def toggle_mode(self, mode):
-        if mode == ReaderMode.SUBJ:
-            if self.mode == ReaderMode.SUBJ:
-                msgid = self.data[self.cursor][0]
-                self.data = api.get_msg_list_data(self.echo, None)
-                self.cursor = self.find_msgid_idx(msgid)
-                self.mode = ReaderMode.ECHO
-                self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-            elif self.mode == ReaderMode.ECHO or self.mode == ReaderMode.SEARCH:
-                msgid = self.data[self.cursor][0]
-                subj = self.data[self.cursor][2]
-                msgids = api.find_subj_msgids(self.echo, subj)
-                self.data = api.get_msg_list_data(self.echo, msgids)
-                self.cursor = self.find_msgid_idx(msgid)
-                self.mode = ReaderMode.SUBJ
-                self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-            return  #
-        elif mode == ReaderMode.SEARCH:
-            self.mode = ReaderMode.SEARCH
-            msgid = self.data[self.cursor][0]
-            self.data = [self.data[idx]
-                         for idx in self.qs.result]
-            self.cursor = self.find_msgid_idx(msgid)
-            self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
-            return  #
-        else:
-            return  #
+    def apply_mode(self, mode, data, msgid):
+        self.data = data
+        self.cursor = self.find_msgid_idx(msgid)
+        self.mode = mode
+        self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
+        self.scroll.ensure_visible(self.cursor, center=True)
+
+    def mode_subj_on(self):
+        if self.mode != ReaderMode.SUBJ:
+            if not self.mode_stack or self.mode_stack[-1][0] != self.mode:
+                self.mode_stack.append((self.mode, self.data,
+                                        self.data[self.cursor][0]))
+        #
+        subj = self.data[self.cursor][2]
+        echo = self.echo if self.echo != config.ECHO_FIND else None
+        msgids = api.find_subj_msgids(echo, subj)
+        self.apply_mode(ReaderMode.SUBJ,
+                        data=api.get_msg_list_data(echo, msgids),
+                        msgid=self.data[self.cursor][0])
+
+    def mode_search_on(self):
+        if self.mode != ReaderMode.SEARCH:
+            if not self.mode_stack or self.mode_stack[-1][0] != self.mode:
+                self.mode_stack.append((self.mode, self.data,
+                                        self.data[self.cursor][0]))
+        self.apply_mode(ReaderMode.SEARCH,
+                        data=[self.data[idx]
+                              for idx in self.qs.result],
+                        msgid=self.data[self.cursor][0])
 
     # noinspection PyUnusedLocal
     @staticmethod
@@ -591,3 +607,404 @@ class MsgListScreen:
         if result_name or result_subj:
             return [(result_name, result_subj)]
         return None
+
+
+class Widget:
+    focused: bool = False
+    enabled: bool = True
+    focusable: bool = True
+    x: int = 0
+    y: int = 0
+    w: int = 0
+    h: int = 0
+
+    def right(self):
+        return self.x + self.w
+
+    def set_focused(self, focused):
+        pass
+
+    def on_key_pressed(self, ks, key):
+        pass
+
+    def draw(self, win):  # type: (curses.window) -> None
+        pass
+
+
+class LabelWidget(Widget):
+    focusable: bool = False
+    h: int = 1
+
+    def __init__(self, y=0, x=0, txt=""):
+        self.x = x
+        self.y = y
+        self.w = len(txt)
+        self.txt = txt
+        self.color = self._color(self.enabled)
+
+    # noinspection PyUnusedLocal
+    @staticmethod
+    def _color(enabled):
+        if enabled:
+            return get_color(UI_TEXT)
+        return get_color(UI_COMMENT)
+
+    def set_enabled(self, enabled):
+        if self.enabled == enabled:
+            return
+        self.enabled = enabled
+        self.color = self._color(enabled)
+
+    def set_txt(self, txt):
+        self.txt = txt
+        self.w = len(txt)
+
+    def draw(self, win):  # type: (curses.window) -> None
+        h, w = win.getmaxyx()
+        w = min(w - self.x, self.w)
+        win.addnstr(self.y, self.x, " " * w, self.color)
+        win.addnstr(self.y, self.x, self.txt, w, self.color)
+
+
+class CheckBoxWidget(Widget):
+    h: int = 1
+
+    def __init__(self, y=0, x=0, lbl="", checked=False):
+        self.x = x
+        self.y = y
+        self.lbl = lbl
+        self.checked = checked
+        self.content = self._content(checked, lbl)
+        self.color = self._color(self.focused)
+        self.w = len(self.content)
+
+    @staticmethod
+    def _content(checked, lbl):
+        return "[%s] %s" % ("x" if checked else " ", lbl)
+
+    @staticmethod
+    def _color(focused):
+        return get_color(UI_TITLES if focused else UI_TEXT)
+
+    def set_checked(self, checked):
+        if self.checked == checked:
+            return
+        self.checked = checked
+        self.content = self._content(checked, self.lbl)
+
+    def set_focused(self, focused):
+        if self.focused == focused:
+            return
+        self.focused = focused
+        self.color = self._color(focused)
+
+    def draw(self, win):
+        win.addnstr(self.y, self.x, self.content, self.w, self.color)
+
+    def on_key_pressed(self, ks, key):
+        if key == ord(" "):
+            self.set_checked(not self.checked)
+
+
+class InputWidget(Widget):
+    cursor: int = 0
+    enabled: bool = True
+    h: int = 1
+
+    def __init__(self, y=0, x=0, w=0, txt="", placeholder=""):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.txt = txt
+        self.placeholder = placeholder
+        self.color = self._color(self.focused, self.enabled)
+
+    # noinspection PyUnusedLocal
+    @staticmethod
+    def _color(focused, enabled):
+        if enabled:
+            return get_color(UI_CURSOR)
+        return get_color(UI_TEXT)
+
+    def set_focused(self, focused):
+        if self.focused == focused:
+            return
+        self.focused = focused
+        self.color = self._color(focused, self.enabled)
+
+    def set_enabled(self, enabled):
+        if self.enabled == enabled:
+            return
+        self.enabled = enabled
+        self.color = self._color(self.focused, enabled)
+
+    def draw(self, win):  # type: (curses.window) -> None
+        win.addstr(self.y, self.x, " " * self.w, self.color)
+        txt = self.txt if self.txt else self.placeholder
+        win.addnstr(self.y, self.x, "[" + txt, self.w - 2, self.color)
+        win.addstr(self.y, self.x + self.w - 1, "]", self.color)
+
+    def on_key_pressed(self, ks, key):
+        if key == ord(" "):
+            ks = " "
+        if key in keys.s_home:
+            self.cursor = 0
+        elif key in keys.s_end:
+            self.cursor = len(self.txt)
+        elif key == curses.KEY_LEFT:
+            self.cursor = max(0, self.cursor - 1)
+        elif key == curses.KEY_RIGHT:
+            self.cursor = min(len(self.txt), self.cursor + 1)
+        elif key in (curses.KEY_BACKSPACE, 127):
+            # 127 - Ctrl+? - Android backspace
+            self.txt = self.txt[0:max(0, self.cursor - 1)] + self.txt[self.cursor:]
+            self.cursor = max(0, self.cursor - 1)
+        elif key == curses.KEY_DC:  # DEL
+            self.txt = self.txt[0:max(0, self.cursor)] + self.txt[self.cursor + 1:]
+        elif len(ks) == 1:
+            self.txt = self.txt[0:self.cursor] + ks + self.txt[self.cursor:]
+            self.cursor = min(len(self.txt), self.cursor + 1)
+
+    def get_win_cursor_pos(self):
+        if len(self.txt) < self.w - 2:
+            return 1 + self.cursor
+        # TODO: Make InputWidget horizontal scrollable
+        return 1 + self.cursor
+
+
+@dataclass
+class FindQuery:
+    query: str = ""
+    msgid: bool = True
+    body: bool = True
+    subj: bool = True
+    fr: bool = True
+    to: bool = True
+    echo: bool = True
+    echo_query: str = ""
+    limit: int = 10000
+
+
+class FindQueryWindow:
+    query = FindQuery()
+    resized: bool = False
+    focused_wid: Widget = None
+    go: bool = True
+    #
+    find_in_progress: bool = None
+    find_progress_bar = cycle(r"-\|/")
+    find_cancel: bool = False
+    find_result: List[api.FindResult] = None
+    find_tick: float = 0
+
+    def __init__(self):
+        self.win = self.init_win()
+        h, w = self.win.getmaxyx()
+        #
+        self.inp_query = InputWidget(1, 2, w - 4, self.query.query,
+                                     placeholder="<введите текст для поиска>")
+
+        self.chk_msgid = CheckBoxWidget(3, 2, "Идентификатор", self.query.msgid)
+        self.chk_body = CheckBoxWidget(4, 2, "Тело", self.query.body)
+        self.chk_subj = CheckBoxWidget(5, 2, "Тема", self.query.subj)
+
+        self.chk_from = CheckBoxWidget(6, 2, "От", self.query.fr)
+        self.chk_to = CheckBoxWidget(7, 2, "Кому", self.query.to)
+
+        self.chk_echo = CheckBoxWidget(8, 2, "Эха ", self.query.echo)
+        self.inp_echo = InputWidget(8, self.chk_echo.right(),
+                                    w - self.chk_echo.right() - 2,
+                                    self.query.echo_query,
+                                    placeholder="<введите эхоконференцию>")
+        self.lbl_limit = LabelWidget(9, 2, "Лимит: ")
+        self.inp_limit = InputWidget(9, self.lbl_limit.right(),
+                                     min(10, w - self.chk_echo.right() - 1),
+                                     str(self.query.limit))
+        self.lbl_progress = LabelWidget(10, 2, "")
+
+        self.widgets = [
+            self.inp_query,
+            self.chk_msgid, self.chk_body, self.chk_subj,
+            self.chk_from, self.chk_to,
+            self.chk_echo, self.inp_echo,
+            self.lbl_limit, self.inp_limit,
+            self.lbl_progress
+        ]  # type: List[Widget]
+
+        self.set_focused(self.inp_query)
+        self.update_state()
+
+    def set_focused(self, focus_wid):  # type: (Optional[Widget]) -> None
+        if self.focused_wid == focus_wid:
+            return
+        if self.focused_wid:
+            self.focused_wid.set_focused(False)
+        self.focused_wid = focus_wid
+        if self.focused_wid:
+            self.focused_wid.set_focused(True)
+
+    @staticmethod
+    def init_win(win=None):
+        w = max(len(LABEL_FIND) + 2, min(80, int(WIDTH * 0.75)))
+        h = min(HEIGHT, 12)
+        w = min(WIDTH, w)
+        y = max(0, int((HEIGHT - h) / 2))
+        x = max(0, int((WIDTH - w) / 2))
+        if win:
+            win.resize(h, w)
+            win.mvwin(y, x)
+        else:
+            win = curses.newwin(h, w, y, x)
+        return win
+
+    def show(self):
+        self.draw_title(self.win)
+        while self.go:
+            self._show()
+            self._keys()
+        return self.find_result
+
+    def _show(self):
+        self.draw_content(self.win)
+        self.win.refresh()
+
+    def _keys(self):
+        if self.find_in_progress:
+            ks, key, _ = get_keystroke(0)
+        else:
+            ks, key, _ = get_keystroke()
+        self.go = self.on_key_pressed(ks, key)
+
+    @staticmethod
+    def draw_title(win):  # type: (curses.window) -> None
+        h, w = win.getmaxyx()
+        win.bkgd(" ", get_color(UI_TEXT))
+        #
+        border = get_color(UI_BORDER)
+        win.attrset(border)
+        win.border()
+
+        x = (w - len(LABEL_FIND)) // 2 - 1
+        draw_title(win, 0, x, LABEL_FIND)
+        win.addstr(2, 2, "Искать в:", get_color(UI_TEXT))
+
+    def draw_content(self, win):  # type: (curses.window) -> None
+        h, w = win.getmaxyx()
+        win.addstr(h - 2, 1, " " * (w - 2))  # lbl_progress
+        for w in self.widgets:
+            w.draw(win)
+
+    def on_key_pressed(self, ks, key):
+        if key == curses.KEY_RESIZE:
+            set_term_size()
+            stdscr.clear()
+            stdscr.refresh()
+            self.win = self.init_win(self.win)
+            self.draw_title(self.win)
+            self.resized = True
+        elif key in keys.s_csearch:
+            curses.curs_set(0)
+            if self.find_in_progress:
+                self.find_cancel = True
+            else:
+                return False  #
+        elif key in keys.s_asearch and not self.find_in_progress:
+            curses.curs_set(0)
+            self.find_tick = 0
+            self.find()
+            self.find_cancel = False
+            if self.find_result:
+                return False
+            self.update_state()
+        elif key != -1:
+            if ks == "Tab" or key == curses.KEY_DOWN:
+                wid = self.next_focus(self.focused_wid)
+                while wid and not (wid.enabled and wid.focusable):
+                    wid = self.next_focus(wid)
+                self.set_focused(wid)
+
+            elif ks == "Shift+Tab" or key == curses.KEY_UP:
+                wid = self.prev_focus(self.focused_wid)
+                while wid and not (wid.enabled and wid.focusable):
+                    wid = self.prev_focus(wid)
+                self.set_focused(wid)
+
+            elif self.focused_wid:
+                self.focused_wid.on_key_pressed(ks, key)
+            self.update_state()
+        return True  #
+
+    def next_focus(self, wid):
+        if not wid:
+            return self.widgets[0]
+        elif self.widgets:
+            idx = self.widgets.index(wid) + 1
+            if idx >= len(self.widgets):
+                idx = 0
+            return self.widgets[idx]
+        return None
+
+    def prev_focus(self, wid):
+        if not wid:
+            return self.widgets[len(self.widgets) - 1]
+        elif self.widgets:
+            idx = self.widgets.index(wid) - 1
+            if idx < 0:
+                idx = len(self.widgets) - 1
+            return self.widgets[idx]
+        return None
+
+    def update_state(self):
+        if self.find_in_progress:
+            return  #
+        self.inp_echo.set_enabled(self.chk_echo.checked)
+        if isinstance(self.focused_wid, InputWidget):
+            y, x = self.win.getbegyx()
+            inp_cursor_x = self.focused_wid.get_win_cursor_pos()
+            stdscr.move(y + self.focused_wid.y,
+                        x + self.focused_wid.x + inp_cursor_x)
+            curses.curs_set(1)
+        else:
+            curses.curs_set(0)
+
+        self.query.query = self.inp_query.txt
+        self.query.msgid = self.chk_msgid.checked
+        self.query.body = self.chk_body.checked
+        self.query.subj = self.chk_subj.checked
+        self.query.fr = self.chk_from.checked
+        self.query.to = self.chk_to.checked
+        self.query.echo = self.chk_echo.checked
+        self.query.echo_query = self.inp_echo.txt
+        self.query.limit = int(self.inp_limit.txt or "1000")
+
+        if self.find_in_progress is None:
+            self.lbl_progress.set_txt("")
+        else:
+            self.lbl_progress.set_txt("Ничего не найдено")
+
+    def find(self):
+        self.find_in_progress = True
+        self.find_result = api.find_query_msgids(
+            query=self.query.query,
+            msgid=self.query.msgid,
+            body=self.query.body,
+            subj=self.query.subj,
+            fr=self.query.fr,
+            to=self.query.to,
+            echoarea=self.query.echo_query if self.query.echo else None,
+            limit=self.query.limit,
+            progress_handler=self.find_progress_handler)
+        self.find_in_progress = False
+
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
+    def find_progress_handler(self, param=None):
+        self._keys()
+        if self.find_cancel:
+            return api.FIND_CANCEL
+        now = time.time()
+        if (now - self.find_tick) < 0.250:  # ms
+            return api.FIND_OK
+        self.find_tick = now
+        self.lbl_progress.set_txt(" Поиск... " + next(self.find_progress_bar))
+        self._show()
+        return api.FIND_OK

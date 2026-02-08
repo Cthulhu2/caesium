@@ -1,12 +1,25 @@
 # coding=utf-8
 import sqlite3
 import time
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import Optional, List, Callable
 
 from core import FEAT_FEATURES, FEAT_X_C
 
 con = None  # type: Optional[sqlite3.Connection]
 c = None  # type: Optional[sqlite3.Cursor]
+
+# TODO: Support SQLite case-insensitive matching of Unicode
+#
+# Frequently Asked Questions
+# (18) Case-insensitive matching of Unicode characters does not work.
+# https://www.sqlite.org/faq.html#q18
+#
+# All the missing SQLite functions
+# https://github.com/nalgeon/sqlean/
+#
+# 5 ways to implement case-insensitive search in SQLite with full Unicode support
+# https://shallowdepth.online/posts/2022/01/5-ways-to-implement-case-insensitive-search-in-sqlite-with-full-unicode-support/
 
 
 def init(db="idec.db"):
@@ -190,13 +203,72 @@ def find_subj_msgids(echoarea, subj):  # type: (str, str) -> List[str]
         subj = subj[3:]
     subjRe = "Re:" + subj
     subjReSpace = "Re: " + subj
+    where_clause = "TRUE"
+    args = []
+    if echoarea:
+        where_clause += " AND echoarea = ? "
+        args.append(echoarea)
 
     rows = c.execute("SELECT msgid FROM msg"
-                     " WHERE echoarea = ?"
+                     " WHERE %s"
                      "   AND (subject = ? OR subject = ? OR subject = ?)"
-                     " LIMIT 1000;",
-                     (echoarea, subj, subjRe, subjReSpace))
+                     " ORDER BY id"
+                     " LIMIT 1000;" % where_clause,
+                     (*args, subj, subjRe, subjReSpace))
     return list(map(lambda r: r[0], rows))
+
+
+FIND_CANCEL = 1
+FIND_OK = 0
+
+
+@dataclass
+class FindResult:
+    msgid: str
+    echo: str
+
+
+def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
+                      limit=1000, progress_handler=None):
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    if not query or not any((msgid, body, subj, fr, to)):
+        return []
+    if progress_handler:
+        con.set_progress_handler(progress_handler, 100)
+    args = []
+    where = "TRUE AND (FALSE"
+    if msgid:
+        where += " OR msgid = ?"
+        args.append(query)
+    if body:
+        where += " OR body LIKE ?"
+        args.append("%" + query + "%")
+    if subj:
+        where += " OR subject LIKE ?"
+        args.append("%" + query + "%")
+    if fr:
+        where += " OR fr LIKE ?"
+        args.append("%" + query + "%")
+    if to:
+        where += " OR t LIKE ?"
+        args.append("%" + query + "%")
+    where += ")"
+    if echoarea:
+        where += " AND echoarea LIKE ?"
+        args.append(echoarea)
+    try:
+        rows = c.execute("SELECT DISTINCT msgid, echoarea FROM msg"
+                         " WHERE %s"
+                         " ORDER BY id"
+                         " LIMIT ?;" % where,
+                         (*args, limit))
+        return list(map(lambda r: FindResult(r[0], r[1]), rows))
+    except sqlite3.OperationalError as ex:
+        if "interrupted" == str(ex):
+            return []
+        raise ex
+    finally:
+        con.set_progress_handler(None, 1)
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

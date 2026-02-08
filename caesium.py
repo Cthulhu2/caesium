@@ -307,11 +307,11 @@ class EchoSelectorScreen:
                 ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
                 curses.curs_set(1)
                 self.qs = search.QuickSearch(self.echoareas, self.on_search_item,
-                                             ui.WIDTH - len(ui.version) - 12)
+                                             ui.WIDTH - len(ui.version) - 13)
             elif key in keys.g_quit:
                 self.go = False
             else:
-                self.on_key_pressed(key)
+                self.on_key_pressed(ks, key)
 
     def draw(self, win, cursor, scroll, qs):
         h, w = win.getmaxyx()
@@ -381,7 +381,7 @@ class EchoSelectorScreen:
 
         ui.draw_status_bar(win, text=cur_node.nodename)
 
-    def on_key_pressed(self, key):
+    def on_key_pressed(self, ks, key):
         global node
         if key in keys.s_up:
             self.cursor = max(0, self.cursor - 1)
@@ -464,6 +464,14 @@ class EchoSelectorScreen:
             config.load_colors(cfg.theme)
             node = 0
             self.reload_echoareas()
+        elif key in keys.s_find or ks in keys.s_find:
+            win = ui.FindQueryWindow()
+            find_result = win.show()
+            if find_result:
+                msgids = list(map(lambda r: r.msgid, find_result))
+                self.go, _ = EchoReader(
+                    config.ECHO_FIND, 0, True, None,
+                    mode=ui.ReaderMode.FIND, msgids=msgids).show()
 
 
 def call_editor(node_, out=''):
@@ -543,10 +551,11 @@ class EchoReader:
     done: bool = False  # close app
     next_echo: Union[str, bool] = False  # jump to next echo after reader closed
 
-    def __init__(self, echo: config.Echo, msgn, archive, counts):
+    def __init__(self, echo: config.Echo, msgn, archive, counts,
+                 mode=ui.ReaderMode.ECHO, msgids=None):
         self.echo = echo
-        self.mode = ui.ReaderMode.ECHO
-        self.prev_mode_stack = []
+        self.mode = mode
+        self.mode_stack = []
         self.archive = archive
         self.counts = counts
         #
@@ -560,7 +569,15 @@ class EchoReader:
         self.size = 0
         self.repto = ""
         self.stack = []
-        self.msgids = self.get_msgids()
+        if not msgids:
+            self.msgids = self.get_msgids()
+        else:
+            def get_msgids_fixed():
+                return self.msgids
+
+            self.msgids = msgids
+            self.get_msgids = get_msgids_fixed
+
         self.msgn = min(msgn, len(self.msgids) - 1)
         if self.msgids:
             self.read_msg_skip_twit(-1)
@@ -585,6 +602,9 @@ class EchoReader:
         self._msgid = None
         if self.out:
             self.msg, self.size = outgoing.read_out_msg(self.msgid(), self.cur_node)
+        elif self.echo == config.ECHO_FIND:
+            # TODO: EchoReader w full message metadata sorted by time
+            self.msg, self.size = api.find_msg(self.msgid())
         else:
             self.msg, self.size = api.read_msg(self.msgid(), self.echo.name)
 
@@ -712,10 +732,13 @@ class EchoReader:
                 ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2)
                 curses.curs_set(1)
                 self.qs = search.QuickSearch(self.tokens, self.on_search_item,
-                                             ui.WIDTH - len(ui.version) - 12)
+                                             ui.WIDTH - len(ui.version) - 13)
             elif key in keys.r_quit:
-                self.go = False
-                self.next_echo = False
+                if self.mode_stack:
+                    self.mode_restore()
+                else:
+                    self.go = False
+                    self.next_echo = False
             elif key in keys.g_quit:
                 self.go = False
                 self.done = True
@@ -781,16 +804,24 @@ class EchoReader:
             else:
                 self.scroll.ensure_visible(self.t2l[tidx].start + off)
 
+    def mode_restore(self):
+        msgid = self.msgids[self.msgn]
+        self.mode, self.msgids, self.msgn = self.mode_stack.pop()
+        if msgid in self.msgids:
+            self.msgn = self.msgids.index(msgid)
+        if msgid != self.msgids[self.msgn]:
+            self.stack.clear()
+            self.read_cur_msg()
+            self.prerender()
+
     def toggle_mode(self, mode):
         if self.mode == mode:
-            if self.prev_mode_stack:
-                msgid = self.msgids[self.msgn]
-                self.mode, self.msgids, self.msgn = self.prev_mode_stack.pop()
-                self.msgn = self.msgids.index(msgid)
+            if self.mode_stack:
+                self.mode_restore()
             return  #
         msgid = self.msgids[self.msgn]
         if mode == ui.ReaderMode.SUBJ:
-            self.prev_mode_stack.append((self.mode, self.msgids, self.msgn))
+            self.mode_stack.append((self.mode, self.msgids, self.msgn))
             self.msgids = api.find_subj_msgids(self.msg[1], self.msg[6])
         else:
             return  #
@@ -934,7 +965,7 @@ class EchoReader:
                 self.prerender(self.scroll.pos)
             if selected_msgn > -1:
                 if self.mode != win.mode:
-                    self.prev_mode_stack.append((self.mode, self.msgids, self.msgn))
+                    self.mode_stack.append((self.mode, self.msgids, self.msgn))
                 self.msgids = list(map(lambda it: it[0], win.data))
                 self.msgn = selected_msgn
                 self.mode = win.mode

@@ -21,6 +21,7 @@ s_config =  [ord("e"), ord("E")]                    # noqa: E222  редакти
 s_osearch = [ord("s"), ord("S")]                    # noqa: E222  быстрый поиск
 s_csearch = [27]                                    # noqa: E222  закрыть поиск
 s_asearch = [10]                                    # noqa: E222  закрыть поиск оставив найденные элементы
+s_find =    [ord("y"), ord("Y")]                    # noqa: E222  открыть окно поиска по БД
 
 # Клавиши для экрана чтения
 r_prev =    [curses.KEY_LEFT, ord("h"), ord("H")]   # noqa: E222  предыдущее сообщение

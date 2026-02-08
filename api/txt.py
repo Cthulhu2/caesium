@@ -3,7 +3,8 @@ import codecs
 import os
 import time
 from collections import defaultdict
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import Optional, List, Callable
 
 storage = "txt"
 
@@ -185,14 +186,79 @@ def find_subj_msgids(echoarea, subj):
     subjRe = "Re:" + subj
     subjReSpace = "Re: " + subj
 
-    echo_msgids = get_echo_msgids(echoarea)
+    if echoarea:
+        echoareas = [echoarea]
+    else:
+        echoareas = sorted(list(filter(
+            lambda e: e not in ("favorites", "carbonarea"),
+            os.listdir(storage + "echo/"))))
+
     thread_msgids = []
-    for msgid in echo_msgids:
-        with open(storage + "msg/" + msgid, "r") as f:
-            msg = f.read().split("\n")
+    for echo in echoareas:
+        echo_msgids = get_echo_msgids(echo)
+        for msgid in echo_msgids:
+            with open(storage + "msg/" + msgid, "r") as f:
+                msg = f.read().split("\n")
             if msg[6] in (subj, subjRe, subjReSpace):
                 thread_msgids.append(msgid)
     return thread_msgids
+
+
+FIND_CANCEL = 1
+FIND_OK = 0
+
+
+@dataclass
+class FindResult:
+    msgid: str
+    echo: str
+
+
+def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
+                      limit=1000, progress_handler=None):
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    query = query.lower()
+
+    def match(s):
+        return query in s.lower()
+
+    echoareas = sorted(list(filter(
+        lambda e: e not in ("favorites", "carbonarea"),
+        os.listdir(storage + "echo/"))))
+
+    find_result = []
+    progress = 0
+    for echo in echoareas:
+        if echoarea and echoarea not in echo:
+            continue  #
+        echo_msgids = get_echo_msgids(echo)
+        for msgid_ in echo_msgids:
+            if len(find_result) >= limit:
+                return find_result
+            progress += 1
+            if progress_handler:
+                if progress_handler(progress) == FIND_CANCEL:
+                    return []
+            #
+            if msgid and msgid_ == query:
+                find_result.append(FindResult(msgid_, echo))
+                continue  #
+            with open(storage + "msg/" + msgid_, "r") as f:
+                msg = f.read().split("\n", maxsplit=7)
+            if body and match(msg[7]):
+                find_result.append(FindResult(msgid_, echo))
+                continue  #
+            if subj and match(msg[6]):
+                find_result.append(FindResult(msgid_, echo))
+                continue  #
+            if fr and match(msg[3]):
+                find_result.append(FindResult(msgid_, echo))
+                continue  #
+            if to and match(msg[5]):
+                find_result.append(FindResult(msgid_, echo))
+                continue  #
+
+    return find_result
 
 
 def get_node_features(node):  # type: (str) -> Optional[List[str]]

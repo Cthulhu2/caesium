@@ -245,6 +245,9 @@ def test_find_subj_msgids(api):
     data = api.find_subj_msgids("test.local", "Re: Subj")
     assert data == ["1" * 20, "2" * 20]
 
+    data = api.find_subj_msgids(None, "Re: Subj")
+    assert data == ["1" * 20, "2" * 20]
+
 
 # noinspection PyTestParametrized
 @pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
@@ -270,3 +273,35 @@ def test_get_msg_list_data_by_ids_only(api):
     data = api.get_msg_list_data(None, ["1" * 20, "3" * 20])
     assert data == [["3" * 20, "admin", "Subj2", "1970.01.01"],  # echo test.local
                     ["1" * 20, "admin", "Subj", "1970.01.01"]]  # echo test2.local
+
+
+# noinspection PyTestParametrized
+@pytest.mark.parametrize("storage", ["aio", "ait", "sqlite", "txt"])
+def test_find_query_msgids(api):
+    msg1 = ["ii/ok", "test.local", "0", "юзер", "node,1", "All", "Сабж", "", "Msg1", "Row2"]
+    msg2 = ["ii/ok", "test2.local", "1", "admin", "node,1", "юзер", "Re: Subj", "", "Мсг2", "Row2"]
+    api.save_message([("1" * 20, msg1), ("2" * 20, msg2)], "node", ["user"])
+
+    # msgid exact
+    data = api.find_query_msgids("1" * 20, True, False, False, True, False, "")
+    assert data == [api.FindResult("1" * 20, "test.local")]
+    data = api.find_query_msgids("1" * 19, True, False, False, True, False, "")
+    assert data == []
+    # unicode body
+    data = api.find_query_msgids("Мсг2", True, True, True, True, True, "")
+    assert data == [api.FindResult("2" * 20, "test2.local")]
+    # unicode subj
+    data = api.find_query_msgids("Сабж", True, True, True, True, True, "")
+    assert data == [api.FindResult("1" * 20, "test.local")]
+    # unicode from
+    data = api.find_query_msgids("юзер", False, False, False, True, False, "")
+    assert data == [api.FindResult("1" * 20, "test.local")]
+    # unicode to
+    data = api.find_query_msgids("юзер", False, False, False, False, True, "")
+    assert data == [api.FindResult("2" * 20, "test2.local")]
+    # unicode echo only
+    data = api.find_query_msgids("Row2", True, True, True, True, True, "test2.local")
+    assert data == [api.FindResult("2" * 20, "test2.local")]
+    # empty results
+    data = api.find_query_msgids("Unknown", True, True, True, True, True, "")
+    assert data == []
