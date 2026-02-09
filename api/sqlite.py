@@ -1,13 +1,14 @@
 # coding=utf-8
 import sqlite3
 import time
-from dataclasses import dataclass
 from typing import Optional, List, Callable
 
+from . import MsgMetadata
 from core import FEAT_FEATURES, FEAT_X_C
 
 con = None  # type: Optional[sqlite3.Connection]
 c = None  # type: Optional[sqlite3.Cursor]
+
 
 # TODO: Support SQLite case-insensitive matching of Unicode
 #
@@ -222,15 +223,9 @@ FIND_CANCEL = 1
 FIND_OK = 0
 
 
-@dataclass
-class FindResult:
-    msgid: str
-    echo: str
-
-
 def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                       limit=1000, progress_handler=None):
-    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[MsgMetadata]
     if not query or not any((msgid, body, subj, fr, to)):
         return []
     if progress_handler:
@@ -257,12 +252,14 @@ def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
         where += " AND echoarea LIKE ?"
         args.append(echoarea)
     try:
-        rows = c.execute("SELECT DISTINCT msgid, echoarea FROM msg"
-                         " WHERE %s"
-                         " ORDER BY id"
-                         " LIMIT ?;" % where,
-                         (*args, limit))
-        return list(map(lambda r: FindResult(r[0], r[1]), rows))
+        rows = c.execute(
+            "SELECT DISTINCT msgid, tags, echoarea, time, fr, addr, t, subject"
+            " FROM msg"
+            " WHERE %s"
+            " ORDER BY id"
+            " LIMIT ?;" % where,
+            (*args, limit))
+        return list(map(lambda r: MsgMetadata.from_list(r[0], r[1:]), rows))
     except sqlite3.OperationalError as ex:
         if "interrupted" == str(ex):
             return []

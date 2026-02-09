@@ -3,8 +3,9 @@ import codecs
 import os
 import time
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import Optional, List, Callable
+
+from . import MsgMetadata
 
 storage = "txt"
 
@@ -208,15 +209,9 @@ FIND_CANCEL = 1
 FIND_OK = 0
 
 
-@dataclass
-class FindResult:
-    msgid: str
-    echo: str
-
-
 def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                       limit=1000, progress_handler=None):
-    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[MsgMetadata]
     query = query.lower()
 
     def match(s):
@@ -251,22 +246,23 @@ def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                 if progress_handler(progress) == FIND_CANCEL:
                     return []
             #
-            if msgid and msgid_ == query:
-                find_result.append(FindResult(msgid_, echo))
-                continue  #
             with open(storage + "msg/" + msgid_, "r") as f:
-                msg = f.read().split("\n", maxsplit=7)
-            if body and match(msg[7]):
-                find_result.append(FindResult(msgid_, echo))
+                msg = f.read().split("\n")
+
+            if msgid and msgid_ == query:
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
+                continue  #
+            if body and match("\n".join(msg[7:])):
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if subj and match(msg[6]):
-                find_result.append(FindResult(msgid_, echo))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if fr and match(msg[3]):
-                find_result.append(FindResult(msgid_, echo))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if to and match(msg[5]):
-                find_result.append(FindResult(msgid_, echo))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
 
     return find_result

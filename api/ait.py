@@ -2,8 +2,9 @@
 import codecs
 import os
 import time
-from dataclasses import dataclass
 from typing import Optional, List, Callable
+
+from . import MsgMetadata
 
 storage = "ait/"
 
@@ -194,15 +195,9 @@ FIND_CANCEL = 1
 FIND_OK = 0
 
 
-@dataclass
-class FindResult:
-    msgid: str
-    echo: str
-
-
 def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                       limit=1000, progress_handler=None):
-    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[FindResult]
+    # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[MsgMetadata]
     query = query.lower()
 
     def match(s):
@@ -241,21 +236,21 @@ def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                     return []
             #
             msg = msg.split(chr(15))
-            msgid_ = msg[0].split(":")[0]
+            msgid_, msg[0] = msg[0].split(":")
             if msgid and msgid_ == query:
-                find_result.append(FindResult(msgid_, echo[0:-4]))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if body and match("\n".join(msg[7:])):
-                find_result.append(FindResult(msgid_, echo[0:-4]))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if subj and match(msg[6]):
-                find_result.append(FindResult(msgid_, echo[0:-4]))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if fr and match(msg[3]):
-                find_result.append(FindResult(msgid_, echo[0:-4]))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
             if to and match(msg[5]):
-                find_result.append(FindResult(msgid_, echo[0:-4]))
+                find_result.append(MsgMetadata.from_list(msgid_, msg))
                 continue  #
     return find_result
 

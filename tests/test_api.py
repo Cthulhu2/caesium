@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from api import MsgMetadata
+
 
 def test_init_aio():
     import api.aio as api
@@ -284,24 +286,24 @@ def test_find_query_msgids(api):
 
     # msgid exact
     data = api.find_query_msgids("1" * 20, True, False, False, True, False, "")
-    assert data == [api.FindResult("1" * 20, "test.local")]
+    assert data == [MsgMetadata.from_list("1" * 20, msg1)]
     data = api.find_query_msgids("1" * 19, True, False, False, True, False, "")
     assert data == []
     # unicode body
     data = api.find_query_msgids("Мсг2", True, True, True, True, True, "")
-    assert data == [api.FindResult("2" * 20, "test2.local")]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2)]
     # unicode subj
     data = api.find_query_msgids("Сабж", True, True, True, True, True, "")
-    assert data == [api.FindResult("1" * 20, "test.local")]
+    assert data == [MsgMetadata.from_list("1" * 20, msg1)]
     # unicode from
     data = api.find_query_msgids("юзер", False, False, False, True, False, "")
-    assert data == [api.FindResult("1" * 20, "test.local")]
+    assert data == [MsgMetadata.from_list("1" * 20, msg1)]
     # unicode to
     data = api.find_query_msgids("юзер", False, False, False, False, True, "")
-    assert data == [api.FindResult("2" * 20, "test2.local")]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2)]
     # unicode echo only
     data = api.find_query_msgids("Row2", True, True, True, True, True, "test2.local")
-    assert data == [api.FindResult("2" * 20, "test2.local")]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2)]
     # empty results
     data = api.find_query_msgids("Unknown", True, True, True, True, True, "")
     assert data == []

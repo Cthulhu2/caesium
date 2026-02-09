@@ -8,6 +8,7 @@ from typing import Optional, List, Tuple
 
 import api.ait as api
 import keys.default as keys
+from api import MsgMetadata
 from core import __version__, parser, utils, search, keystroke, config
 from core.config import (
     get_color, TOKEN2UI,
@@ -797,7 +798,7 @@ class FindQueryWindow:
     find_in_progress: bool = None
     find_progress_bar = cycle(r"-\|/")
     find_cancel: bool = False
-    find_result: List[api.FindResult] = None
+    find_result: List[MsgMetadata] = None
     find_tick: float = 0
 
     def __init__(self):
