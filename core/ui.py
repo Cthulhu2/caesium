@@ -708,7 +708,7 @@ class CheckBoxWidget(Widget):
 
 class InputWidget(Widget):
     cursor: int = 0
-    enabled: bool = True
+    offset: int = 0
     h: int = 1
 
     def __init__(self, y=0, x=0, w=0, txt="", placeholder=""):
@@ -742,7 +742,8 @@ class InputWidget(Widget):
         win.addstr(self.y, self.x, " " * self.w, self.color)
         txt = self.txt if self.txt else self.placeholder
         if self.w - 2 > 0:
-            win.addnstr(self.y, self.x, "[" + txt, self.w - 2, self.color)
+            win.addnstr(self.y, self.x, "[" + txt[self.offset:],
+                        self.w - 1, self.color)
         win.addstr(self.y, self.x + self.w - 1, "]", self.color)
 
     def on_key_pressed(self, ks, key):
@@ -750,27 +751,34 @@ class InputWidget(Widget):
             ks = " "
         if key in keys.s_home:
             self.cursor = 0
+            self.offset = 0
         elif key in keys.s_end:
             self.cursor = len(self.txt)
+            self.offset = max(0, self.cursor - self.w + 3)
         elif key == curses.KEY_LEFT:
             self.cursor = max(0, self.cursor - 1)
+            if self.cursor - self.offset < 0:
+                self.offset -= 1
         elif key == curses.KEY_RIGHT:
             self.cursor = min(len(self.txt), self.cursor + 1)
+            if self.cursor - self.offset > self.w - 3:
+                self.offset += 1
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
             self.txt = self.txt[0:max(0, self.cursor - 1)] + self.txt[self.cursor:]
             self.cursor = max(0, self.cursor - 1)
+            if self.cursor - self.offset < 0:
+                self.offset -= 1
         elif key == curses.KEY_DC:  # DEL
             self.txt = self.txt[0:max(0, self.cursor)] + self.txt[self.cursor + 1:]
         elif len(ks) == 1:
             self.txt = self.txt[0:self.cursor] + ks + self.txt[self.cursor:]
             self.cursor = min(len(self.txt), self.cursor + 1)
+            if self.cursor - self.offset > self.w - 3:
+                self.offset += 1
 
     def get_win_cursor_pos(self):
-        if len(self.txt) < self.w - 2:
-            return 1 + self.cursor
-        # TODO: Make InputWidget horizontal scrollable
-        return 1 + self.cursor
+        return 1 + self.cursor - self.offset
 
 
 @dataclass
