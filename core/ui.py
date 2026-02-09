@@ -711,12 +711,13 @@ class InputWidget(Widget):
     offset: int = 0
     h: int = 1
 
-    def __init__(self, y=0, x=0, w=0, txt="", placeholder=""):
+    def __init__(self, y=0, x=0, w=0, txt="", *, placeholder="", mask=None):
         self.x = x
         self.y = y
         self.w = w
         self.txt = txt
         self.placeholder = placeholder
+        self.mask = mask
         self.color = self._color(self.focused, self.enabled)
 
     # noinspection PyUnusedLocal
@@ -765,17 +766,23 @@ class InputWidget(Widget):
                 self.offset += 1
         elif key in (curses.KEY_BACKSPACE, 127):
             # 127 - Ctrl+? - Android backspace
-            self.txt = self.txt[0:max(0, self.cursor - 1)] + self.txt[self.cursor:]
-            self.cursor = max(0, self.cursor - 1)
-            if self.cursor - self.offset < 0:
-                self.offset -= 1
+            txt = self.txt[0:max(0, self.cursor - 1)] + self.txt[self.cursor:]
+            if not self.mask or self.mask.match(txt):
+                self.txt = txt
+                self.cursor = max(0, self.cursor - 1)
+                if self.cursor - self.offset < 0:
+                    self.offset -= 1
         elif key == curses.KEY_DC:  # DEL
-            self.txt = self.txt[0:max(0, self.cursor)] + self.txt[self.cursor + 1:]
+            txt = self.txt[0:max(0, self.cursor)] + self.txt[self.cursor + 1:]
+            if not self.mask or self.mask.match(txt):
+                self.txt = txt
         elif len(ks) == 1:
-            self.txt = self.txt[0:self.cursor] + ks + self.txt[self.cursor:]
-            self.cursor = min(len(self.txt), self.cursor + 1)
-            if self.cursor - self.offset > self.w - 3:
-                self.offset += 1
+            txt = self.txt[0:self.cursor] + ks + self.txt[self.cursor:]
+            if not self.mask or self.mask.match(txt):
+                self.txt = txt
+                self.cursor = min(len(self.txt), self.cursor + 1)
+                if self.cursor - self.offset > self.w - 3:
+                    self.offset += 1
 
     def get_win_cursor_pos(self):
         return 1 + self.cursor - self.offset
@@ -820,7 +827,7 @@ class FindQueryWindow:
         self.chk_from = CheckBoxWidget(6, 2, "От", self.query.fr)
         self.chk_to = CheckBoxWidget(7, 2, "Кому", self.query.to)
 
-        self.chk_echo = CheckBoxWidget(8, 2, "Эха ", self.query.echo)
+        self.chk_echo = CheckBoxWidget(8, 2, "Конференция ", self.query.echo)
         self.inp_echo = InputWidget(8, self.chk_echo.right(),
                                     w - self.chk_echo.right() - 2,
                                     self.query.echo_query,
@@ -828,7 +835,8 @@ class FindQueryWindow:
         self.lbl_limit = LabelWidget(9, 2, "Лимит: ")
         self.inp_limit = InputWidget(9, self.lbl_limit.right(),
                                      min(10, w - self.chk_echo.right() - 1),
-                                     str(self.query.limit))
+                                     str(self.query.limit),
+                                     mask=re.compile(r"^[1-9][0-9]{0,6}$"))
         self.lbl_progress = LabelWidget(10, 2, "")
 
         self.widgets = [
