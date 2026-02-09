@@ -204,20 +204,31 @@ def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
         lambda e: e.endswith(".aio") and e not in ("favorites.aio",
                                                    "carbonarea.aio"),
         os.listdir(storage))))
+    if echoarea:
+        echoareas = list(filter(lambda e: echoarea in e[0:-4], echoareas))
 
     find_result = []
-    progress = 0
+    total_msg_progress = 0
+    echo_progress = 0
+    total_echoareas = len(echoareas)
+
     for echo in echoareas:
-        if echoarea and echoarea not in echo[0:-4]:
-            continue  #
         with codecs.open(storage + echo, "r", "utf-8") as f:
             echo_msgs = list(filter(None, f.read().split("\n")))
+        echo_progress += 1
+        echo_msg_progress = 0
+        echo_total_msgs = len(echo_msgs)
 
         for msg in echo_msgs:
             if len(find_result) >= limit:
                 return find_result  #
-            progress += 1
+            #
+            total_msg_progress += 1
+            echo_msg_progress += 1
             if progress_handler:
+                progress = (echo_progress, total_echoareas,
+                            echo_msg_progress, echo_total_msgs,
+                            total_msg_progress, len(find_result))
                 if progress_handler(progress) == FIND_CANCEL:
                     return []
             #

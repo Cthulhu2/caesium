@@ -893,7 +893,7 @@ class FindQueryWindow:
 
     def draw_content(self, win):  # type: (curses.window) -> None
         h, w = win.getmaxyx()
-        win.addstr(h - 2, 1, " " * (w - 2))  # lbl_progress
+        win.addstr(self.lbl_progress.y, 1, " " * (w - 2))  # lbl_progress
         for w in self.widgets:
             w.draw(win)
 
@@ -1001,13 +1001,19 @@ class FindQueryWindow:
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def find_progress_handler(self, param=None):
+        now = time.time()
         self._keys()
         if self.find_cancel:
             return api.FIND_CANCEL
-        now = time.time()
         if (now - self.find_tick) < 0.250:  # ms
             return api.FIND_OK
         self.find_tick = now
-        self.lbl_progress.set_txt(" Поиск... " + next(self.find_progress_bar))
+        progress = " Поиск... " + next(self.find_progress_bar)
+        if param:
+            progress += (f" Found: {param[5]}"
+                         f" TMsg: {param[4]}"
+                         f" E: {param[0]}/{param[1]}"
+                         f" EMsg: {param[2]}/{param[3]}")
+        self.lbl_progress.set_txt(progress)
         self._show()
         return api.FIND_OK

@@ -225,18 +225,29 @@ def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
     echoareas = sorted(list(filter(
         lambda e: e not in ("favorites", "carbonarea"),
         os.listdir(storage + "echo/"))))
+    if echoarea:
+        echoareas = list(filter(lambda e: echoarea in e, echoareas))
 
     find_result = []
-    progress = 0
+    total_msg_progress = 0
+    echo_progress = 0
+    total_echoareas = len(echoareas)
+
     for echo in echoareas:
-        if echoarea and echoarea not in echo:
-            continue  #
         echo_msgids = get_echo_msgids(echo)
+        echo_progress += 1
+        echo_msg_progress = 0
+        echo_total_msgs = len(echo_msgids)
+
         for msgid_ in echo_msgids:
             if len(find_result) >= limit:
                 return find_result
-            progress += 1
+            total_msg_progress += 1
+            echo_msg_progress += 1
             if progress_handler:
+                progress = (echo_progress, total_echoareas,
+                            echo_msg_progress, echo_total_msgs,
+                            total_msg_progress, len(find_result))
                 if progress_handler(progress) == FIND_CANCEL:
                     return []
             #
