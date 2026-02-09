@@ -14,7 +14,7 @@ url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
 url_gemini_template = re.compile(r"^=>\s*(?P<url>[^\s]+)(?P<title>\s.+)*")
 url_md_template = re.compile(r"\[(?P<title>.*?)]\((?P<url>.*?)\)")
 header_template = re.compile(r"^(={1,3}\s)|(#{1,3}\s)")
-ps_template = re.compile(r"(^\s*)(PS|P\.S|ps|ЗЫ|З\.Ы|//|#)")
+ps_template = re.compile(r"(^\s*)(P+S|(P\.)+S|ps|З+Ы|(З\.)+Ы|//|#)")
 quote_template = re.compile(r"^\s*[a-zA-Zа-яА-Я0-9_\-.()]{0,20}>{1,20}")
 origin_template = re.compile(r"^\s*\+\+\+")
 echo_template = re.compile(r"^[a-z0-9_!.-]{1,60}\.[a-z0-9_!.-]{1,60}$")

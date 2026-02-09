@@ -41,7 +41,13 @@ def test_not_inline_ends(ends):
 
 def test_ps_template():
     assert parser.ps_template.match("PS")
+    assert parser.ps_template.match("PPS")
+    assert parser.ps_template.match("P.P.P.S")
+    assert not parser.ps_template.match("PP.P.S")
     assert parser.ps_template.match("ЗЫ")
+    assert parser.ps_template.match("ЗЗЗЫ")
+    assert parser.ps_template.match("З.З.З.Ы")
+    assert not parser.ps_template.match("ЗЗЗ.З.Ы")
     assert not parser.ps_template.match("POST")
     assert not parser.ps_template.match("ЗЛЫ")
 
