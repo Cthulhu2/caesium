@@ -1,4 +1,5 @@
 import curses
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -427,17 +428,20 @@ class MsgListScreen:
         draw_message_box("Подождите", False)
         if echo == config.ECHO_FIND:
             echo = None
-        self.data = api.get_msg_list_data(echo, msgids)
+        self.data = api.get_msg_list_data(echo, msgids)  # type: List[MsgMetadata]
         self.cursor = self.find_msgid_idx(msgid)
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
         self.resized = False
         self.qs = None  # type: Optional[search.QuickSearch]
-        self.mode_stack = []  # type: List[Tuple[ReaderMode, List[str], str]]
+        self.mode_stack = []  # type: List[Tuple[ReaderMode, List[MsgMetadata], str]]
+
+    def cur_msg(self):
+        return self.data[self.cursor]
 
     def find_msgid_idx(self, msgid):
         for i, d in enumerate(self.data):
-            if d[0] == msgid:
+            if d.msgid == msgid:
                 return i
         return len(self.data) - 1
 
@@ -500,6 +504,7 @@ class MsgListScreen:
             draw_title(win, 0, 0, echo)
 
     def draw(self, win, data, cursor, scroll):
+        # type: (curses.window, List[MsgMetadata], int, ScrollCalc) -> None
         h, w = win.getmaxyx()
         for i in range(1, h - 1):
             color = get_color(UI_TEXT if scroll.pos + i - 1 != cursor else
@@ -510,27 +515,27 @@ class MsgListScreen:
                 continue  #
             #
             msg = data[pos]
-            win.addstr(i, 0, msg[1], color)
-            win.addstr(i, 16, msg[2][:w - 27], color)
-            win.addstr(i, w - 11, msg[3], color)
+            win.addstr(i, 0, msg.fr, color)
+            win.addstr(i, 16, msg.subj[:w - 27], color)
+            win.addstr(i, w - 11, msg.strtime(), color)
             #
             if self.qs and pos in self.qs.result:
                 idx = self.qs.result.index(pos)
-                m_name, m_subj = self.qs.matches[idx]
+                m_name, m_subj = self.qs.matches[idx]  # type: List[re.Match], List[re.Match]
                 for m in m_name:
-                    win.addstr(i, 0 + m.start(), msg[1][m.start():m.end()],
+                    win.addstr(i, 0 + m.start(), msg.fr[m.start():m.end()],
                                color | curses.A_REVERSE)
                 for m in m_subj:
                     end = min(w - 27, m.end())
                     if m.start() + 16 > w - 12:
                         continue
-                    win.addstr(i, 16 + m.start(), msg[2][m.start():end],
+                    win.addstr(i, 16 + m.start(), msg.subj[m.start():end],
                                color | curses.A_REVERSE)
-
         #
         if scroll.is_scrollable:
             draw_scrollbarV(win, 1, w - 1, scroll)
-        draw_status_bar(win, mode=self.mode, text=utils.msgn_status(data, cursor, w))
+        draw_status_bar(win, mode=self.mode,
+                        text=utils.msgn_status(len(data), cursor, w))
 
     def on_key_pressed(self, key, scroll):
         if key in keys.r_msubj:
@@ -566,42 +571,40 @@ class MsgListScreen:
         self.scroll.ensure_visible(self.cursor, center=True)
 
     def mode_subj_on(self):
+        msg = self.cur_msg()
         if self.mode != ReaderMode.SUBJ:
             if not self.mode_stack or self.mode_stack[-1][0] != self.mode:
-                self.mode_stack.append((self.mode, self.data,
-                                        self.data[self.cursor][0]))
-        #
-        subj = self.data[self.cursor][2]
-        echo = self.echo if self.echo != config.ECHO_FIND else None
-        msgids = api.find_subj_msgids(echo, subj)
+                self.mode_stack.append((self.mode, self.data, msg.msgid))
+        msgids = api.find_subj_msgids(msg.echo, msg.subj)
         self.apply_mode(ReaderMode.SUBJ,
-                        data=api.get_msg_list_data(echo, msgids),
-                        msgid=self.data[self.cursor][0])
+                        data=api.get_msg_list_data(msg.echo, msgids),
+                        msgid=msg.msgid)
 
     def mode_search_on(self):
+        msg = self.cur_msg()
         if self.mode != ReaderMode.SEARCH:
             if not self.mode_stack or self.mode_stack[-1][0] != self.mode:
-                self.mode_stack.append((self.mode, self.data,
-                                        self.data[self.cursor][0]))
+                self.mode_stack.append((self.mode, self.data, msg.msgid))
         self.apply_mode(ReaderMode.SEARCH,
                         data=[self.data[idx]
                               for idx in self.qs.result],
-                        msgid=self.data[self.cursor][0])
+                        msgid=msg.msgid)
 
     # noinspection PyUnusedLocal
     @staticmethod
     def on_search_item(sidx, pattern, it):
+        # type: (int, re.Pattern, MsgMetadata) -> Optional[List[Tuple[List[re.Match], List[re.Match]]]]
         result_name = []
         result_subj = []
         p = 0
-        while match := pattern.search(it[1], p):
-            if p >= len(it[1]):
+        while match := pattern.search(it.fr, p):
+            if p >= len(it.fr):
                 break
             result_name.append(match)
             p = match.end()
         p = 0
-        while match := pattern.search(it[2], p):
-            if p >= len(it[2]):
+        while match := pattern.search(it.subj, p):
+            if p >= len(it.subj):
                 break
             result_subj.append(match)
             p = match.end()

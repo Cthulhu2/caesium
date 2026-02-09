@@ -101,8 +101,8 @@ def test_save_messages(api):
     assert msgids == ["11", "22"]
 
     data = api.get_msg_list_data("test.local")
-    assert data == [['11', 'admin', 'Subj', '1970.01.01'],
-                    ["22", "admin", "Subj", "1970.01.01"]]
+    assert data == [MsgMetadata.from_list("11", msg1),
+                    MsgMetadata.from_list("22", msg2)]
 
 
 # noinspection PyTestParametrized
@@ -124,7 +124,7 @@ def test_add_to_carbonarea(api):
     assert msg == msg2
 
     data = api.get_msg_list_data("carbonarea")
-    assert data == [["2" * 20, "admin", "Subj", "1970.01.01"]]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2)]
 
 
 # noinspection PyTestParametrized
@@ -143,7 +143,7 @@ def test_save_favorites(api):
     assert msg == msg2
 
     data = api.get_msg_list_data("favorites")
-    assert data == [["2" * 20, "admin", "Subj", "1970.01.01"]]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2)]
 
     api.remove_from_favorites("2" * 20)
     assert not api.get_favorites_list()
@@ -191,7 +191,7 @@ def test_non_printable(api):
     assert msg == msgbody
 
     data = api.get_msg_list_data("idec.talks")
-    assert data == [[msgid, "revoltech", "First test", "2024.10.22"]]
+    assert data == [MsgMetadata.from_list(msgid, msgbody)]
 
 
 # noinspection PyTestParametrized
@@ -260,8 +260,8 @@ def test_get_msg_list_data_by_ids_n_echo(api):
     api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
 
     data = api.get_msg_list_data("test.local", ["2" * 20, "3" * 20])
-    assert data == [["2" * 20, "admin", "Re: Subj", "1970.01.01"],
-                    ["3" * 20, "admin", "Subj2", "1970.01.01"]]
+    assert data == [MsgMetadata.from_list("2" * 20, msg2),
+                    MsgMetadata.from_list("3" * 20, msg3)]
 
 
 # noinspection PyTestParametrized
@@ -273,8 +273,8 @@ def test_get_msg_list_data_by_ids_only(api):
     api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
 
     data = api.get_msg_list_data(None, ["1" * 20, "3" * 20])
-    assert data == [["3" * 20, "admin", "Subj2", "1970.01.01"],  # echo test.local
-                    ["1" * 20, "admin", "Subj", "1970.01.01"]]  # echo test2.local
+    assert data == [MsgMetadata.from_list("3" * 20, msg3),  # echo test.local
+                    MsgMetadata.from_list("1" * 20, msg1)]  # echo test2.local
 
 
 # noinspection PyTestParametrized

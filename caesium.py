@@ -706,7 +706,7 @@ class EchoReader:
             status = None
             if self.msgids:
                 self.draw(ui.stdscr)
-                status = utils.msgn_status(self.msgids, self.msgn, ui.WIDTH)
+                status = utils.msgn_status(len(self.msgids), self.msgn, ui.WIDTH)
             else:
                 ui.draw_reader(ui.stdscr, self.echo.name, "", self.out)
             ui.draw_status_bar(ui.stdscr, mode=self.mode, text=status)
@@ -966,7 +966,7 @@ class EchoReader:
             if selected_msgn > -1:
                 if self.mode != win.mode:
                     self.mode_stack.append((self.mode, self.msgids, self.msgn))
-                self.msgids = list(map(lambda it: it[0], win.data))
+                self.msgids = list(map(lambda it: it.msgid, win.data))
                 self.msgn = selected_msgn
                 self.mode = win.mode
                 self.stack.clear()

@@ -126,6 +126,7 @@ def remove_echoarea(echoarea):
 
 
 def get_msg_list_data(echoarea, msgids=None):
+    # type: (Optional[str], List[str]) -> List[MsgMetadata]
     msgids = msgids or get_echo_msgids(echoarea)
     echo_msgs = defaultdict(list)
     for msgid in msgids:
@@ -142,12 +143,8 @@ def get_msg_list_data(echoarea, msgids=None):
             #
             if (header[1] == echoarea
                     or echoarea in (None, "carbonarea", "favorites")):
-                echo_msgs[header[1]].append([
-                    msgid,
-                    header[3],
-                    header[6],
-                    time.strftime("%Y.%m.%d", time.gmtime(int(header[2]))),
-                ])
+
+                echo_msgs[header[1]].append(MsgMetadata.from_list(msgid, header))
     lst = []
     for k in sorted(echo_msgs.keys()):
         lst += echo_msgs[k]

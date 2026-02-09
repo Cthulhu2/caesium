@@ -1,6 +1,5 @@
 # coding=utf-8
 import sqlite3
-import time
 from typing import Optional, List, Callable
 
 from . import MsgMetadata
@@ -145,17 +144,21 @@ def remove_echoarea(echoarea):
 
 
 def get_msg_list_data(echoarea, msgids=None):
+    # type: (Optional[str], List[str]) -> List[MsgMetadata]
     if not msgids:
         if echoarea == "favorites":
-            rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
-                             " WHERE favorites = 1 ORDER BY id;")
+            rows = c.execute(
+                "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+                " FROM msg WHERE favorites = 1 ORDER BY id;")
         elif echoarea == "carbonarea":
-            rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
-                             " WHERE carbonarea = 1 ORDER BY id;")
+            rows = c.execute(
+                "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+                " FROM msg WHERE carbonarea = 1 ORDER BY id;")
         else:
-            rows = c.execute("SELECT msgid, fr, subject, time"
-                             " FROM msg WHERE echoarea = ? ORDER BY id;",
-                             (echoarea,))
+            rows = c.execute(
+                "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+                " FROM msg WHERE echoarea = ? ORDER BY id;",
+                (echoarea,))
     else:
         args = list(msgids)
         echo_clause = ""
@@ -169,14 +172,12 @@ def get_msg_list_data(echoarea, msgids=None):
         echo_order = ""
         if not echoarea:
             echo_order = "echoarea, "
-        rows = c.execute("SELECT msgid, fr, subject, time FROM msg"
-                         " WHERE msgid IN (%s) %s ORDER BY %s id;"
-                         % (",".join("?" * len(msgids)), echo_clause, echo_order),
-                         args)
-    return list(map(
-        lambda r: [r[0], r[1], r[2], time.strftime("%Y.%m.%d",
-                                                   time.gmtime(int(r[3])))],
-        rows))
+        rows = c.execute(
+            "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+            " FROM msg WHERE msgid IN (%s) %s ORDER BY %s id;"
+            % (",".join("?" * len(msgids)), echo_clause, echo_order),
+            args)
+    return list(map(lambda r: MsgMetadata.from_list(r[0], r[1:]), rows))
 
 
 # noinspection PyUnusedLocal

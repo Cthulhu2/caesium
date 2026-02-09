@@ -1,7 +1,6 @@
 # coding=utf-8
 import codecs
 import os
-import time
 from typing import Optional, List, Callable
 
 from . import MsgMetadata
@@ -111,6 +110,7 @@ def remove_echoarea(echoarea):
 
 
 def get_msg_list_data(echoarea, msgids=None):
+    # type: (Optional[str], List[str]) -> List[MsgMetadata]
     if echoarea:
         echoareas = [echoarea + ".mat"]
     else:
@@ -123,15 +123,10 @@ def get_msg_list_data(echoarea, msgids=None):
         with codecs.open(storage + echo, "r", "utf-8") as f:
             for msg in filter(None, f.read().split("\n")):
                 rawmsg = msg.split(chr(15))
-                msgid = rawmsg[0].split(":")[0]
+                msgid, rawmsg[0] = rawmsg[0].split(":")
                 if msgids and msgid not in msgids:
                     continue  # msg
-                lst.append([
-                    msgid,
-                    rawmsg[3],
-                    rawmsg[6],
-                    time.strftime("%Y.%m.%d", time.gmtime(int(rawmsg[2]))),
-                ])
+                lst.append(MsgMetadata.from_list(msgid, rawmsg))
     return lst
 
 

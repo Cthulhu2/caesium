@@ -10,8 +10,7 @@ def separate(fetch_list, step=20):  # type: (List, int) -> List
         yield fetch_list[x:x + step]
 
 
-def msgn_status(msgids, msgn, width):  # type: (List[str], int, int) -> str
-    total = len(msgids)
+def msgn_status(total, msgn, width):  # type: (int, int, int) -> str
     remains = total - msgn - 1
     if width >= 80:
         return "Сообщение %d из %d (%d осталось)" % (msgn + 1, total, remains)
