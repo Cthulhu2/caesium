@@ -659,7 +659,7 @@ class LabelWidget(Widget):
 
     def draw(self, win):  # type: (curses.window) -> None
         _, width = win.getmaxyx()
-        w = min(width - self.x, self.w)
+        w = min(width - self.x - 1, self.w)
         if w > 0:  # android termux curses v6.5.20240832 crashes on addnstr w zero width
             win.addstr(self.y, self.x, " " * w, self.color)
             win.addnstr(self.y, self.x, self.txt, w, self.color)
@@ -917,6 +917,17 @@ class FindQueryWindow:
             stdscr.clear()
             stdscr.refresh()
             self.win = self.init_win(self.win)
+            self.win.clear()
+            # TODO: Widget Layout.repack
+            h, w = self.win.getmaxyx()
+            for wid in self.widgets:
+                if wid.right() > w - 2:
+                    wid.w -= wid.right() - (w - 2)
+            if self.inp_query.right() < w - 2:
+                self.inp_query.w += (w - 2) - self.inp_query.right()
+            if self.inp_echo.right() < w - 2:
+                self.inp_echo.w += (w - 2) - self.inp_echo.right()
+            #
             self.draw_title(self.win)
             self.resized = True
         elif key in keys.s_csearch:
