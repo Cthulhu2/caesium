@@ -200,10 +200,10 @@ FIND_OK = 0
 def find_query_msgids(query, msgid, body, subj, fr, to, echoarea,
                       limit=1000, progress_handler=None):
     # type: (str, bool, bool, bool, bool, bool, str, int, Callable) -> List[MsgMetadata]
-    query = query.lower()
+    query_low = query.lower()
 
     def match(s):
-        return query in s.lower()
+        return query_low in s.lower()
 
     echoareas = sorted(list(filter(
         lambda e: e.endswith(".aio") and e not in ("favorites.aio",
