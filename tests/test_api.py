@@ -99,6 +99,8 @@ def test_save_messages(api):
 
     msgids = api.get_echo_msgids("test.local")
     assert msgids == ["11", "22"]
+    assert api.get_echo_msgs_metadata("test.local") == [MsgMetadata.from_list("11", msg1),
+                                                        MsgMetadata.from_list("22", msg2)]
 
     data = api.get_msg_list_data("test.local")
     assert data == [MsgMetadata.from_list("11", msg1),
@@ -181,6 +183,7 @@ def test_non_printable(api):
     #
     assert api.get_echo_length("idec.talks") == 1
     assert api.get_echo_msgids("idec.talks") == [msgid]
+    assert api.get_echo_msgs_metadata("idec.talks") == [MsgMetadata.from_list(msgid, msgbody)]
     #
     msg, _ = api.read_msg(msgid, "idec.talks")
     assert msg == msgbody
@@ -245,10 +248,12 @@ def test_find_subj_msgids(api):
     api.save_message([("1" * 20, msg1), ("2" * 20, msg2), ("3" * 20, msg3)], "node", ["user"])
 
     data = api.find_subj_msgids("test.local", "Re: Subj")
-    assert data == ["1" * 20, "2" * 20]
+    assert data == [MsgMetadata.from_list("1" * 20, msg1),
+                    MsgMetadata.from_list("2" * 20, msg2)]
 
     data = api.find_subj_msgids(None, "Re: Subj")
-    assert data == ["1" * 20, "2" * 20]
+    assert data == [MsgMetadata.from_list("1" * 20, msg1),
+                    MsgMetadata.from_list("2" * 20, msg2)]
 
 
 # noinspection PyTestParametrized

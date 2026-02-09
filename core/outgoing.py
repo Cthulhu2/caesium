@@ -1,7 +1,9 @@
 import codecs
 import os
+from datetime import datetime
 from typing import List
 
+from api import MsgMetadata
 from core import config, parser
 
 storage = ""
@@ -37,6 +39,19 @@ def get_out_msgids(node, drafts=False):
             msgids = [f for f in sorted(os.listdir(node_dir))
                       if f.endswith(".out") or f.endswith(".outmsg")]
     return msgids
+
+
+def get_out_msgs_metadata(node, drafts=False):
+    # type: (config.Node, bool) -> List[MsgMetadata]
+    msgids = get_out_msgids(node, drafts)
+    msgs_metadata = []
+    node_dir = directory(node)
+    for msgid in msgids:
+        with codecs.open(node_dir + msgid, "r", "utf-8") as f:
+            msg = f.read().strip().replace("\r", "").split("\n")
+            msgs_metadata.append(MsgMetadata.from_list(
+                msgid, ["", msg[0], datetime.now().timestamp(), "", "", msg[1], msg[2]]))
+    return msgs_metadata
 
 
 def read_out_msg(msgid, node):  # type: (str, config.Node) -> (List[str], int)

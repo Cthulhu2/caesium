@@ -1,7 +1,6 @@
 # coding=utf-8
 import codecs
 import os
-import time
 from collections import defaultdict
 from typing import Optional, List, Callable
 
@@ -62,6 +61,35 @@ def get_echo_msgids(echo):
         return []
     with open(storage + "echo/" + echo, "r") as f:
         return f.read().splitlines()
+
+
+def get_echo_msgs_metadata(echo):
+    # type: (str) -> List[MsgMetadata]
+    if not os.path.exists(storage + "echo/" + echo):
+        return []
+    with open(storage + "echo/" + echo, "r") as f:
+        msgids = f.read().splitlines()
+    echo_msgs = []
+    for msgid in msgids:
+        header = _read_header(msgid)
+        echo_msgs.append(MsgMetadata.from_list(msgid, header))
+    return echo_msgs
+
+
+def _read_header(msgid):
+    header = []
+    with codecs.open(storage + "msg/" + msgid, "r", "utf-8") as f:
+        last_line = ""
+        while len(header) < 6:
+            buf = f.read(200)
+            if not buf:
+                break  #
+            lines = buf.split("\n")
+            lines[0] = last_line + lines[0]
+            if len(lines) > 1:
+                header.extend(lines[0:-1])
+            last_line = lines[-1]
+    return header
 
 
 def get_carbonarea():
@@ -130,21 +158,10 @@ def get_msg_list_data(echoarea, msgids=None):
     msgids = msgids or get_echo_msgids(echoarea)
     echo_msgs = defaultdict(list)
     for msgid in msgids:
-        with codecs.open(storage + "msg/" + msgid, "r", "utf-8") as f:
-            header = []
-            last_line = ""
-            while len(header) < 6:
-                buf = f.read(200)
-                lines = buf.split("\n")
-                lines[0] = last_line + lines[0]
-                if len(lines) > 1:
-                    header.extend(lines[0:-1])
-                last_line = lines[-1]
-            #
-            if (header[1] == echoarea
-                    or echoarea in (None, "carbonarea", "favorites")):
-
-                echo_msgs[header[1]].append(MsgMetadata.from_list(msgid, header))
+        header = _read_header(msgid)
+        if (header[1] == echoarea
+                or echoarea in (None, "carbonarea", "favorites")):
+            echo_msgs[header[1]].append(MsgMetadata.from_list(msgid, header))
     lst = []
     for k in sorted(echo_msgs.keys()):
         lst += echo_msgs[k]
@@ -176,7 +193,7 @@ def find_msg(msgid):
 
 
 def find_subj_msgids(echoarea, subj):
-    # type: (str, str) -> List[str]
+    # type: (str, str) -> List[MsgMetadata]
     if subj.startswith("Re: "):
         subj = subj[4:]
     elif subj.startswith("Re:"):
@@ -195,10 +212,9 @@ def find_subj_msgids(echoarea, subj):
     for echo in echoareas:
         echo_msgids = get_echo_msgids(echo)
         for msgid in echo_msgids:
-            with open(storage + "msg/" + msgid, "r") as f:
-                msg = f.read().split("\n")
-            if msg[6] in (subj, subjRe, subjReSpace):
-                thread_msgids.append(msgid)
+            header = _read_header(msgid)
+            if header[6] in (subj, subjRe, subjReSpace):
+                thread_msgids.append(MsgMetadata.from_list(msgid, header))
     return thread_msgids
 
 

@@ -89,6 +89,24 @@ def get_echo_msgids(echo):
     return msgids
 
 
+def get_echo_msgs_metadata(echo):
+    # type: (str) -> List[MsgMetadata]
+    if echo == "favorites":
+        rows = c.execute(
+            "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+            " FROM msg WHERE favorites = 1 ORDER BY id;")
+    elif echo == "carbonarea":
+        rows = c.execute(
+            "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+            " FROM msg WHERE carbonarea = 1 ORDER BY id;")
+    else:
+        rows = c.execute(
+            "SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+            " FROM msg WHERE echoarea = ? ORDER BY id;",
+            (echo,))
+    return list(map(lambda r: MsgMetadata.from_list(r[0], r[1:]), rows))
+
+
 def get_carbonarea():
     msgids = []
     for row in c.execute("SELECT msgid FROM msg WHERE carbonarea = 1 ORDER BY id"):
@@ -211,13 +229,14 @@ def find_subj_msgids(echoarea, subj):  # type: (str, str) -> List[str]
         where_clause += " AND echoarea = ? "
         args.append(echoarea)
 
-    rows = c.execute("SELECT msgid FROM msg"
+    rows = c.execute("SELECT msgid, tags, echoarea, time, fr, addr, t, subject"
+                     " FROM msg"
                      " WHERE %s"
                      "   AND (subject = ? OR subject = ? OR subject = ?)"
                      " ORDER BY id"
                      " LIMIT 1000;" % where_clause,
                      (*args, subj, subjRe, subjReSpace))
-    return list(map(lambda r: r[0], rows))
+    return list(map(lambda r: MsgMetadata.from_list(r[0], r[1:]), rows))
 
 
 FIND_CANCEL = 1

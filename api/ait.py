@@ -50,6 +50,20 @@ def get_echo_msgids(echo):
     return []
 
 
+def get_echo_msgs_metadata(echo):
+    # type: (str) -> List[MsgMetadata]
+    if not os.path.exists(storage + echo + ".mat"):
+        return []
+
+    echo_msgs = []
+    with codecs.open(storage + echo + ".mat", "r", "utf-8") as f:
+        for str_msg in filter(None, f.read().split("\n")):
+            msgid, msg = str_msg.split(":", maxsplit=1)
+            msg = msg.split(chr(15))
+            echo_msgs.append(MsgMetadata.from_list(msgid, msg))
+    return echo_msgs
+
+
 def get_carbonarea():
     if os.path.exists(storage + "carbonarea.iat"):
         with open(storage + "carbonarea.iat", "r") as f:
@@ -160,7 +174,7 @@ def find_msg(msgid):
 
 
 def find_subj_msgids(echoarea, subj):
-    # type: (str, str) -> List[str]
+    # type: (str, str) -> List[MsgMetadata]
     if subj.startswith("Re: "):
         subj = subj[4:]
     elif subj.startswith("Re:"):
@@ -179,11 +193,12 @@ def find_subj_msgids(echoarea, subj):
     thread_msgs = []
     for echo in echoareas:
         with codecs.open(storage + echo, "r", "utf-8") as f:
-            msgs = map(lambda i: i.split(chr(15)),
-                       filter(None, f.read().split("\n")))
-        thread_msgs += list(filter(lambda i: i[6] in (subj, subjRe, subjReSpace),
-                                   msgs))
-    return list(map(lambda m: m[0].split(":", maxsplit=1)[0], thread_msgs))
+            for str_msg in filter(None, f.read().split("\n")):
+                msgid, msg = str_msg.split(":", maxsplit=1)
+                msg = msg.split(chr(15))
+                if msg[6] in (subj, subjRe, subjReSpace):
+                    thread_msgs.append(MsgMetadata.from_list(msgid, msg))
+    return thread_msgs
 
 
 FIND_CANCEL = 1

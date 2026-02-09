@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple
 import api.ait as api
 import keys.default as keys
 from api import MsgMetadata
-from core import __version__, parser, utils, search, keystroke, config
+from core import __version__, parser, utils, search, keystroke
 from core.config import (
     get_color, TOKEN2UI,
     UI_BORDER, UI_COMMENT, UI_CURSOR, UI_STATUS, UI_SCROLL, UI_TITLES, UI_TEXT
@@ -420,15 +420,11 @@ def render_token(scr, token: parser.Token, y, x, h, offset, text_attr, qs=None):
 
 
 class MsgListScreen:
-    def __init__(self, echo, msgids, msgid, mode):
-        # type: (str, List[str], str, ReaderMode) -> MsgListScreen
+    def __init__(self, echo, msgs_data, msgid, mode):
+        # type: (str, List[MsgMetadata], str, ReaderMode) -> MsgListScreen
         self.echo = echo
         self.mode = mode
-        msgids = None if self.mode == ReaderMode.ECHO else msgids
-        draw_message_box("Подождите", False)
-        if echo == config.ECHO_FIND:
-            echo = None
-        self.data = api.get_msg_list_data(echo, msgids)  # type: List[MsgMetadata]
+        self.data = msgs_data  # type: List[MsgMetadata]
         self.cursor = self.find_msgid_idx(msgid)
         self.scroll = ScrollCalc(len(self.data), HEIGHT - 2)
         self.scroll.ensure_visible(self.cursor, center=True)
@@ -575,10 +571,8 @@ class MsgListScreen:
         if self.mode != ReaderMode.SUBJ:
             if not self.mode_stack or self.mode_stack[-1][0] != self.mode:
                 self.mode_stack.append((self.mode, self.data, msg.msgid))
-        msgids = api.find_subj_msgids(msg.echo, msg.subj)
-        self.apply_mode(ReaderMode.SUBJ,
-                        data=api.get_msg_list_data(msg.echo, msgids),
-                        msgid=msg.msgid)
+        data = api.find_subj_msgids(msg.echo, msg.subj)
+        self.apply_mode(ReaderMode.SUBJ, data=data, msgid=msg.msgid)
 
     def mode_search_on(self):
         msg = self.cur_msg()
