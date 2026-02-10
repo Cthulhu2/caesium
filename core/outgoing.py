@@ -111,10 +111,10 @@ def get_out_length(node, drafts=False):
     node_dir = directory(node)
     if drafts:
         return len([f for f in os.listdir(node_dir)
-                    if f.endswith(".draft")]) - 1
+                    if f.endswith(".draft")])
     else:
         return len([f for f in os.listdir(node_dir)
-                    if f.endswith(".out") or f.endswith(".outmsg")]) - 1
+                    if f.endswith(".out") or f.endswith(".outmsg")])
 
 
 def new_msg(echo):

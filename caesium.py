@@ -108,7 +108,7 @@ def debundle(bundle):
         api.save_message(messages, node, cfg.nodes[node].to)
 
 
-def get_mail(node_):  # type: (config.Node) -> None
+def get_mail(node_, force_full_idx=False):  # type: (config.Node, bool) -> None
     features = api.get_node_features(node_.nodename)
     if features is None:
         print("Запрос x/features...")
@@ -128,8 +128,8 @@ def get_mail(node_):  # type: (config.Node) -> None
         offsets = utils.offsets_echo_count(old_nec or {}, new_nec)
 
     fetch_msg_list = []
-    print("Получение индекса от ноды...")
-    if is_node_smart and old_nec:
+    if is_node_smart and old_nec and not force_full_idx:
+        print("Получение свежего индекса от ноды...")
         remote_msg_list = []
         grouped = {offset: [ec[0] for ec in ec]
                    for offset, ec in itertools.groupby(offsets.items(),
@@ -138,6 +138,7 @@ def get_mail(node_):  # type: (config.Node) -> None
             print("  offset %s: %s" % (str(offset), ", ".join(echoareas)))
             remote_msg_list += client.get_msg_list(node_.url, echoareas, offset)
     else:
+        print("Получение полного индекса от ноды...")
         remote_msg_list = client.get_msg_list(node_.url, echoareas)
 
     print("Построение разностного индекса...")
@@ -161,13 +162,13 @@ def get_mail(node_):  # type: (config.Node) -> None
     print()
 
 
-def fetch_mail(node_):  # type: (config.Node) -> None
+def fetch_mail(node_, force_full_idx=False):  # type: (config.Node, bool) -> None
     print("Работа с " + node_.url)
     try:
         if node_.auth:
             make_toss(node_)
             send_mail(node_)
-        get_mail(node_)
+        get_mail(node_, force_full_idx)
     except KeyboardInterrupt:
         print("\nПрервано пользователем")
     except Exception as ex:
@@ -403,53 +404,16 @@ class EchoSelectorScreen:
             self.cursor = 0
         elif key in keys.s_end:
             self.cursor = self.scroll.content - 1
-        elif key in keys.s_get:
-            ui.terminate_curses()
-            os.system('cls' if os.name == 'nt' else 'clear')
-            fetch_mail(cfg.nodes[node])
-            ui.initialize_curses()
-            ui.draw_message_box("Подождите", False)
-            self.counts.get_counts(cfg.nodes[node], True)
-            self.counts.rescan_counts(self.echoareas)
-            ui.stdscr.clear()
-            self.cursor = self.counts.find_new(0)
+        elif key in keys.s_get or ks in keys.s_fget:
+            self.fetch_mail(force_full_idx=(ks in keys.s_fget))
         elif key in keys.s_archive and len(cfg.nodes[node].archive) > 0:
             self.toggle_archive()
         elif key in keys.s_enter:
-            ui.draw_message_box("Подождите", False)
-            last = 0
-            cur_echo = self.echoareas[self.cursor]
-            if cur_echo.name in self.counts.lasts:
-                last = self.counts.lasts[cur_echo.name]
-            last = min(self.counts.total[cur_echo.name], last + 1)
-            self.go, self.next_echo = EchoReader(
-                cur_echo, last, self.archive, self.counts).show()
-            self.counts.rescan_counts(self.echoareas)
-            if self.next_echo and isinstance(self.next_echo, bool):
-                self.cursor = self.counts.find_new(self.cursor)
-                self.next_echo = False
-            elif self.next_echo and isinstance(self.next_echo, str):
-                cur_node = cfg.nodes[node]
-                if ((not self.archive and self.next_echo in cur_node.archive)
-                        or (self.archive and (self.next_echo in cur_node.echoareas
-                                              or self.next_echo in cur_node.stat))):
-                    self.toggle_archive()
-                # noinspection PyTypeChecker
-                self.cursor = (self.echoareas.index(self.next_echo)
-                               if self.next_echo in self.echoareas else
-                               0)
-                self.next_echo = False
-
+            self.read_echo()
         elif key in keys.s_out:
-            out_length = outgoing.get_out_length(cfg.nodes[node], drafts=False)
-            if out_length > -1:
-                self.go, self.next_echo = EchoReader(
-                    config.ECHO_OUT, out_length, self.archive, self.counts).show()
+            self.read_outgoing()
         elif key in keys.s_drafts:
-            out_length = outgoing.get_out_length(cfg.nodes[node], drafts=True)
-            if out_length > -1:
-                self.go, self.next_echo = EchoReader(
-                    config.ECHO_DRAFTS, out_length, self.archive, self.counts).show()
+            self.read_drafts()
         elif key in keys.s_nnode:
             node = node + 1
             if node == len(cfg.nodes):
@@ -472,6 +436,54 @@ class EchoSelectorScreen:
                 self.go, _ = EchoReader(
                     config.ECHO_FIND, 0, True, self.counts,
                     mode=ui.ReaderMode.FIND, msgids=find_result).show()
+
+    def fetch_mail(self, force_full_idx):
+        ui.terminate_curses()
+        os.system('cls' if os.name == 'nt' else 'clear')
+        fetch_mail(cfg.nodes[node], force_full_idx)
+        ui.initialize_curses()
+        ui.draw_message_box("Подождите", False)
+        self.counts.get_counts(cfg.nodes[node], True)
+        self.counts.rescan_counts(self.echoareas)
+        ui.stdscr.clear()
+        self.cursor = self.counts.find_new(0)
+
+    def read_echo(self):
+        ui.draw_message_box("Подождите", False)
+        last = 0
+        cur_echo = self.echoareas[self.cursor]
+        if cur_echo.name in self.counts.lasts:
+            last = self.counts.lasts[cur_echo.name]
+        last = min(self.counts.total[cur_echo.name], last + 1)
+        self.go, self.next_echo = EchoReader(
+            cur_echo, last, self.archive, self.counts).show()
+        self.counts.rescan_counts(self.echoareas)
+        if self.next_echo and isinstance(self.next_echo, bool):
+            self.cursor = self.counts.find_new(self.cursor)
+            self.next_echo = False
+        elif self.next_echo and isinstance(self.next_echo, str):
+            cur_node = cfg.nodes[node]
+            if ((not self.archive and self.next_echo in cur_node.archive)
+                    or (self.archive and (self.next_echo in cur_node.echoareas
+                                          or self.next_echo in cur_node.stat))):
+                self.toggle_archive()
+            # noinspection PyTypeChecker
+            self.cursor = (self.echoareas.index(self.next_echo)
+                           if self.next_echo in self.echoareas else
+                           0)
+            self.next_echo = False
+
+    def read_outgoing(self):
+        out_length = outgoing.get_out_length(cfg.nodes[node], drafts=False)
+        if out_length:
+            self.go, self.next_echo = EchoReader(
+                config.ECHO_OUT, out_length, self.archive, self.counts).show()
+
+    def read_drafts(self):
+        out_length = outgoing.get_out_length(cfg.nodes[node], drafts=True)
+        if out_length:
+            self.go, self.next_echo = EchoReader(
+                config.ECHO_DRAFTS, 0, self.archive, self.counts).show()
 
 
 def call_editor(node_, out=''):
