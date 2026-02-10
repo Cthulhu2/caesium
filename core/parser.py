@@ -6,7 +6,18 @@ from typing import List, Optional, Tuple
 
 from core import utils
 
+pgpy = None
+try:
+    # noinspection PyProtectedMember,PyUnresolvedReferences
+    from pgpy.pgp import PubKeyAlgorithm
+    # noinspection PyUnresolvedReferences
+    import pgpy
+except ImportError:
+    pass
+
 INLINE_STYLE_ENABLED = False
+BEGIN_PGP_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+END_PGP_KEY = "-----END PGP PUBLIC KEY BLOCK-----"
 
 url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
@@ -45,6 +56,7 @@ class TT(Enum):
     UNDERLINE_BEGIN = auto()
     UNDERLINE_END = auto()
     URL = auto()
+    LF = auto()
 
 
 @dataclass
@@ -66,6 +78,14 @@ class Token:
         return Token(TT.URL, value, line_num,
                      url=url, title=title,
                      filename=filename, filedata=filedata)
+
+    @staticmethod
+    def LF(line_num):
+        return Token(TT.LF, "", line_num)
+
+    @staticmethod
+    def CODE(value, line_num):
+        return Token(TT.CODE, value, line_num)
 
 
 def is_code_block(line):
@@ -151,6 +171,15 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 tokens.extend(b64_tokens)
                 line_num += b64_lines_count
                 continue  # lines
+        #
+        if line.rstrip().startswith(BEGIN_PGP_KEY):
+            next_lines = lines[line_num:]
+            if any(filter(lambda s: s.rstrip().startswith(END_PGP_KEY), next_lines)):
+                code_tokens, lines_count = _tokenize_pgp_key_block(next_lines, line_num)
+                if code_tokens:
+                    tokens.extend(code_tokens)
+                    line_num += lines_count
+                    continue  # lines
         #
         tokens.extend(_inline(line, line_num, Token(TT.TEXT, "", line_num)))
         line_num += 1
@@ -342,6 +371,61 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
     return [token], b64_lines_count
 
 
+# region _tokenize_pgp_key
+def _tokenize_pgp_key_block(lines, line_num):
+    lines_count = 0
+    for line in lines:
+        lines_count += 1
+        if line.strip().startswith(END_PGP_KEY):
+            break  #
+
+    if INLINE_STYLE_ENABLED:
+        key_bytes = "\n".join(lines[0:lines_count]).encode("latin-1")
+        size = utils.msg_strfsize(len(key_bytes))
+
+        fname = "pgp-public-key.asc"
+        if pgpy:
+            try:
+                fname, key_tokens = _tokenize_pgp_key(line_num, key_bytes)
+            except Exception as ex:
+                key_tokens = [
+                    Token.LF(line_num), Token.CODE(f"Error: {str(ex)}", line_num)
+                ]
+        else:
+            key_tokens = []
+
+        url = "file:///%s (PGP key, %s)" % (fname, size)
+        token = Token.URL(url, line_num, url=url,
+                          filename=fname, filedata=key_bytes)
+        return [token, *key_tokens], lines_count  #
+
+    return ([Token(TT.CODE, line, line_num + i)
+             for i, line in enumerate(lines[0:lines_count])],
+            lines_count)  #
+
+
+def _tokenize_pgp_key(num, key_bytes):
+    # noinspection PyUnresolvedReferences
+    key, val = pgpy.PGPKey().parse(key_bytes).popitem()
+    username = val.userids[0].name
+    comment = val.userids[0].comment
+    fname = f"{username}-{comment}-pgp-public-key.asc"
+    fname = filename_sanitize.sub("_", fname.replace(",", "_"))
+    expires = val.expires_at if not val.expires_at else ""
+    key_tokens = [
+        Token.LF(num), Token.CODE(f"        Key: {key[0]}", num),
+        Token.LF(num), Token.CODE(f"Fingerprint: {val.fingerprint}", num),
+        Token.LF(num), Token.CODE(f"   Username: {username}", num),
+        Token.LF(num), Token.CODE(f"    Comment: {comment}", num),
+        Token.LF(num), Token.CODE(f"    Created: {val.created}", num),
+        Token.LF(num), Token.CODE(f"    Expires: {expires}", num),
+        Token.LF(num), Token.CODE(f"  Algorithm: {PubKeyAlgorithm(val.key_algorithm).name}", num),
+        Token.LF(num), Token.CODE(f"       Size: {val.key_size}", num),
+    ]
+    return fname, key_tokens
+# endregion _tokenize_pgp_key
+
+
 def prerender(tokens, width, height=None):
     # type: (List[Token], int, Optional[int]) -> int
     """:return: body height lines count"""
@@ -357,6 +441,11 @@ def prerender(tokens, width, height=None):
             x = 0
             line_num = token.line_num
             in_quote = False
+        if token.type == TT.LF:
+            y += 1
+            x = 0
+            token.render = ["", ""]
+            continue  # tokens
         if token.render is None:
             token.render = []
         else:

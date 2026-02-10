@@ -590,6 +590,25 @@ def test_attachments_base64_filename():
                                   filedata="test data".encode("utf-8"))
 
 
+def test_attachments_pgp_key_code():
+    parser.INLINE_STYLE_ENABLED = False
+    tokens = parser.tokenize([parser.BEGIN_PGP_KEY, "11111", parser.END_PGP_KEY])
+    assert tokens[0] == Token.CODE(parser.BEGIN_PGP_KEY, 0)
+    assert tokens[1] == Token.CODE("11111", 1)
+    assert tokens[2] == Token.CODE(parser.END_PGP_KEY, 2)
+
+
+def test_attachments_pgp_key_filename():
+    parser.INLINE_STYLE_ENABLED = True
+    lines = [parser.BEGIN_PGP_KEY, "11111", parser.END_PGP_KEY]
+    tokens = parser.tokenize(lines)
+    assert tokens[0] == token_url("file:///pgp-public-key.asc (PGP key, 77 B)", 0,
+                                  filename="pgp-public-key.asc",
+                                  filedata="\n".join(lines).encode("latin-1"))
+    assert tokens[1] == Token.LF(0)
+    assert tokens[2] == Token.CODE("Error: Expected: ASCII-armored PGP data", 0)
+
+
 class ScrMock:
     def __init__(self, h, w):
         self.height = h
