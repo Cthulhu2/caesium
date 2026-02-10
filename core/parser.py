@@ -35,6 +35,8 @@ GPG_PUB_KEY_ALGS = {
 INLINE_STYLE_ENABLED = False
 BEGIN_PGP_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 END_PGP_KEY = "-----END PGP PUBLIC KEY BLOCK-----"
+BEGIN_PGP_KEY_IN = "- -----BEGIN PGP PUBLIC KEY BLOCK-----"
+END_PGP_KEY_IN = "- -----END PGP PUBLIC KEY BLOCK-----"
 BEGIN_PGP_SIGNED_MSG = "-----BEGIN PGP SIGNED MESSAGE-----"
 BEGIN_PGP_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
 END_PGP_SIGNATURE = "-----END PGP SIGNATURE-----"
@@ -192,10 +194,16 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 line_num += b64_lines_count
                 continue  # lines
         #
+        pgp_beg, pgp_end = None, None
         if line.rstrip().startswith(BEGIN_PGP_KEY):
+            pgp_beg, pgp_end = BEGIN_PGP_KEY, END_PGP_KEY
+        elif line.rstrip().startswith(BEGIN_PGP_KEY_IN):
+            pgp_beg, pgp_end = BEGIN_PGP_KEY_IN, END_PGP_KEY_IN
+        if pgp_beg and pgp_end:
             next_lines = lines[line_num - start_line:]
-            if any(filter(lambda s: s.rstrip().startswith(END_PGP_KEY), next_lines)):
-                code_tokens, lines_count = _tokenize_pgp_key_block(next_lines, line_num)
+            if any(filter(lambda s: s.rstrip().startswith(pgp_end), next_lines)):
+                code_tokens, lines_count = _tokenize_pgp_key_block(
+                    next_lines, line_num, pgp_end)
                 if code_tokens:
                     tokens.extend(code_tokens)
                     line_num += lines_count
@@ -401,15 +409,21 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
 
 
 # region _tokenize_pgp_key
-def _tokenize_pgp_key_block(lines, line_num):
+def _tokenize_pgp_key_block(lines, line_num, pgp_end):
     lines_count = 0
     for line in lines:
         lines_count += 1
-        if line.strip().startswith(END_PGP_KEY):
+        if line.strip().startswith(pgp_end):
             break  #
 
     if INLINE_STYLE_ENABLED:
-        key_bytes = "\n".join(lines[0:lines_count]).encode("latin-1")
+        line0 = lines[0]
+        lineLast = lines[lines_count - 1]
+        if pgp_end.startswith("- "):  # escaped inner block in signed msg
+            line0 = line0[2:]
+            lineLast = lineLast[2:]
+
+        key_bytes = "\n".join((line0, *lines[1:lines_count-1], lineLast)).encode("utf-8")
         size = utils.msg_strfsize(len(key_bytes))
 
         fname = "pgp-public-key.asc"
