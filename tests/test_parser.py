@@ -462,8 +462,12 @@ def test_inline_italic():
     assert tokens[3] == Token(TT.ITALIC_END, "", 0)
     assert tokens[4] == Token(TT.TEXT, ".", 0)
     assert tokens[5] == Token(TT.TEXT, "", 1)
-    assert tokens[6] == Token(TT.TEXT, "/* XPM */", 2)
+    # Do not modify source values due to GPG signature
+    assert tokens[6] == Token(TT.TEXT, "/* XPM */\r", 2)
     assert tokens[7] == Token(TT.TEXT, "/* XPM */", 3)
+
+    parser.prerender(tokens, width=100)
+    assert tokens[6].render == ["/* XPM */"]  # No \r in render
 
     tokens = parser.tokenize(["Text filename_with_underscore.log."])
     assert tokens[0] == Token(TT.TEXT, "Text filename_with_underscore.log.", 0)
@@ -606,7 +610,38 @@ def test_attachments_pgp_key_filename():
                                   filename="pgp-public-key.asc",
                                   filedata="\n".join(lines).encode("latin-1"))
     assert tokens[1] == Token.LF(0)
-    assert tokens[2] == Token.CODE("Error: Expected: ASCII-armored PGP data", 0)
+    assert tokens[2] == Token.CODE("Error: Invalid key", 0)
+
+
+PGP_SIGNED_MSG = [parser.BEGIN_PGP_SIGNED_MSG,
+                  "11111",
+                  parser.BEGIN_PGP_SIGNATURE,
+                  "22222",
+                  parser.END_PGP_SIGNATURE]
+
+
+def test_pgp_sign_code():
+    parser.INLINE_STYLE_ENABLED = False
+    tokens = parser.tokenize(PGP_SIGNED_MSG)
+    assert tokens[0] == Token.CODE(parser.BEGIN_PGP_SIGNED_MSG, 0)
+    assert tokens[1] == Token(TT.TEXT, "11111", 1)
+    assert tokens[2] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 2)
+    assert tokens[3] == Token.CODE("22222", 3)
+    assert tokens[4] == Token.CODE(parser.END_PGP_SIGNATURE, 4)
+
+
+def test_pgp_sign_inline():
+    parser.INLINE_STYLE_ENABLED = True
+    tokens = parser.tokenize(PGP_SIGNED_MSG)
+    assert tokens[0] == Token.CODE(parser.BEGIN_PGP_SIGNED_MSG, 0)
+    assert tokens[1] == Token(TT.TEXT, "11111", 1)
+    assert tokens[2] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 2)
+    assert tokens[3] == Token.LF(2)
+    assert tokens[4] == Token.CODE("     Status: Invalid :(", 2)
+    assert tokens[5] == Token.LF(2)
+    assert tokens[6] == Token.CODE("      KeyId: ---", 2)
+    #
+    assert tokens[13] == Token.CODE(parser.END_PGP_SIGNATURE, 4)
 
 
 class ScrMock:

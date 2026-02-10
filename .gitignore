@@ -6,6 +6,7 @@ tests/test.aio/
 tests/test.ait/
 tests/test.txt/
 tests/test.db
+.gpg
 
 caesium.cfg
 

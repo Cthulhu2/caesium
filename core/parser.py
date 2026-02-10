@@ -1,23 +1,43 @@
 import base64
+import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum, auto
 from typing import List, Optional, Tuple
 
 from core import utils
 
-pgpy = None
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+gpg = None
 try:
-    # noinspection PyProtectedMember,PyUnresolvedReferences
-    from pgpy.pgp import PubKeyAlgorithm
     # noinspection PyUnresolvedReferences
-    import pgpy
+    import gnupg
+    gpg = gnupg.GPG(gnupghome=BASE_DIR + '/../.gpg')
 except ImportError:
     pass
+
+GPG_PUB_KEY_ALGS = {
+    # OpenPGP Message Format :: 9.1.  Public-Key Algorithms
+    # https://datatracker.ietf.org/doc/html/rfc4880#section-9.1
+    '1': 'RSA (Encrypt or Sign)',
+    '2': 'RSA (Encrypt-Only)',
+    '3': 'RSA (Sign-Only)',
+    '16': 'Elgamal (Encrypt-Only)',
+    '17': 'DSA (Digital Signature Algorithm)',
+    # Elliptic Curve Cryptography (ECC) in OpenPGP :: 5.  Supported Public Key Algorithms
+    # https://datatracker.ietf.org/doc/html/rfc6637#section-5
+    '18': 'ECDH',
+    '19': 'ECDSA',
+}
 
 INLINE_STYLE_ENABLED = False
 BEGIN_PGP_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 END_PGP_KEY = "-----END PGP PUBLIC KEY BLOCK-----"
+BEGIN_PGP_SIGNED_MSG = "-----BEGIN PGP SIGNED MESSAGE-----"
+BEGIN_PGP_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
+END_PGP_SIGNATURE = "-----END PGP SIGNATURE-----"
 
 url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
@@ -99,8 +119,8 @@ def is_code_block2(line):
 def tokenize(lines: List[str], start_line=0) -> List[Token]:
     tokens = []
     line_num = start_line
-    while line_num < len(lines):
-        line = lines[line_num - start_line].rstrip("\r")
+    while line_num - start_line < len(lines):
+        line = lines[line_num - start_line]
         #
         if header := header_template.match(line):
             tokens.extend(_inline(line[header.end():], line_num,
@@ -144,7 +164,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
         else:
             check_code_block = None
         if check_code_block:
-            next_lines = lines[line_num + 1:]
+            next_lines = lines[line_num - start_line + 1:]
             if any(filter(lambda s: check_code_block(s), next_lines)):
                 tokens.append(Token(TT.CODE, line, line_num))
                 line_num += 1
@@ -157,7 +177,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 continue  # lines
         #
         if line.rstrip() == "/* XPM */":
-            next_lines = lines[line_num:]
+            next_lines = lines[line_num - start_line:]
             xpm_tokens, xpm_lines_count = _tokenize_xpm(next_lines, line_num)
             if xpm_tokens:
                 tokens.extend(xpm_tokens)
@@ -165,7 +185,7 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 continue  # lines
         #
         if line.rstrip().startswith("@base64:"):
-            next_lines = lines[line_num:]
+            next_lines = lines[line_num - start_line:]
             b64_tokens, b64_lines_count = _tokenize_base64(next_lines, line_num)
             if b64_tokens:
                 tokens.extend(b64_tokens)
@@ -173,9 +193,18 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                 continue  # lines
         #
         if line.rstrip().startswith(BEGIN_PGP_KEY):
-            next_lines = lines[line_num:]
+            next_lines = lines[line_num - start_line:]
             if any(filter(lambda s: s.rstrip().startswith(END_PGP_KEY), next_lines)):
                 code_tokens, lines_count = _tokenize_pgp_key_block(next_lines, line_num)
+                if code_tokens:
+                    tokens.extend(code_tokens)
+                    line_num += lines_count
+                    continue  # lines
+        #
+        if line.rstrip().startswith(BEGIN_PGP_SIGNED_MSG):
+            next_lines = lines[line_num - start_line:]
+            if any(filter(lambda s: s.rstrip().startswith(END_PGP_SIGNATURE), next_lines)):
+                code_tokens, lines_count = _tokenize_pgp_signed_msg(next_lines, line_num)
                 if code_tokens:
                     tokens.extend(code_tokens)
                     line_num += lines_count
@@ -384,7 +413,7 @@ def _tokenize_pgp_key_block(lines, line_num):
         size = utils.msg_strfsize(len(key_bytes))
 
         fname = "pgp-public-key.asc"
-        if pgpy:
+        if gnupg:
             try:
                 fname, key_tokens = _tokenize_pgp_key(line_num, key_bytes)
             except Exception as ex:
@@ -405,25 +434,89 @@ def _tokenize_pgp_key_block(lines, line_num):
 
 
 def _tokenize_pgp_key(num, key_bytes):
-    # noinspection PyUnresolvedReferences
-    key, val = pgpy.PGPKey().parse(key_bytes).popitem()
-    username = val.userids[0].name
-    comment = val.userids[0].comment
-    fname = f"{username}-{comment}-pgp-public-key.asc"
+    val = gpg.scan_keys_mem(key_bytes)
+    if not val:
+        raise Exception('Invalid key')
+    val = val[0]
+    user = val['uids'][0]
+    fname = f"{user}-pgp-public-key.asc"
     fname = filename_sanitize.sub("_", fname.replace(",", "_"))
-    expires = val.expires_at if not val.expires_at else ""
+    expires = "---"
+    if val['expires']:
+        expires = datetime.utcfromtimestamp(int(val['expires']))
+    alg = GPG_PUB_KEY_ALGS.get(val['algo'], val['algo'])
+    created = datetime.utcfromtimestamp(int(val['date']))
     key_tokens = [
-        Token.LF(num), Token.CODE(f"        Key: {key[0]}", num),
-        Token.LF(num), Token.CODE(f"Fingerprint: {val.fingerprint}", num),
-        Token.LF(num), Token.CODE(f"   Username: {username}", num),
-        Token.LF(num), Token.CODE(f"    Comment: {comment}", num),
-        Token.LF(num), Token.CODE(f"    Created: {val.created}", num),
+        Token.LF(num), Token.CODE(f"      KeyId: {val['keyid']}", num),
+        Token.LF(num), Token.CODE(f"Fingerprint: {val['fingerprint']}", num),
+        Token.LF(num), Token.CODE(f"     UserId: {user}", num),
+        Token.LF(num), Token.CODE(f"    Created: {created}", num),
         Token.LF(num), Token.CODE(f"    Expires: {expires}", num),
-        Token.LF(num), Token.CODE(f"  Algorithm: {PubKeyAlgorithm(val.key_algorithm).name}", num),
-        Token.LF(num), Token.CODE(f"       Size: {val.key_size}", num),
+        Token.LF(num), Token.CODE(f"  Algorithm: {alg}", num),
+        Token.LF(num), Token.CODE(f"       Size: {val['length']}", num),
     ]
     return fname, key_tokens
 # endregion _tokenize_pgp_key
+
+
+# region _tokenize_pgp_signed_msg
+def _tokenize_pgp_signed_msg(lines, line_num):
+    lines_count = 0
+    sign_line = 0
+    for line in lines:
+        lines_count += 1
+        if line.strip().startswith(BEGIN_PGP_SIGNATURE):
+            sign_line = lines_count - 1
+        if line.strip().startswith(END_PGP_SIGNATURE):
+            break  #
+    msg_body = lines[1:sign_line]
+    msg_body_tokens = tokenize(msg_body, line_num + 1)
+    if INLINE_STYLE_ENABLED and gpg:
+        sign_tokens = _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count)
+    else:
+        sign_tokens = [Token(TT.CODE, line, sign_line + i)
+                       for i, line in enumerate(lines[sign_line:lines_count])]
+
+    tokens = [Token(TT.CODE, lines[0], line_num),
+              *msg_body_tokens,
+              *sign_tokens]
+
+    return tokens, lines_count  #
+
+
+def _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count):
+    signed_msg = lines[0:lines_count]
+    sign = gpg.verify("\n".join(signed_msg).encode("utf-8"))
+    ts = "---"
+    if sign.timestamp:
+        ts = str(datetime.utcfromtimestamp(int(sign.timestamp)))
+    if sign.valid:
+        sign_token = [
+            Token.LF(sign_line),
+            Token.CODE(f"     Status: Valid :)", sign_line),
+            Token.LF(sign_line),
+            Token.CODE(f"      Trust: {sign.trust_text}", sign_line)
+        ]
+    else:
+        sign_token = [
+            Token.LF(sign_line),
+            Token.CODE(f"     Status: Invalid :(", sign_line)
+        ]
+    sign_tokens = [
+        Token.CODE(lines[sign_line], sign_line),
+        *sign_token,
+        Token.LF(sign_line),
+        Token.CODE(f"      KeyId: {sign.key_id or '---'}", sign_line),
+        Token.LF(sign_line),
+        Token.CODE(f"Fingerprint: {sign.fingerprint or '---'}", sign_line),
+        Token.LF(sign_line),
+        Token.CODE(f"     Signer: {sign.username or '---'}", sign_line),
+        Token.LF(sign_line),
+        Token.CODE(f"  Timestamp: {ts}", sign_line),
+        Token.CODE(lines[lines_count - 1], lines_count - 1),
+    ]
+    return sign_tokens
+# endregion
 
 
 def prerender(tokens, width, height=None):
@@ -454,7 +547,7 @@ def prerender(tokens, width, height=None):
             # early scrollable detected, reserve scrollbar width
             return prerender(tokens, width=width - 1, height=None)
         # pre-process
-        value = token.value.replace("\t", "    ")
+        value = token.value.replace("\t", "    ").rstrip("\r")
         if token.type == TT.URL and INLINE_STYLE_ENABLED:
             value = token.title or token.url
         elif token.type in (TT.QUOTE1, TT.QUOTE2):
