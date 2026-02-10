@@ -21,7 +21,7 @@ def token_url(url, line_num, title=None, filename=None, filedata=None):
                      filename=filename, filedata=filedata)
 
 
-@pytest.mark.parametrize("ends", " .,:;!@#%&*(){}_=+\\/")
+@pytest.mark.parametrize("ends", " .,:;!@#%&*(){}_=+\\/?")
 def test_inline_ends(ends):
     assert parser.italic_inline_template.match("_italic_" + ends)
     assert parser.italic_inline_template.match("*italic*" + ends)
