@@ -613,6 +613,19 @@ def test_attachments_pgp_key_filename():
     assert tokens[2] == Token.CODE("Error: Invalid key", 0)
 
 
+def test_attachments_pgp_key_filename_in_code_block():
+    parser.INLINE_STYLE_ENABLED = True
+    lines = ["====", parser.BEGIN_PGP_KEY, "11111", parser.END_PGP_KEY, "===="]
+    tokens = parser.tokenize(lines)
+    assert tokens[0] == Token.CODE("====", 0)
+    assert tokens[1] == token_url("file:///pgp-public-key.asc (PGP key, 77 B)", 1,
+                                  filename="pgp-public-key.asc",
+                                  filedata="\n".join(lines[1:-1]).encode("latin-1"))
+    assert tokens[2] == Token.LF(1)
+    assert tokens[3] == Token.CODE("Error: Invalid key", 1)
+    assert tokens[4] == Token.CODE("====", 4)
+
+
 PGP_SIGNED_MSG = [parser.BEGIN_PGP_SIGNED_MSG,
                   "11111",
                   parser.BEGIN_PGP_SIGNATURE,

@@ -118,81 +118,85 @@ def is_code_block2(line):
     return line.startswith("```")
 
 
-def tokenize(lines: List[str], start_line=0) -> List[Token]:
+def tokenize(lines: List[str], start_line=0, in_code_block=False) -> List[Token]:
     tokens = []
     line_num = start_line
     while line_num - start_line < len(lines):
         line = lines[line_num - start_line]
         #
-        if header := header_template.match(line):
-            tokens.extend(_inline(line[header.end():], line_num,
-                                  Token(TT.HEADER, line[0:header.end()],
-                                        line_num)))
-            line_num += 1
-            continue  #
-        #
-        if comment := ps_template.search(line):
-            tokens.extend(_inline(line[comment.end():], line_num,
-                                  Token(TT.COMMENT, line[0:comment.end()],
-                                        line_num)))
-            line_num += 1
-            continue  #
-        #
-        if quote := quote_template.match(line):
-            count = line[0:quote.span()[1]].count(">")
-            kind = (TT.QUOTE1, TT.QUOTE2)[(count + 1) % 2]
-            tokens.extend(_inline(line[quote.end():], line_num,
-                                  Token(kind, line[0:quote.end()],
-                                        line_num)))
-            line_num += 1
-            continue  #
-        #
-        if origin := origin_template.search(line):
-            tokens.extend(_inline(line[origin.end():], line_num,
-                                  Token(TT.ORIGIN, line[0:origin.end()],
-                                        line_num)))
-            line_num += 1
-            continue  #
-        #
-        if line.rstrip() == "----":
-            tokens.append(Token(TT.HR, line, line_num))
-            line_num += 1
-            continue  #
-        #
-        if is_code_block(line):
-            check_code_block = is_code_block
-        elif is_code_block2(line):
-            check_code_block = is_code_block2
-        else:
-            check_code_block = None
-        if check_code_block:
-            next_lines = lines[line_num - start_line + 1:]
-            if any(filter(lambda s: check_code_block(s), next_lines)):
-                tokens.append(Token(TT.CODE, line, line_num))
+        if not in_code_block:
+            if header := header_template.match(line):
+                tokens.extend(_inline(line[header.end():], line_num,
+                                      Token(TT.HEADER, line[0:header.end()],
+                                            line_num)))
                 line_num += 1
-                for nline in next_lines:
-                    tokens.extend(_simple_inline(nline, line_num,
-                                                 Token(TT.CODE, "", line_num)))
+                continue  #
+            #
+            if comment := ps_template.search(line):
+                tokens.extend(_inline(line[comment.end():], line_num,
+                                      Token(TT.COMMENT, line[0:comment.end()],
+                                            line_num)))
+                line_num += 1
+                continue  #
+            #
+            if quote := quote_template.match(line):
+                count = line[0:quote.span()[1]].count(">")
+                kind = (TT.QUOTE1, TT.QUOTE2)[(count + 1) % 2]
+                tokens.extend(_inline(line[quote.end():], line_num,
+                                      Token(kind, line[0:quote.end()],
+                                            line_num)))
+                line_num += 1
+                continue  #
+            #
+            if origin := origin_template.search(line):
+                tokens.extend(_inline(line[origin.end():], line_num,
+                                      Token(TT.ORIGIN, line[0:origin.end()],
+                                            line_num)))
+                line_num += 1
+                continue  #
+            #
+            if line.rstrip() == "----":
+                tokens.append(Token(TT.HR, line, line_num))
+                line_num += 1
+                continue  #
+            #
+            if is_code_block(line):
+                check_code_block = is_code_block
+            elif is_code_block2(line):
+                check_code_block = is_code_block2
+            else:
+                check_code_block = None
+            if check_code_block:
+                next_lines = lines[line_num - start_line + 1:]
+                code_block_end = None
+                for i, l in enumerate(next_lines):
+                    if check_code_block(l):
+                        code_block_end = i
+                        break
+
+                if code_block_end is not None:
+                    tokens.append(Token(TT.CODE, line, line_num))
                     line_num += 1
-                    if check_code_block(nline):
-                        break  # next_lines
-                continue  # lines
-        #
-        if line.rstrip() == "/* XPM */":
-            next_lines = lines[line_num - start_line:]
-            xpm_tokens, xpm_lines_count = _tokenize_xpm(next_lines, line_num)
-            if xpm_tokens:
-                tokens.extend(xpm_tokens)
-                line_num += xpm_lines_count
-                continue  # lines
-        #
-        if line.rstrip().startswith("@base64:"):
-            next_lines = lines[line_num - start_line:]
-            b64_tokens, b64_lines_count = _tokenize_base64(next_lines, line_num)
-            if b64_tokens:
-                tokens.extend(b64_tokens)
-                line_num += b64_lines_count
-                continue  # lines
+                    tokens.extend(tokenize(next_lines[0:code_block_end + 1],
+                                           line_num, in_code_block=True))
+                    line_num += code_block_end + 1
+                    continue  # lines
+            #
+            if line.rstrip() == "/* XPM */":
+                next_lines = lines[line_num - start_line:]
+                xpm_tokens, xpm_lines_count = _tokenize_xpm(next_lines, line_num)
+                if xpm_tokens:
+                    tokens.extend(xpm_tokens)
+                    line_num += xpm_lines_count
+                    continue  # lines
+            #
+            if line.rstrip().startswith("@base64:"):
+                next_lines = lines[line_num - start_line:]
+                b64_tokens, b64_lines_count = _tokenize_base64(next_lines, line_num)
+                if b64_tokens:
+                    tokens.extend(b64_tokens)
+                    line_num += b64_lines_count
+                    continue  # lines
         #
         pgp_beg, pgp_end = None, None
         if line.rstrip().startswith(BEGIN_PGP_KEY):
@@ -218,7 +222,10 @@ def tokenize(lines: List[str], start_line=0) -> List[Token]:
                     line_num += lines_count
                     continue  # lines
         #
-        tokens.extend(_inline(line, line_num, Token(TT.TEXT, "", line_num)))
+        if in_code_block:
+            tokens.extend(_simple_inline(line, line_num, Token.CODE("", line_num)))
+        else:
+            tokens.extend(_inline(line, line_num, Token(TT.TEXT, "", line_num)))
         line_num += 1
 
     return tokens
@@ -432,7 +439,7 @@ def _tokenize_pgp_key_block(lines, line_num, pgp_end):
                 fname, key_tokens = _tokenize_pgp_key(line_num, key_bytes)
             except Exception as ex:
                 key_tokens = [
-                    Token.LF(line_num), Token.CODE(f"Error: {str(ex)}", line_num)
+                    Token.LF(line_num), Token.CODE("Error: " + str(ex), line_num)
                 ]
         else:
             key_tokens = []
@@ -457,17 +464,17 @@ def _tokenize_pgp_key(num, key_bytes):
     fname = filename_sanitize.sub("_", fname.replace(",", "_"))
     expires = "---"
     if val['expires']:
-        expires = datetime.utcfromtimestamp(int(val['expires']))
+        expires = str(datetime.utcfromtimestamp(int(val['expires'])))
     alg = GPG_PUB_KEY_ALGS.get(val['algo'], val['algo'])
-    created = datetime.utcfromtimestamp(int(val['date']))
+    created = str(datetime.utcfromtimestamp(int(val['date'])))
     key_tokens = [
-        Token.LF(num), Token.CODE(f"      KeyId: {val['keyid']}", num),
-        Token.LF(num), Token.CODE(f"Fingerprint: {val['fingerprint']}", num),
-        Token.LF(num), Token.CODE(f"     UserId: {user}", num),
-        Token.LF(num), Token.CODE(f"    Created: {created}", num),
-        Token.LF(num), Token.CODE(f"    Expires: {expires}", num),
-        Token.LF(num), Token.CODE(f"  Algorithm: {alg}", num),
-        Token.LF(num), Token.CODE(f"       Size: {val['length']}", num),
+        Token.LF(num), Token.CODE("      KeyId: " + val['keyid'], num),
+        Token.LF(num), Token.CODE("Fingerprint: " + val['fingerprint'], num),
+        Token.LF(num), Token.CODE("     UserId: " + user, num),
+        Token.LF(num), Token.CODE("    Created: " + created, num),
+        Token.LF(num), Token.CODE("    Expires: " + expires, num),
+        Token.LF(num), Token.CODE("  Algorithm: " + alg, num),
+        Token.LF(num), Token.CODE("       Size: " + val['length'], num),
     ]
     return fname, key_tokens
 # endregion _tokenize_pgp_key
@@ -507,26 +514,26 @@ def _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count):
     if sign.valid:
         sign_token = [
             Token.LF(sign_line),
-            Token.CODE(f"     Status: Valid :)", sign_line),
+            Token.CODE("     Status: Valid :)", sign_line),
             Token.LF(sign_line),
-            Token.CODE(f"      Trust: {sign.trust_text}", sign_line)
+            Token.CODE("      Trust: " + sign.trust_text, sign_line)
         ]
     else:
         sign_token = [
             Token.LF(sign_line),
-            Token.CODE(f"     Status: Invalid :(", sign_line)
+            Token.CODE("     Status: Invalid :(", sign_line)
         ]
     sign_tokens = [
         Token.CODE(lines[sign_line], sign_line),
         *sign_token,
         Token.LF(sign_line),
-        Token.CODE(f"      KeyId: {sign.key_id or '---'}", sign_line),
+        Token.CODE("      KeyId: " + (sign.key_id or '---'), sign_line),
         Token.LF(sign_line),
-        Token.CODE(f"Fingerprint: {sign.fingerprint or '---'}", sign_line),
+        Token.CODE("Fingerprint: " + (sign.fingerprint or '---'), sign_line),
         Token.LF(sign_line),
-        Token.CODE(f"     Signer: {sign.username or '---'}", sign_line),
+        Token.CODE("     Signer: " + (sign.username or '---'), sign_line),
         Token.LF(sign_line),
-        Token.CODE(f"  Timestamp: {ts}", sign_line),
+        Token.CODE("  Timestamp: " + ts, sign_line),
         Token.CODE(lines[lines_count - 1], lines_count - 1),
     ]
     return sign_tokens
