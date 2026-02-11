@@ -1,5 +1,6 @@
 import curses
 import re
+import textwrap
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -97,26 +98,32 @@ def draw_title(scr, y, x, title):
 
 def draw_message_box(smsg, wait):
     msg = smsg.split("\n")
-    maxlen = max(map(lambda x: len(x), msg))
+    if wait:
+        msg.extend(LABEL_ANY_KEY)
+    max_width = int(WIDTH * 0.75) if WIDTH > 80 else WIDTH - 2
+    max_width = min(max_width, max(map(lambda x: len(x), msg))) + 2
+    msg = list(map(lambda p: textwrap.fill(p, max_width - 2),
+                   smsg.split("\n")))
+    msg = "\n".join(msg).split("\n")  # re-split after textwrap.fill added \n
     box_height = len(msg) + 2  # len + border
     if wait:
         box_height += 2  # + new line + LABEL_ANY_KEY
-        maxlen = max(len(LABEL_ANY_KEY), maxlen)
-    maxlen += 2  # + border
-    win = curses.newwin(box_height, maxlen,
+    win = curses.newwin(box_height, max_width,
                         int((HEIGHT - box_height) / 2),
-                        int((WIDTH - maxlen) / 2))
+                        int((WIDTH - max_width) / 2))
     win.bkgd(' ', get_color(UI_TEXT))
     win.attrset(get_color(UI_BORDER))
     win.border()
 
     color = get_color(UI_TEXT)
     for i, line in enumerate(msg, start=1):
+        if i >= HEIGHT - 1:
+            break
         win.addstr(i, 1, line, color)
 
     color = get_color(UI_TITLES)
     if wait:
-        win.addstr(len(msg) + 2, int((maxlen - len(LABEL_ANY_KEY)) / 2),
+        win.addstr(len(msg) + 2, int((max_width - len(LABEL_ANY_KEY)) / 2),
                    LABEL_ANY_KEY, color)
     win.refresh()
 
