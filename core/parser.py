@@ -94,12 +94,15 @@ class Token:
     # file url with attachment
     filename: str = None
     filedata: bytes = None
+    pgp_key: bool = None
 
     @staticmethod
-    def URL(value, line_num, url, title=None, filename=None, filedata=None):
+    def URL(value, line_num, url, title=None, filename=None, filedata=None,
+            pgp_key=None):
         return Token(TT.URL, value, line_num,
                      url=url, title=title,
-                     filename=filename, filedata=filedata)
+                     filename=filename, filedata=filedata,
+                     pgp_key=pgp_key)
 
     @staticmethod
     def LF(line_num):
@@ -452,7 +455,7 @@ def _tokenize_pgp_key_block(lines, line_num, pgp_end):
 
         url = "file:///%s (PGP key, %s)" % (fname, size)
         token = Token.URL(url, line_num, url=url,
-                          filename=fname, filedata=key_bytes)
+                          filename=fname, filedata=key_bytes, pgp_key=True)
         return [token, *key_tokens], lines_count  #
 
     return ([Token(TT.CODE, line, line_num + i)
@@ -523,25 +526,16 @@ def _tokenize_pgp_signed_msg(lines, line_num, in_code_block):
 
 def _tokenize_pgp_signed_msg_verify(lines, sign_line_idx, sign_line, lines_count):
     signed_msg = lines[0:lines_count]
-    sign = gpg.verify("\n".join(signed_msg).encode("utf-8"))
+    # noinspection PyTypeChecker
+    sign = gpg.verify("\n".join(signed_msg).encode("utf-8"),
+                      extra_args=["-v"])
     ts = "---"
     if sign.timestamp:
         ts = str(datetime.utcfromtimestamp(int(sign.timestamp)))
-    if sign.status == "signature valid":
-        sign_token = [
-            Token.LF(sign_line),
-            Token.CODE("   Status: Valid :)", sign_line),
-            Token.LF(sign_line),
-            Token.CODE("    Trust: " + str(sign.trust_text), sign_line)
-        ]
-    else:
-        sign_token = [
-            Token.LF(sign_line),
-            Token.CODE("   Status: Invalid :(", sign_line)
-        ]
     sign_tokens = [
         Token.CODE(lines[sign_line_idx], sign_line),
-        *sign_token,
+        Token.LF(sign_line),
+        Token.CODE("   Status: " + str(sign.status), sign_line),
         *_pgp_key_tokens(sign.key_id, sign.fingerprint, sign_line),
         Token.LF(sign_line),
         Token.CODE("   Signer: " + (sign.username or '---'), sign_line),

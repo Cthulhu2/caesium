@@ -258,16 +258,16 @@ class SelectWindow:
         w = 0 if not items else max(map(lambda it: len(it), test_width))
         h = min(HEIGHT - 2, len(items))
         w = min(WIDTH - 2, w)
-        y = max(0, int(HEIGHT / 2 - h / 2 - 2))
-        x = max(0, int(WIDTH / 2 - w / 2 - 2))
+        y = max(0, int(HEIGHT / 2 - h / 2 - 1))
+        x = max(0, int(WIDTH / 2 - w / 2 - 1))
         if win:
             win.resize(h + 2, w + 2)
             win.mvwin(y, x)
         else:
             win = curses.newwin(h + 2, w + 2, y, x)
         color = get_color(UI_BORDER)
-        lbl_title = title[0:min(w - 4, len(title))]
-        lbl_esc = LABEL_ESC[0:min(w - 4, len(LABEL_ESC))]
+        lbl_title = title[0:min(w - 2, len(title))]
+        lbl_esc = LABEL_ESC[0:min(w - 2, len(LABEL_ESC))]
         win.attrset(color)
         win.border()
         win.addstr(0, 1, "[", color)

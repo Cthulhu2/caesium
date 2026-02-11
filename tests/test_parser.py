@@ -15,10 +15,12 @@ def _color_pair_mock(num):
 curses.color_pair = _color_pair_mock
 
 
-def token_url(url, line_num, title=None, filename=None, filedata=None):
+def token_url(url, line_num, title=None, filename=None, filedata=None,
+              pgp_key=None):
     return Token.URL(url, line_num,
                      url=title or url, title=title,
-                     filename=filename, filedata=filedata)
+                     filename=filename, filedata=filedata,
+                     pgp_key=pgp_key)
 
 
 @pytest.mark.parametrize("ends", " .,:;!@#%&*(){}_=+\\/?")
@@ -608,7 +610,8 @@ def test_attachments_pgp_key_filename():
     tokens = parser.tokenize(lines)
     assert tokens[0] == token_url("file:///pgp-public-key.asc (PGP key, 77 B)", 0,
                                   filename="pgp-public-key.asc",
-                                  filedata="\n".join(lines).encode("latin-1"))
+                                  filedata="\n".join(lines).encode("latin-1"),
+                                  pgp_key=True)
     assert tokens[1] == Token.LF(0)
     assert tokens[2] == Token.CODE("Error: Invalid key", 0)
 
@@ -620,7 +623,8 @@ def test_attachments_pgp_key_filename_in_code_block():
     assert tokens[0] == Token.CODE("====", 0)
     assert tokens[1] == token_url("file:///pgp-public-key.asc (PGP key, 77 B)", 1,
                                   filename="pgp-public-key.asc",
-                                  filedata="\n".join(lines[1:-1]).encode("latin-1"))
+                                  filedata="\n".join(lines[1:-1]).encode("latin-1"),
+                                  pgp_key=True)
     assert tokens[2] == Token.LF(1)
     assert tokens[3] == Token.CODE("Error: Invalid key", 1)
     assert tokens[4] == Token.CODE("====", 4)
@@ -650,7 +654,7 @@ def test_pgp_sign_inline():
     assert tokens[1] == Token(TT.TEXT, "11111", 1)
     assert tokens[2] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 2)
     assert tokens[3] == Token.LF(2)
-    assert tokens[4] == Token.CODE("   Status: Invalid :(", 2)
+    assert tokens[4] == Token.CODE("   Status: error - gpg-exit 33554433", 2)
     assert tokens[5] == Token.LF(2)
     assert tokens[6] == Token.CODE("    KeyId: --- (---)", 2)
     #
@@ -684,14 +688,15 @@ def test_pgp_sign_inline_in_code_block():
         filename="pgp-public-key.asc",
         filedata="\n".join(["-----BEGIN PGP PUBLIC KEY BLOCK-----",
                             "=pQC6",
-                            "-----END PGP PUBLIC KEY BLOCK-----"]).encode("latin-1"))
+                            "-----END PGP PUBLIC KEY BLOCK-----"]).encode("latin-1"),
+        pgp_key=True)
     assert tokens[5] == Token.LF(4)
     assert tokens[6] == Token.CODE("Error: Invalid key", 4)
     assert tokens[7] == Token(TT.TEXT, "Text", 7)
     assert tokens[8] == Token.CODE("====", 8)
     assert tokens[9] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 9)
     assert tokens[10] == Token.LF(9)
-    assert tokens[11] == Token.CODE("   Status: Invalid :(", 9)
+    assert tokens[11] == Token.CODE("   Status: error - gpg-exit 33554433", 9)
     #
     assert tokens[18] == Token.CODE(parser.END_PGP_SIGNATURE, 11)
     assert tokens[19] == Token.CODE("====", 12)

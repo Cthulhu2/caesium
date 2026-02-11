@@ -5,6 +5,7 @@ import codecs
 import curses
 import hashlib
 import itertools
+import json
 import locale
 import os
 import pickle
@@ -547,9 +548,22 @@ def save_attachment(token):  # type: (parser.Token) -> None
         attachment.write(token.filedata)
     ui.draw_message_box("Файл сохранён '%s'" % filepath, True)
     ui.stdscr.getch()
-    if ui.SelectWindow("Открыть '%s'?" % token.filename,
-                       ["Нет", "Да"]).show() == 2:
-        utils.open_file(filepath)
+    if token.pgp_key and parser.gpg:
+        option = ui.SelectWindow("PGP Ключ '%s'" % token.filename,
+                                 ["Закрыть окно",
+                                  "Открыть файл",
+                                  "Добавить в хранилище"]).show()
+        if option == 2:
+            utils.open_file(filepath)
+        elif option == 3:
+            result = parser.gpg.import_keys_file(filepath)
+            smsg = "\n".join(map(lambda rd: json.dumps(rd, sort_keys=True, indent=2),
+                                 filter(lambda r: r['fingerprint'], result.results)))
+            ui.show_message_box(smsg)
+    else:
+        if ui.SelectWindow("Открыть '%s'?" % token.filename,
+                           ["Нет", "Да"]).show() == 2:
+            utils.open_file(filepath)
 
 
 class EchoReader:
