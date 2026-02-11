@@ -657,6 +657,46 @@ def test_pgp_sign_inline():
     assert tokens[13] == Token.CODE(parser.END_PGP_SIGNATURE, 4)
 
 
+def test_pgp_sign_inline_in_code_block():
+    parser.INLINE_STYLE_ENABLED = True
+    lines = [
+        "====",
+        "-----BEGIN PGP SIGNED MESSAGE-----",
+        "====",
+        "Text",
+        "- -----BEGIN PGP PUBLIC KEY BLOCK-----",
+        "=pQC6",
+        "- -----END PGP PUBLIC KEY BLOCK-----",
+        "Text",
+        "====",
+        "-----BEGIN PGP SIGNATURE-----",
+        "=SLkw",
+        "-----END PGP SIGNATURE-----",
+        "====",
+    ]
+    tokens = parser.tokenize(lines)
+    assert tokens[0] == Token.CODE("====", 0)
+    assert tokens[1] == Token.CODE(parser.BEGIN_PGP_SIGNED_MSG, 1)
+    assert tokens[2] == Token.CODE("====", 2)
+    assert tokens[3] == Token(TT.TEXT, "Text", 3)
+    assert tokens[4] == token_url(
+        "file:///pgp-public-key.asc (PGP key, 77 B)", 4,
+        filename="pgp-public-key.asc",
+        filedata="\n".join(["-----BEGIN PGP PUBLIC KEY BLOCK-----",
+                            "=pQC6",
+                            "-----END PGP PUBLIC KEY BLOCK-----"]).encode("latin-1"))
+    assert tokens[5] == Token.LF(4)
+    assert tokens[6] == Token.CODE("Error: Invalid key", 4)
+    assert tokens[7] == Token(TT.TEXT, "Text", 7)
+    assert tokens[8] == Token.CODE("====", 8)
+    assert tokens[9] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 9)
+    assert tokens[10] == Token.LF(9)
+    assert tokens[11] == Token.CODE("     Status: Invalid :(", 9)
+    #
+    assert tokens[20] == Token.CODE(parser.END_PGP_SIGNATURE, 11)
+    assert tokens[21] == Token.CODE("====", 12)
+
+
 class ScrMock:
     def __init__(self, h, w):
         self.height = h

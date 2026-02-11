@@ -118,10 +118,12 @@ def is_code_block2(line):
     return line.startswith("```")
 
 
-def tokenize(lines: List[str], start_line=0, in_code_block=False) -> List[Token]:
+def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) -> List[Token]:
     tokens = []
     line_num = start_line
     while line_num - start_line < len(lines):
+        if start_line < end_line and line_num == end_line:
+            return tokens  #
         line = lines[line_num - start_line]
         #
         if not in_code_block:
@@ -177,9 +179,7 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False) -> List[Token]
                 if code_block_end is not None:
                     tokens.append(Token(TT.CODE, line, line_num))
                     line_num += 1
-                    tokens.extend(tokenize(next_lines[0:code_block_end + 1],
-                                           line_num, in_code_block=True))
-                    line_num += code_block_end + 1
+                    in_code_block = check_code_block
                     continue  # lines
             #
             if line.rstrip() == "/* XPM */":
@@ -197,6 +197,11 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False) -> List[Token]
                     tokens.extend(b64_tokens)
                     line_num += b64_lines_count
                     continue  # lines
+        if in_code_block and in_code_block(line):
+            tokens.append(Token(TT.CODE, line, line_num))
+            line_num += 1
+            in_code_block = False
+            continue  # lines
         #
         pgp_beg, pgp_end = None, None
         if line.rstrip().startswith(BEGIN_PGP_KEY):
@@ -216,7 +221,8 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False) -> List[Token]
         if line.rstrip().startswith(BEGIN_PGP_SIGNED_MSG):
             next_lines = lines[line_num - start_line:]
             if any(filter(lambda s: s.rstrip().startswith(END_PGP_SIGNATURE), next_lines)):
-                code_tokens, lines_count = _tokenize_pgp_signed_msg(next_lines, line_num)
+                code_tokens, lines_count = _tokenize_pgp_signed_msg(
+                    next_lines, line_num, in_code_block)
                 if code_tokens:
                     tokens.extend(code_tokens)
                     line_num += lines_count
@@ -481,22 +487,24 @@ def _tokenize_pgp_key(num, key_bytes):
 
 
 # region _tokenize_pgp_signed_msg
-def _tokenize_pgp_signed_msg(lines, line_num):
+def _tokenize_pgp_signed_msg(lines, line_num, in_code_block):
     lines_count = 0
-    sign_line = 0
+    sign_line_idx = 0
     for line in lines:
         lines_count += 1
         if line.strip().startswith(BEGIN_PGP_SIGNATURE):
-            sign_line = lines_count - 1
+            sign_line_idx = lines_count - 1
         if line.strip().startswith(END_PGP_SIGNATURE):
             break  #
-    msg_body = lines[1:sign_line]
-    msg_body_tokens = tokenize(msg_body, line_num + 1)
+    msg_body = lines[1:]
+    msg_body_tokens = tokenize(
+        msg_body, line_num + 1, in_code_block, line_num + sign_line_idx)
     if INLINE_STYLE_ENABLED and gpg:
-        sign_tokens = _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count)
+        sign_tokens = _tokenize_pgp_signed_msg_verify(
+            lines, sign_line_idx, line_num + sign_line_idx, lines_count)
     else:
-        sign_tokens = [Token(TT.CODE, line, sign_line + i)
-                       for i, line in enumerate(lines[sign_line:lines_count])]
+        sign_tokens = [Token(TT.CODE, line, line_num + sign_line_idx + i)
+                       for i, line in enumerate(lines[sign_line_idx:lines_count])]
 
     tokens = [Token(TT.CODE, lines[0], line_num),
               *msg_body_tokens,
@@ -505,7 +513,7 @@ def _tokenize_pgp_signed_msg(lines, line_num):
     return tokens, lines_count  #
 
 
-def _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count):
+def _tokenize_pgp_signed_msg_verify(lines, sign_line_idx, sign_line, lines_count):
     signed_msg = lines[0:lines_count]
     sign = gpg.verify("\n".join(signed_msg).encode("utf-8"))
     ts = "---"
@@ -524,7 +532,7 @@ def _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count):
             Token.CODE("     Status: Invalid :(", sign_line)
         ]
     sign_tokens = [
-        Token.CODE(lines[sign_line], sign_line),
+        Token.CODE(lines[sign_line_idx], sign_line),
         *sign_token,
         Token.LF(sign_line),
         Token.CODE("      KeyId: " + (sign.key_id or '---'), sign_line),
@@ -534,7 +542,7 @@ def _tokenize_pgp_signed_msg_verify(lines, sign_line, lines_count):
         Token.CODE("     Signer: " + (sign.username or '---'), sign_line),
         Token.LF(sign_line),
         Token.CODE("  Timestamp: " + ts, sign_line),
-        Token.CODE(lines[lines_count - 1], lines_count - 1),
+        Token.CODE(lines[lines_count - 1], sign_line + (lines_count - sign_line_idx) - 1),
     ]
     return sign_tokens
 # endregion
