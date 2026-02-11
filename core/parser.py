@@ -460,6 +460,12 @@ def _tokenize_pgp_key_block(lines, line_num, pgp_end):
             lines_count)  #
 
 
+def _pgp_key_tokens(key, fingerprint, num):
+    return [Token.LF(num),
+            Token.CODE("    KeyId: %s (%s)" % (key or "---",
+                                               fingerprint or "---"), num)]
+
+
 def _tokenize_pgp_key(num, key_bytes):
     val = gpg.scan_keys_mem(key_bytes)
     if not val:
@@ -473,14 +479,16 @@ def _tokenize_pgp_key(num, key_bytes):
         expires = str(datetime.utcfromtimestamp(int(val['expires'])))
     alg = GPG_PUB_KEY_ALGS.get(val['algo'], val['algo'])
     created = str(datetime.utcfromtimestamp(int(val['date'])))
+    key_fp = _pgp_key_tokens(val['keyid'], val['fingerprint'], num)
+    for k, _, fp, _ in val['subkeys']:
+        key_fp.extend(_pgp_key_tokens(k, fp, num))
     key_tokens = [
-        Token.LF(num), Token.CODE("      KeyId: " + val['keyid'], num),
-        Token.LF(num), Token.CODE("Fingerprint: " + val['fingerprint'], num),
-        Token.LF(num), Token.CODE("     UserId: " + user, num),
-        Token.LF(num), Token.CODE("    Created: " + created, num),
-        Token.LF(num), Token.CODE("    Expires: " + expires, num),
-        Token.LF(num), Token.CODE("  Algorithm: " + alg, num),
-        Token.LF(num), Token.CODE("       Size: " + val['length'], num),
+        *key_fp,
+        Token.LF(num), Token.CODE("   UserId: " + user, num),
+        Token.LF(num), Token.CODE("  Created: " + created, num),
+        Token.LF(num), Token.CODE("  Expires: " + expires, num),
+        Token.LF(num), Token.CODE("Algorithm: " + alg, num),
+        Token.LF(num), Token.CODE("     Size: " + val['length'], num),
     ]
     return fname, key_tokens
 # endregion _tokenize_pgp_key
@@ -519,29 +527,26 @@ def _tokenize_pgp_signed_msg_verify(lines, sign_line_idx, sign_line, lines_count
     ts = "---"
     if sign.timestamp:
         ts = str(datetime.utcfromtimestamp(int(sign.timestamp)))
-    if sign.valid:
+    if sign.status == "signature valid":
         sign_token = [
             Token.LF(sign_line),
-            Token.CODE("     Status: Valid :)", sign_line),
+            Token.CODE("   Status: Valid :)", sign_line),
             Token.LF(sign_line),
-            Token.CODE("      Trust: " + sign.trust_text, sign_line)
+            Token.CODE("    Trust: " + str(sign.trust_text), sign_line)
         ]
     else:
         sign_token = [
             Token.LF(sign_line),
-            Token.CODE("     Status: Invalid :(", sign_line)
+            Token.CODE("   Status: Invalid :(", sign_line)
         ]
     sign_tokens = [
         Token.CODE(lines[sign_line_idx], sign_line),
         *sign_token,
+        *_pgp_key_tokens(sign.key_id, sign.fingerprint, sign_line),
         Token.LF(sign_line),
-        Token.CODE("      KeyId: " + (sign.key_id or '---'), sign_line),
+        Token.CODE("   Signer: " + (sign.username or '---'), sign_line),
         Token.LF(sign_line),
-        Token.CODE("Fingerprint: " + (sign.fingerprint or '---'), sign_line),
-        Token.LF(sign_line),
-        Token.CODE("     Signer: " + (sign.username or '---'), sign_line),
-        Token.LF(sign_line),
-        Token.CODE("  Timestamp: " + ts, sign_line),
+        Token.CODE("Timestamp: " + ts, sign_line),
         Token.CODE(lines[lines_count - 1], sign_line + (lines_count - sign_line_idx) - 1),
     ]
     return sign_tokens

@@ -650,11 +650,11 @@ def test_pgp_sign_inline():
     assert tokens[1] == Token(TT.TEXT, "11111", 1)
     assert tokens[2] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 2)
     assert tokens[3] == Token.LF(2)
-    assert tokens[4] == Token.CODE("     Status: Invalid :(", 2)
+    assert tokens[4] == Token.CODE("   Status: Invalid :(", 2)
     assert tokens[5] == Token.LF(2)
-    assert tokens[6] == Token.CODE("      KeyId: ---", 2)
+    assert tokens[6] == Token.CODE("    KeyId: --- (---)", 2)
     #
-    assert tokens[13] == Token.CODE(parser.END_PGP_SIGNATURE, 4)
+    assert tokens[11] == Token.CODE(parser.END_PGP_SIGNATURE, 4)
 
 
 def test_pgp_sign_inline_in_code_block():
@@ -691,10 +691,10 @@ def test_pgp_sign_inline_in_code_block():
     assert tokens[8] == Token.CODE("====", 8)
     assert tokens[9] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 9)
     assert tokens[10] == Token.LF(9)
-    assert tokens[11] == Token.CODE("     Status: Invalid :(", 9)
+    assert tokens[11] == Token.CODE("   Status: Invalid :(", 9)
     #
-    assert tokens[20] == Token.CODE(parser.END_PGP_SIGNATURE, 11)
-    assert tokens[21] == Token.CODE("====", 12)
+    assert tokens[18] == Token.CODE(parser.END_PGP_SIGNATURE, 11)
+    assert tokens[19] == Token.CODE("====", 12)
 
 
 class ScrMock:
