@@ -515,6 +515,25 @@ def call_editor(node_, out=''):
         os.remove("temp")
 
 
+def sign_msg(node_, out, key_id):
+    node_dir = outgoing.directory(node_)
+    with open(node_dir + out, "r") as f:
+        msg = f.read().split("\n")
+    if msg[4].startswith("@repto"):
+        header = "\n".join(msg[0:5])
+        body = "\n".join(msg[5:])
+    else:
+        header = "\n".join(msg[0:4])
+        body = "\n".join(msg[4:])
+    result = parser.gpg.sign(body.encode("utf-8"), keyid=key_id, clearsign=True)
+    signed_body = str(result.data, encoding="utf-8")
+    if len(signed_body) > len(body):
+        with open(node_dir + out, "w") as f:
+            f.write(header)
+            f.write("\n")
+            f.write(signed_body)
+
+
 def save_message_to_file(msgid, echoarea):
     msg, size = api.read_msg(msgid, echoarea)
     filepath = "downloads/" + msgid + ".txt"
@@ -743,6 +762,8 @@ class EchoReader:
                 ui.stdscr.move(ui.HEIGHT - 1, len(ui.version) + 2 + self.qs.cursor)
             #
             ks, key, _ = ui.get_keystroke()
+            if ks and any(("Shift+" in ks, "Alt+" in ks, "Ctrl+" in ks)):
+                key = -1
             #
             if key == curses.KEY_RESIZE:
                 ui.set_term_size()
@@ -770,7 +791,7 @@ class EchoReader:
                 self.go = False
                 self.done = True
             else:
-                self.on_key_pressed(key)
+                self.on_key_pressed(ks, key)
 
         if self.mode == ui.ReaderMode.ECHO:
             self.counts.lasts[self.echo.name] = self.msgn
@@ -856,7 +877,7 @@ class EchoReader:
         self.msgn = self.find_msgid_idx(msgid)
         self.mode = mode
 
-    def on_key_pressed(self, key):
+    def on_key_pressed(self, ks, key):
         if key in keys.r_msubj:
             self.toggle_mode(ui.ReaderMode.SUBJ)
             self.stack.clear()
@@ -957,6 +978,8 @@ class EchoReader:
                 self.prerender_msg_or_quit()
             else:
                 ui.show_message_box("Сообщение уже отправлено")
+        elif (ks in keys.o_sign or key in keys.o_sign) and self.out:
+            self.sign_msg()
         elif key in keys.f_delete and self.favorites and self.msgs_data:
             ui.draw_message_box("Подождите", False)
             api.remove_from_favorites(self.msgid())
@@ -1004,6 +1027,28 @@ class EchoReader:
         elif key in keys.r_inlines:
             parser.INLINE_STYLE_ENABLED = not parser.INLINE_STYLE_ENABLED
             self.prerender(self.scroll.pos)
+
+    def sign_msg(self):
+        if (not self.msgid().endswith(".out")
+                and not self.msgid().endswith(".draft")):
+            ui.show_message_box("Сообщение уже отправлено")
+            return  #
+
+        private_keys = parser.gpg.list_keys(secret=True)
+        if private_keys:
+            items = []
+            for k in private_keys:
+                user = k['uids'][0]
+                items.append((k['keyid'], "%s (%s)" % (user, k['keyid'])))
+            selected = ui.SelectWindow("Подписать ключом",
+                                       [it[1] for it in items]).show()
+            if selected > 0:
+                sign_msg(self.cur_node, self.msgid(), items[selected - 1][0])
+                self.prerender_msg_or_quit()
+        else:
+            ui.show_message_box("Не удалось подписать сообщение.\n"
+                                "Нет приватных ключей в хранилище:\n%s"
+                                % os.path.abspath(parser.gpg.gnupghome))
 
 
 if sys.version_info >= (3, 11):

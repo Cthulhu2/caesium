@@ -49,6 +49,8 @@ def get_out_msgs_metadata(node, drafts=False):
     for msgid in msgids:
         with codecs.open(node_dir + msgid, "r", "utf-8") as f:
             msg = f.read().strip().replace("\r", "").split("\n")
+            if len(msg) < 4:
+                msg += [""] * (4 - len(msg))
             msgs_metadata.append(MsgMetadata.from_list(
                 msgid, ["", msg[0], datetime.now().timestamp(), "", "", msg[1], msg[2]]))
     return msgs_metadata
@@ -57,9 +59,9 @@ def get_out_msgs_metadata(node, drafts=False):
 def read_out_msg(msgid, node):  # type: (str, config.Node) -> (List[str], int)
     node_dir = directory(node)
     with open(node_dir + msgid, "r") as f:
-        temp = f.read().splitlines()
-    if len(temp) < 8:
-        temp += [""] * (8 - len(temp))
+        temp = f.read().strip().replace("\r", "").split("\n")
+    if len(temp) < 4:
+        temp += [""] * (4 - len(temp))
     msg = ["",
            temp[0],
            "",
