@@ -45,11 +45,11 @@ BEGIN_PGP_SIGNED_MSG = "-----BEGIN PGP SIGNED MESSAGE-----"
 BEGIN_PGP_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
 END_PGP_SIGNATURE = "-----END PGP SIGNATURE-----"
 
-b_pgpkey_template = re.compile(r"(- )*-----BEGIN PGP PUBLIC KEY BLOCK-----")
-e_pgpkey_template = re.compile(r"(- )*-----END PGP PUBLIC KEY BLOCK-----")
-b_pgpmsg_template = re.compile(r"(- )*-----BEGIN PGP SIGNED MESSAGE-----")
-b_pgpsign_template = re.compile(r"(- )*-----BEGIN PGP SIGNATURE-----")
-e_pgpsign_template = re.compile(r"(- )*-----END PGP SIGNATURE-----")
+b_pgpkey_template = re.compile(r"^(- )*-----BEGIN PGP PUBLIC KEY BLOCK-----\s*")
+e_pgpkey_template = re.compile(r"^(- )*-----END PGP PUBLIC KEY BLOCK-----\s*")
+b_pgpmsg_template = re.compile(r"^(- )*-----BEGIN PGP SIGNED MESSAGE-----\s*")
+b_pgpsign_template = re.compile(r"^(- )*-----BEGIN PGP SIGNATURE-----\s*")
+e_pgpsign_template = re.compile(r"^(- )*-----END PGP SIGNATURE-----\s*")
 url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
@@ -216,12 +216,12 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
             continue  # lines
         #
         if b_pgpkey_template.match(line):
-            nesting_lvl = line.count("- ")
+            nesting_lvl = line.rstrip().count("- ")
             next_lines = lines[line_num - start_line:]
             end_idx = 0
             for i, nline in enumerate(next_lines):
                 if (e_pgpkey_template.match(nline)
-                        and nline.count("- ") == nesting_lvl):
+                        and nline.rstrip().count("- ") == nesting_lvl):
                     end_idx = i
                     break
             if end_idx:
@@ -233,17 +233,17 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
                     continue  # lines
         #
         if b_pgpmsg_template.match(line):
-            nesting_lvl = line.count("- ")
+            nesting_lvl = line.rstrip().count("- ")
             next_lines = lines[line_num - start_line:]
             sign_idx = 0
             end_idx = 0
             for i, nline in enumerate(next_lines):
                 if (b_pgpsign_template.match(nline)
-                        and nline.count("- ") == nesting_lvl
+                        and nline.rstrip().count("- ") == nesting_lvl
                         and not end_idx and not sign_idx):
                     sign_idx = i
                 if (e_pgpsign_template.match(nline)
-                        and nline.count("- ") == nesting_lvl
+                        and nline.rstrip().count("- ") == nesting_lvl
                         and not end_idx and sign_idx):
                     end_idx = i
                     break  #
@@ -532,7 +532,7 @@ def _tokenize_pgp_signed_msg(lines, line_num, in_code, sign_idx, lines_count):
 
 
 def _tokenize_pgp_signed_msg_verify(lines, sign_line_idx, sign_line, lines_count):
-    nesting_lvl = lines[0].count("- ")
+    nesting_lvl = lines[0].rstrip().count("- ")
 
     def strip_nesting(line):  # type: (str) -> str
         if (b_pgpsign_template.match(line)

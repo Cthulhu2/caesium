@@ -665,23 +665,23 @@ def test_pgp_sign_inline_in_code_block():
     parser.INLINE_STYLE_ENABLED = True
     lines = [
         "====",
-        "-----BEGIN PGP SIGNED MESSAGE-----",
-        "====",
+        "-----BEGIN PGP SIGNED MESSAGE----- \r",
+        "====\r",
         "Text",
-        "- - -----BEGIN PGP PUBLIC KEY BLOCK-----",
+        "- - -----BEGIN PGP PUBLIC KEY BLOCK----- \r",
         "=pQC6",
-        "- - -----END PGP PUBLIC KEY BLOCK-----",
+        "- - -----END PGP PUBLIC KEY BLOCK----- \r",
         "Text",
         "====",
-        "-----BEGIN PGP SIGNATURE-----",
+        "-----BEGIN PGP SIGNATURE-----\r",
         "=SLkw",
-        "-----END PGP SIGNATURE-----",
+        "-----END PGP SIGNATURE----- \r",
         "====",
     ]
     tokens = parser.tokenize(lines)
     assert tokens[0] == Token.CODE("====", 0)
-    assert tokens[1] == Token.CODE(parser.BEGIN_PGP_SIGNED_MSG, 1)
-    assert tokens[2] == Token.CODE("====", 2)
+    assert tokens[1] == Token.CODE(parser.BEGIN_PGP_SIGNED_MSG + " \r", 1)
+    assert tokens[2] == Token.CODE("====\r", 2)
     assert tokens[3] == Token(TT.TEXT, "Text", 3)
     assert tokens[4] == token_url(
         "file:///pgp-public-key.asc (PGP key, 77 B)", 4,
@@ -694,11 +694,11 @@ def test_pgp_sign_inline_in_code_block():
     assert tokens[6] == Token.CODE("Error: Invalid key", 4)
     assert tokens[7] == Token(TT.TEXT, "Text", 7)
     assert tokens[8] == Token.CODE("====", 8)
-    assert tokens[9] == Token.CODE(parser.BEGIN_PGP_SIGNATURE, 9)
+    assert tokens[9] == Token.CODE(parser.BEGIN_PGP_SIGNATURE + "\r", 9)
     assert tokens[10] == Token.LF(9)
     assert tokens[11] == Token.CODE("   Status: error - gpg-exit 33554433", 9)
     #
-    assert tokens[18] == Token.CODE(parser.END_PGP_SIGNATURE, 11)
+    assert tokens[18] == Token.CODE(parser.END_PGP_SIGNATURE + " \r", 11)
     assert tokens[19] == Token.CODE("====", 12)
 
 
