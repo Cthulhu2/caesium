@@ -147,7 +147,7 @@ def getkeystroke(scr: curses.window, init_ch=-1) -> Tuple[str, int, Any]:
             name += prettykeys(curses.keyname(k).decode('utf-8'))
     if name == 'Alt+':  # Single ^[
         name = 'ESC'
-    elif name == 'Alt+?' and k == 127:  # for Android termux
+    elif name == 'Ctrl+?' and k == 127:  # for Android termux
         name = 'Bksp'
     return name, k, None
 
