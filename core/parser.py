@@ -41,6 +41,9 @@ END_PGP_SIGNATURE = "-----END PGP SIGNATURE-----"
 
 b_pgpkey_template = re.compile(r"(- )*-----BEGIN PGP PUBLIC KEY BLOCK-----")
 e_pgpkey_template = re.compile(r"(- )*-----END PGP PUBLIC KEY BLOCK-----")
+b_pgpmsg_template = re.compile(r"(- )*-----BEGIN PGP SIGNED MESSAGE-----")
+b_pgpsign_template = re.compile(r"(- )*-----BEGIN PGP SIGNATURE-----")
+e_pgpsign_template = re.compile(r"(- )*-----END PGP SIGNATURE-----")
 url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
@@ -207,11 +210,12 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
             continue  # lines
         #
         if b_pgpkey_template.match(line):
-            count = line.count("- ")
+            nesting_lvl = line.count("- ")
             next_lines = lines[line_num - start_line:]
             end_idx = 0
             for i, nline in enumerate(next_lines):
-                if e_pgpkey_template.match(nline) and nline.count("- ") == count:
+                if (e_pgpkey_template.match(nline)
+                        and nline.count("- ") == nesting_lvl):
                     end_idx = i
                     break
             if end_idx:
@@ -222,13 +226,27 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
                     line_num += lines_count
                     continue  # lines
         #
-        if line.rstrip().endswith(BEGIN_PGP_SIGNED_MSG):
+        if b_pgpmsg_template.match(line):
+            nesting_lvl = line.count("- ")
             next_lines = lines[line_num - start_line:]
-            if any(filter(lambda s: s.rstrip().startswith(END_PGP_SIGNATURE), next_lines)):
-                code_tokens, lines_count = _tokenize_pgp_signed_msg(
-                    next_lines, line_num, in_code_block)
-                if code_tokens:
-                    tokens.extend(code_tokens)
+            sign_idx = 0
+            end_idx = 0
+            for i, nline in enumerate(next_lines):
+                if (b_pgpsign_template.match(nline)
+                        and nline.count("- ") == nesting_lvl
+                        and not end_idx and not sign_idx):
+                    sign_idx = i
+                if (e_pgpsign_template.match(nline)
+                        and nline.count("- ") == nesting_lvl
+                        and not end_idx and sign_idx):
+                    end_idx = i
+                    break  #
+
+            if sign_idx and end_idx:
+                sign_msg_tokens, lines_count = _tokenize_pgp_signed_msg(
+                    next_lines, line_num, in_code_block, sign_idx, end_idx + 1)
+                if sign_msg_tokens:
+                    tokens.extend(sign_msg_tokens)
                     line_num += lines_count
                     continue  # lines
         #
@@ -428,10 +446,9 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
 # region _tokenize_pgp_key
 def _tokenize_pgp_key_block(lines, line_num, lines_count):
     if INLINE_STYLE_ENABLED:
-        line0 = lines[0].replace("- ", "")
-        lineLast = lines[lines_count - 1].replace("- ", "")
-
-        key_bytes = "\n".join((line0, *lines[1:lines_count-1], lineLast)).encode("utf-8")
+        key_bytes = "\n".join((BEGIN_PGP_KEY,
+                               *lines[1:lines_count-1],
+                               END_PGP_KEY)).encode("utf-8")
         size = utils.msg_strfsize(len(key_bytes))
 
         fname = "pgp-public-key.asc"
@@ -490,24 +507,16 @@ def _tokenize_pgp_key(num, key_bytes):
 
 
 # region _tokenize_pgp_signed_msg
-def _tokenize_pgp_signed_msg(lines, line_num, in_code_block):
-    lines_count = 0
-    sign_line_idx = 0
-    for line in lines:
-        lines_count += 1
-        if line.strip().startswith(BEGIN_PGP_SIGNATURE):
-            sign_line_idx = lines_count - 1
-        if line.strip().startswith(END_PGP_SIGNATURE):
-            break  #
+def _tokenize_pgp_signed_msg(lines, line_num, in_code, sign_idx, lines_count):
     msg_body = lines[1:]
     msg_body_tokens = tokenize(
-        msg_body, line_num + 1, in_code_block, line_num + sign_line_idx)
+        msg_body, line_num + 1, in_code, line_num + sign_idx)
     if INLINE_STYLE_ENABLED and gpg:
         sign_tokens = _tokenize_pgp_signed_msg_verify(
-            lines, sign_line_idx, line_num + sign_line_idx, lines_count)
+            lines, sign_idx, line_num + sign_idx, lines_count)
     else:
-        sign_tokens = [Token(TT.CODE, line, line_num + sign_line_idx + i)
-                       for i, line in enumerate(lines[sign_line_idx:lines_count])]
+        sign_tokens = [Token(TT.CODE, line, line_num + sign_idx + i)
+                       for i, line in enumerate(lines[sign_idx:lines_count])]
 
     tokens = [Token(TT.CODE, lines[0], line_num),
               *msg_body_tokens,
@@ -517,10 +526,24 @@ def _tokenize_pgp_signed_msg(lines, line_num, in_code_block):
 
 
 def _tokenize_pgp_signed_msg_verify(lines, sign_line_idx, sign_line, lines_count):
-    signed_msg = lines[0:lines_count]
-    # noinspection PyTypeChecker
-    sign = gpg.verify("\n".join(signed_msg).encode("utf-8"),
-                      extra_args=["-v"])
+    nesting_lvl = lines[0].count("- ")
+
+    def strip_nesting(line):  # type: (str) -> str
+        if (b_pgpsign_template.match(line)
+                or b_pgpmsg_template.match(line)
+                or e_pgpsign_template.match(line)
+                or b_pgpkey_template.match(line)
+                or e_pgpkey_template.match(line)):
+            return line[nesting_lvl * 2:]
+        return line
+
+    signed_msg = [BEGIN_PGP_SIGNED_MSG,
+                  *[strip_nesting(line) for line in lines[1:sign_line_idx]],
+                  BEGIN_PGP_SIGNATURE,
+                  *lines[sign_line_idx + 1:lines_count-1],
+                  END_PGP_SIGNATURE]
+    #
+    sign = gpg.verify("\n".join(signed_msg).encode("utf-8"))
     ts = "---"
     if sign.timestamp:
         ts = str(datetime.utcfromtimestamp(int(sign.timestamp)))
