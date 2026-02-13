@@ -1,6 +1,7 @@
 import base64
 import os
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
@@ -12,6 +13,11 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 gpg = None
 try:
+    # gpg-agent forwarding: inappropriate ioctl for device
+    # https://stackoverflow.com/a/55032706
+    if os.getenv("TERMUX_VERSION", ""):  # android probably
+        if os.environ.get("GPG_TTY", None) is None:
+            os.environ["GPG_TTY"] = os.ttyname(sys.stdout.fileno())
     # noinspection PyUnresolvedReferences
     import gnupg
     gpg = gnupg.GPG(gnupghome=BASE_DIR + '/../.gpg')
@@ -219,10 +225,10 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
                     end_idx = i
                     break
             if end_idx:
-                code_tokens, lines_count = _tokenize_pgp_key_block(
+                key_tokens, lines_count = _tokenize_pgp_key_block(
                     next_lines, line_num, end_idx + 1)
-                if code_tokens:
-                    tokens.extend(code_tokens)
+                if key_tokens:
+                    tokens.extend(key_tokens)
                     line_num += lines_count
                     continue  # lines
         #
