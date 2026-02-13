@@ -766,7 +766,7 @@ class EchoReader:
             #
             ks, key, _ = ui.get_keystroke()
             if ks and any(("Shift+" in ks, "Alt+" in ks, "Ctrl+" in ks)):
-                key = -1
+                key = -1  # beware Android backspace "Ctrl+?" (127)
             #
             if key == curses.KEY_RESIZE:
                 ui.set_term_size()
