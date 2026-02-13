@@ -1,5 +1,5 @@
 
-__version__ = "0.8"  # keep eyes on template.txt
+__version__ = "0.9"  # keep eyes on template.txt
 
 # Расширения IDEC
 # https://github.com/idec-net/new-docs/blob/master/extensions.md
