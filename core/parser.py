@@ -35,12 +35,12 @@ GPG_PUB_KEY_ALGS = {
 INLINE_STYLE_ENABLED = False
 BEGIN_PGP_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 END_PGP_KEY = "-----END PGP PUBLIC KEY BLOCK-----"
-BEGIN_PGP_KEY_IN = "- -----BEGIN PGP PUBLIC KEY BLOCK-----"
-END_PGP_KEY_IN = "- -----END PGP PUBLIC KEY BLOCK-----"
 BEGIN_PGP_SIGNED_MSG = "-----BEGIN PGP SIGNED MESSAGE-----"
 BEGIN_PGP_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
 END_PGP_SIGNATURE = "-----END PGP SIGNATURE-----"
 
+b_pgpkey_template = re.compile(r"(- )*-----BEGIN PGP PUBLIC KEY BLOCK-----")
+e_pgpkey_template = re.compile(r"(- )*-----END PGP PUBLIC KEY BLOCK-----")
 url_simple_template = re.compile(r"((https?|ftp|file|ii|magnet|gemini):/?"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%?=~_|!:,.;()]+"
                                  r"[-A-Za-zА-Яа-яЁё0-9+&@#/%=~_|()])")
@@ -206,22 +206,23 @@ def tokenize(lines: List[str], start_line=0, in_code_block=False, end_line=0) ->
             in_code_block = False
             continue  # lines
         #
-        pgp_beg, pgp_end = None, None
-        if line.rstrip().startswith(BEGIN_PGP_KEY):
-            pgp_beg, pgp_end = BEGIN_PGP_KEY, END_PGP_KEY
-        elif line.rstrip().startswith(BEGIN_PGP_KEY_IN):
-            pgp_beg, pgp_end = BEGIN_PGP_KEY_IN, END_PGP_KEY_IN
-        if pgp_beg and pgp_end:
+        if b_pgpkey_template.match(line):
+            count = line.count("- ")
             next_lines = lines[line_num - start_line:]
-            if any(filter(lambda s: s.rstrip().startswith(pgp_end), next_lines)):
+            end_idx = 0
+            for i, nline in enumerate(next_lines):
+                if e_pgpkey_template.match(nline) and nline.count("- ") == count:
+                    end_idx = i
+                    break
+            if end_idx:
                 code_tokens, lines_count = _tokenize_pgp_key_block(
-                    next_lines, line_num, pgp_end)
+                    next_lines, line_num, end_idx + 1)
                 if code_tokens:
                     tokens.extend(code_tokens)
                     line_num += lines_count
                     continue  # lines
         #
-        if line.rstrip().startswith(BEGIN_PGP_SIGNED_MSG):
+        if line.rstrip().endswith(BEGIN_PGP_SIGNED_MSG):
             next_lines = lines[line_num - start_line:]
             if any(filter(lambda s: s.rstrip().startswith(END_PGP_SIGNATURE), next_lines)):
                 code_tokens, lines_count = _tokenize_pgp_signed_msg(
@@ -425,19 +426,10 @@ def _tokenize_base64(lines, line_num):  # type: (List[str], int) -> (List[Token]
 
 
 # region _tokenize_pgp_key
-def _tokenize_pgp_key_block(lines, line_num, pgp_end):
-    lines_count = 0
-    for line in lines:
-        lines_count += 1
-        if line.strip().startswith(pgp_end):
-            break  #
-
+def _tokenize_pgp_key_block(lines, line_num, lines_count):
     if INLINE_STYLE_ENABLED:
-        line0 = lines[0]
-        lineLast = lines[lines_count - 1]
-        if pgp_end.startswith("- "):  # escaped inner block in signed msg
-            line0 = line0[2:]
-            lineLast = lineLast[2:]
+        line0 = lines[0].replace("- ", "")
+        lineLast = lines[lines_count - 1].replace("- ", "")
 
         key_bytes = "\n".join((line0, *lines[1:lines_count-1], lineLast)).encode("utf-8")
         size = utils.msg_strfsize(len(key_bytes))
