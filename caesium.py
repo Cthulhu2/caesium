@@ -526,12 +526,15 @@ def sign_msg(node_, out, key_id):
         header = "\n".join(msg[0:4])
         body = "\n".join(msg[4:])
     result = parser.gpg.sign(body.encode("utf-8"), keyid=key_id, clearsign=True)
-    signed_body = str(result.data, encoding="utf-8")
-    if len(signed_body) > len(body):
-        with open(node_dir + out, "w") as f:
-            f.write(header)
-            f.write("\n")
-            f.write(signed_body)
+    if result.returncode == 0:
+        signed_body = str(result.data, encoding="utf-8")
+        if len(signed_body) > len(body):
+            with open(node_dir + out, "w") as f:
+                f.write(header)
+                f.write("\n")
+                f.write(signed_body)
+    else:
+        ui.show_message_box(result.stderr)
 
 
 def save_message_to_file(msgid, echoarea):
