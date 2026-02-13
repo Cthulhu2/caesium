@@ -458,7 +458,7 @@ def _tokenize_pgp_key_block(lines, line_num, lines_count):
         size = utils.msg_strfsize(len(key_bytes))
 
         fname = "pgp-public-key.asc"
-        if gnupg:
+        if gpg:
             try:
                 fname, key_tokens = _tokenize_pgp_key(line_num, key_bytes)
             except Exception as ex:
